@@ -139,3 +139,47 @@ Invocalos con `/clozr-endpoint`, `/clozr-release`, etc., o se activan solos cuan
 - Monetización: SaaS suscripción mensual (Free → Pro por usuario → Team por workspace).
 - Mercado: PyMEs / equipos de venta LATAM, en español, precio local. Wedge = reemplazar Excel/WhatsApp.
 - SMS/celular pospuesto (caro + fraude SMS-pumping); si se quiere "celular", usar WhatsApp más adelante.
+
+---
+
+## 8. 🗺️ ROADMAP — paridad con la app desktop (Tauri)
+
+La webapp es una reescritura reciente y tiene MUCHO menos que la desktop (65+ releases).
+**El logo ya se portó (2026-06-14).** Lo que falta es contenido/vistas.
+
+**Gap de vistas: la desktop tiene 11, la webapp 3** (Dashboard/Resumen, Pipeline, Clientes).
+Faltan 8: **Mi Día, Ventas, Caja, Deudas, Inventario, Tareas, Reportes, Equipo, Ajustes.**
+
+**Ventaja clave:** el backend (Worker) YA tiene casi todas las rutas (sales, cash, catalog/stock,
+assigned-tasks, workspaces/members, _generic para tasks/followups/payment-methods, etc.). Portar
+cada vista es mayormente **frontend + método nuevo en `clozr-web/src/lib/api.ts`**, no backend de cero.
+
+**Cómo portar cada vista (receta):**
+1. Mirá la pantalla en la desktop: `clozr/src/pages/<vista>/` o `clozr/src/features/<vista>/`.
+   Reusá su markup/lógica de UI; cambiá la capa de datos a `api.ts` (fetch al Worker).
+2. Si falta un método de datos → agregalo en `src/lib/api.ts` (mapper snake↔camel). Si falta una
+   ruta en el Worker → usá el skill **clozr-endpoint** (ya trae el guard multi-tenant).
+3. Agregá la entrada al `<nav>` del sidebar en `clozr-web/src/app/app/Crm.tsx` y un `case` en el `view`.
+4. Respetá tokens/estilos (nada hardcodeado) y filtrado por `workspace_id`.
+5. Recordá: Next 16 breaking changes → leer `node_modules/next/dist/docs/` (lo pide AGENTS.md).
+
+**Prioridad sugerida (valor para un CRM de ventas + backend listo):**
+
+| # | Vista | Por qué | Backend |
+|---|-------|---------|---------|
+| 1 | **Ventas** | Core del producto ("cerrá más ventas") | `sales.ts` ✅ |
+| 2 | **Tareas** | Uso diario + muestra las tasks del AI Triage (`template_id='ai-triage'`) | assigned-tasks + tasks ✅ |
+| 3 | **Mi Día** | Home/resumen del día (compone pipeline+tareas+followups) | agrega de los anteriores |
+| 4 | **Caja** | Entradas/salidas de dinero | cash (_generic) ✅ |
+| 5 | **Inventario / Catálogo** | Para quienes venden productos | catalog-stock ✅ |
+| 6 | **Equipo** | Multi-usuario; habilita el plan Team | workspaces/members ✅ |
+| 7 | **Ajustes** | Perfil, logo/banner del workspace, preferencias | workspace-assets + settings ✅ |
+| 8 | **Reportes** | Analítica de ventas/caja | calcular client-side o endpoint nuevo |
+| 9 | **Deudas** | Derivado de ventas/clientes | derivar, o endpoint nuevo |
+
+**Polish transversal (después de las vistas):** command palette (cmdk), onboarding, tips
+("¿Sabías que…?"), WhatsApp quick picker, exchange-rate chip (dólar AR), empty states, toasts.
+Todos existen en `clozr/src/components/` para reusar.
+
+**Forma de trabajar sugerida:** una vista por sesión/PR, de arriba hacia abajo en la tabla.
+Pedile a Claude: *"portá la vista Ventas desde la desktop a la webapp siguiendo el roadmap del handoff"*.
