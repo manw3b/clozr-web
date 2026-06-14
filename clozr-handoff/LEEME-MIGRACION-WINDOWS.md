@@ -159,10 +159,16 @@ Dos tipos, y los dos ya están resueltos:
 ## 8. 🗺️ ROADMAP — paridad con la app desktop (Tauri)
 
 La webapp es una reescritura reciente y tiene MUCHO menos que la desktop (65+ releases).
-**El logo ya se portó (2026-06-14).** Lo que falta es contenido/vistas.
+**El logo ya se portó (2026-06-14). La vista VENTAS también (2026-06-14).** Lo que falta es contenido/vistas.
 
-**Gap de vistas: la desktop tiene 11, la webapp 3** (Dashboard/Resumen, Pipeline, Clientes).
-Faltan 8: **Mi Día, Ventas, Caja, Deudas, Inventario, Tareas, Reportes, Equipo, Ajustes.**
+**Gap de vistas: la desktop tiene 11, la webapp 4** (Dashboard/Resumen, Pipeline, Clientes, ✅ Ventas).
+Faltan 7: **Mi Día, Caja, Deudas, Inventario, Tareas, Reportes, Equipo, Ajustes.**
+
+> **Ventas (hecho):** vista con KPIs + tabla + búsqueda, alta de venta (ítems + cobro total/parcial/fiado)
+> y detalle (ver, registrar pago, eliminar). En `clozr-web/src/app/app/Crm.tsx` + métodos en `api.ts`.
+> Simplificación conocida: la venta va en **ARS** (el schema `sales` no tiene columna de moneda; la
+> moneda vive en los pagos). Multi-moneda por venta, IMEI, regularización y decremento de stock =
+> pendientes de la desktop, para una iteración futura.
 
 **Ventaja clave:** el backend (Worker) YA tiene casi todas las rutas (sales, cash, catalog/stock,
 assigned-tasks, workspaces/members, _generic para tasks/followups/payment-methods, etc.). Portar
@@ -181,7 +187,7 @@ cada vista es mayormente **frontend + método nuevo en `clozr-web/src/lib/api.ts
 
 | # | Vista | Por qué | Backend |
 |---|-------|---------|---------|
-| 1 | **Ventas** | Core del producto ("cerrá más ventas") | `sales.ts` ✅ |
+| ~~1~~ | ~~**Ventas**~~ | ✅ HECHO (2026-06-14) | `sales.ts` ✅ |
 | 2 | **Tareas** | Uso diario + muestra las tasks del AI Triage (`template_id='ai-triage'`) | assigned-tasks + tasks ✅ |
 | 3 | **Mi Día** | Home/resumen del día (compone pipeline+tareas+followups) | agrega de los anteriores |
 | 4 | **Caja** | Entradas/salidas de dinero | cash (_generic) ✅ |
