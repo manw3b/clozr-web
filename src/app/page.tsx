@@ -2,12 +2,8 @@ import Link from "next/link";
 
 function Logo() {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="grid h-9 w-9 -skew-x-6 place-items-center rounded-lg bg-primary text-lg font-extrabold tracking-tighter text-white">
-        CZ
-      </div>
-      <span className="text-lg font-bold tracking-tight">Clozr</span>
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/logo-horizontal.svg" alt="Clozr" className="h-7 w-auto" />
   );
 }
 

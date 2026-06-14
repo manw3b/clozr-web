@@ -114,9 +114,8 @@ export default function Crm({
       {/* Sidebar */}
       <aside className="flex flex-col border-r border-border bg-surface p-3">
         <div className="flex items-center gap-2.5 px-2 py-3">
-          <div className="grid h-9 w-9 -skew-x-6 place-items-center rounded-lg bg-primary text-lg font-extrabold tracking-tighter text-white">
-            CZ
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-isotipo.svg" alt="Clozr" className="h-8 w-auto shrink-0" />
           <div className="min-w-0">
             <div className="truncate text-sm font-bold">{workspace.name}</div>
             <div className="text-xs text-text-dim capitalize">{workspace.role}</div>
