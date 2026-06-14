@@ -125,7 +125,7 @@ Invocalos con `/clozr-endpoint`, `/clozr-release`, etc., o se activan solos cuan
 - **Hosting front:** Vercel (scope `clozr-s`, proyecto `clozr-web`, deploy auto por push a `main`).
 - **Dominio:** `clozr.online` comprado en Hostinger; DNS apunta a Vercel. Usar `www.clozr.online` (el apex puede tardar en propagar).
 - **Backend:** Cloudflare Worker en `https://clozr-auth.pyter-import.workers.dev` (API REST CRUD multi-tenant) + Turso (DB) + R2 (archivos).
-- **Auth:** email passwordless (código de 6 dígitos) + (pronto) Google OAuth. JWT HS256 en `localStorage` (`clozr_jwt`, `clozr_ws`), header `Authorization: Bearer`.
+- **Auth:** email passwordless (código de 6 dígitos) + Google OAuth (LIVE desde 2026-06-14). JWT HS256 en `localStorage` (`clozr_jwt`, `clozr_ws`), header `Authorization: Bearer`.
 - **Seguridad multi-tenant:** confirmada — cada handler valida membership y filtra por `workspace_id`.
 
 > Para probar login real hoy: `pyter.import@gmail.com` (único email habilitado en Resend hasta verificar dominio).
