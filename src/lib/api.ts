@@ -12,6 +12,10 @@ import type {
   LeadSource,
   PipelineItem,
   PipelineStage,
+  Sale,
+  SaleDetail,
+  SaleItem,
+  SalePayment,
   User,
   Workspace,
 } from "./types";
@@ -296,4 +300,158 @@ export async function moveItem(id: string, stage: PipelineStage): Promise<void> 
 }
 export async function deleteItem(id: string): Promise<void> {
   await req(`/workspaces/${ws()}/pipeline/items/${id}`, { method: "DELETE" });
+}
+
+/* ---------- sales (ventas) ---------- */
+interface SaleRaw {
+  id: string;
+  customer_id?: string | null;
+  customer_name?: string | null;
+  seller_name?: string | null;
+  subtotal?: number | null;
+  total?: number | null;
+  total_paid?: number | null;
+  balance?: number | null;
+  is_paid?: number | null;
+  payment_method?: string | null;
+  notes?: string | null;
+  sale_date?: string | null;
+  created_at?: string | null;
+}
+function mapSale(r: SaleRaw): Sale {
+  return {
+    id: r.id,
+    customerId: r.customer_id ?? undefined,
+    customerName: r.customer_name ?? "Consumidor final",
+    sellerName: r.seller_name ?? undefined,
+    subtotal: Number(r.subtotal ?? 0),
+    total: Number(r.total ?? 0),
+    totalPaid: Number(r.total_paid ?? 0),
+    balance: Number(r.balance ?? 0),
+    isPaid: !!r.is_paid,
+    paymentMethod: r.payment_method ?? undefined,
+    notes: r.notes ?? undefined,
+    saleDate: r.sale_date ?? undefined,
+    createdAt: r.created_at ?? undefined,
+  };
+}
+
+interface SaleItemRaw {
+  id: string;
+  description: string;
+  quantity?: number | null;
+  unit_price?: number | null;
+  subtotal?: number | null;
+}
+function mapSaleItem(r: SaleItemRaw): SaleItem {
+  return {
+    id: r.id,
+    description: r.description,
+    quantity: Number(r.quantity ?? 1),
+    unitPrice: Number(r.unit_price ?? 0),
+    subtotal: Number(r.subtotal ?? 0),
+  };
+}
+
+interface SalePaymentRaw {
+  id: string;
+  method: string;
+  currency?: string | null;
+  amount?: number | null;
+  is_deposit?: number | null;
+}
+function mapSalePayment(r: SalePaymentRaw): SalePayment {
+  return {
+    id: r.id,
+    method: r.method,
+    currency: (r.currency as Currency) ?? "ARS",
+    amount: Number(r.amount ?? 0),
+    isDeposit: !!r.is_deposit,
+  };
+}
+
+export async function listSales(): Promise<Sale[]> {
+  const r = await req<{ sales: SaleRaw[] }>(`/workspaces/${ws()}/sales`);
+  return (r.sales ?? []).map(mapSale);
+}
+
+export async function getSale(id: string): Promise<SaleDetail> {
+  const r = await req<{ sale: SaleRaw; items: SaleItemRaw[]; payments: SalePaymentRaw[] }>(
+    `/workspaces/${ws()}/sales/${id}`,
+  );
+  return {
+    ...mapSale(r.sale),
+    items: (r.items ?? []).map(mapSaleItem),
+    payments: (r.payments ?? []).map(mapSalePayment),
+  };
+}
+
+export interface NewSaleInput {
+  customerId?: string;
+  customerName: string;
+  sellerName?: string;
+  notes?: string;
+  items: Array<{ description: string; quantity: number; unitPrice: number }>;
+  payments: Array<{ method: string; amount: number; currency: Currency }>;
+}
+
+export async function createSale(input: NewSaleInput): Promise<string> {
+  // El Worker NO calcula totales en POST (sí en addPayment) — los mandamos
+  // calculados desde acá. Venta en ARS por ahora (el schema sale no guarda
+  // moneda; la moneda vive en cada pago). Multi-moneda = feature pendiente.
+  const items = input.items.map((i) => ({
+    description: i.description,
+    quantity: i.quantity,
+    unit_price: i.unitPrice,
+    subtotal: i.quantity * i.unitPrice,
+  }));
+  const subtotal = items.reduce((a, i) => a + i.subtotal, 0);
+  const total = subtotal;
+  const totalPaid = input.payments.reduce((a, p) => a + p.amount, 0);
+  const balance = total - totalPaid;
+  const paymentMethod =
+    input.payments.length === 1
+      ? input.payments[0]!.method
+      : input.payments.length > 1
+        ? "multiple"
+        : "cuenta-corriente";
+
+  const r = await req<{ id: string }>(`/workspaces/${ws()}/sales`, {
+    method: "POST",
+    body: JSON.stringify({
+      customer_id: input.customerId ?? null,
+      customer_name: input.customerName,
+      seller_name: input.sellerName ?? null,
+      subtotal,
+      total,
+      total_paid: totalPaid,
+      balance,
+      is_paid: balance <= 0.01 ? 1 : 0,
+      payment_method: paymentMethod,
+      notes: input.notes ?? null,
+      sale_date: new Date().toISOString(),
+      items,
+      payments: input.payments.map((p) => ({
+        method: p.method,
+        amount: p.amount,
+        currency: p.currency,
+      })),
+    }),
+  });
+  return r.id;
+}
+
+export async function addPayment(
+  saleId: string,
+  p: { method: string; amount: number; currency: Currency },
+): Promise<void> {
+  // El Worker recalcula total_paid/balance/is_paid al agregar el pago.
+  await req(`/workspaces/${ws()}/sales/${saleId}/payments`, {
+    method: "POST",
+    body: JSON.stringify({ method: p.method, amount: p.amount, currency: p.currency }),
+  });
+}
+
+export async function deleteSale(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/sales/${id}`, { method: "DELETE" });
 }

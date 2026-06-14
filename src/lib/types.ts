@@ -98,3 +98,61 @@ export const SOURCE_LABELS: Record<LeadSource, string> = {
   otro: "Otro",
 };
 export const SOURCES = Object.keys(SOURCE_LABELS) as LeadSource[];
+
+/* ───────── Ventas ───────── */
+export type PaymentMethod =
+  | "efectivo"
+  | "transferencia"
+  | "tarjeta"
+  | "mercadopago"
+  | "cuenta-corriente"
+  | "otro";
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  tarjeta: "Tarjeta",
+  mercadopago: "Mercado Pago",
+  "cuenta-corriente": "Cuenta corriente",
+  otro: "Otro",
+};
+export const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
+
+export interface SaleItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface SalePayment {
+  id: string;
+  method: string;
+  currency: Currency;
+  amount: number;
+  isDeposit: boolean;
+}
+
+/** Cabecera de venta (lo que devuelve el listado). */
+export interface Sale {
+  id: string;
+  customerId?: string;
+  customerName: string;
+  sellerName?: string;
+  subtotal: number;
+  total: number;
+  totalPaid: number;
+  balance: number;
+  isPaid: boolean;
+  paymentMethod?: string;
+  notes?: string;
+  saleDate?: string;
+  createdAt?: string;
+}
+
+/** Venta con items + pagos (GET de una venta). */
+export interface SaleDetail extends Sale {
+  items: SaleItem[];
+  payments: SalePayment[];
+}

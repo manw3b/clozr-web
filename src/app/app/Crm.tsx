@@ -5,6 +5,8 @@ import * as api from "@/lib/api";
 import {
   CLIENT_TYPE_LABELS,
   CLIENT_TYPES,
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_METHODS,
   PRIORITIES,
   PRIORITY_LABELS,
   SOURCE_LABELS,
@@ -18,6 +20,8 @@ import type {
   LeadSource,
   PipelineItem,
   PipelineStage,
+  Sale,
+  SaleDetail,
   User,
   Workspace,
 } from "@/lib/types";
@@ -48,9 +52,11 @@ const PRIORITY_PILL: Record<LeadPriority, string> = {
 type ModalState =
   | { kind: "customer"; id?: string }
   | { kind: "item"; id?: string; presetStageId?: string }
+  | { kind: "sale" }
+  | { kind: "saleDetail"; id: string }
   | null;
 
-type View = "dashboard" | "pipeline" | "clientes";
+type View = "dashboard" | "pipeline" | "clientes" | "ventas";
 
 export default function Crm({
   user,
@@ -69,6 +75,7 @@ export default function Crm({
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [items, setItems] = useState<PipelineItem[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -86,10 +93,15 @@ export default function Crm({
         await api.seedDefaultStages();
         st = await api.listStages();
       }
-      const [cs, it] = await Promise.all([api.listCustomers(), api.listItems()]);
+      const [cs, it, sl] = await Promise.all([
+        api.listCustomers(),
+        api.listItems(),
+        api.listSales(),
+      ]);
       setStages(st);
       setCustomers(cs);
       setItems(it);
+      setSales(sl);
     } catch (e) {
       setError(
         e instanceof api.ApiError && e.status === 403
@@ -108,6 +120,7 @@ export default function Crm({
 
   const refreshCustomers = () => api.listCustomers().then(setCustomers);
   const refreshItems = () => api.listItems().then(setItems);
+  const refreshSales = () => api.listSales().then(setSales);
 
   return (
     <div className="grid h-screen grid-cols-[240px_1fr]">
@@ -126,6 +139,7 @@ export default function Crm({
             ["dashboard", "◧", "Resumen"],
             ["pipeline", "▦", "Pipeline"],
             ["clientes", "☰", "Clientes"],
+            ["ventas", "$", "Ventas"],
           ] as const).map(([v, ico, label]) => (
             <button
               key={v}
@@ -156,14 +170,22 @@ export default function Crm({
         <header className="flex items-center gap-4 border-b border-border bg-surface px-7 py-4">
           <div>
             <h2 className="text-xl font-bold tracking-tight">
-              {view === "dashboard" ? "Resumen" : view === "pipeline" ? "Pipeline" : "Clientes"}
+              {view === "dashboard"
+                ? "Resumen"
+                : view === "pipeline"
+                  ? "Pipeline"
+                  : view === "clientes"
+                    ? "Clientes"
+                    : "Ventas"}
             </h2>
             <p className="text-xs text-text-dim">
               {view === "dashboard"
                 ? "Tu actividad de ventas de un vistazo"
                 : view === "pipeline"
                   ? "Arrastrá las oportunidades entre etapas"
-                  : "Tu cartera de contactos"}
+                  : view === "clientes"
+                    ? "Tu cartera de contactos"
+                    : "Tus ventas registradas"}
             </p>
           </div>
           <div className="flex-1" />
@@ -173,12 +195,21 @@ export default function Crm({
           >
             + Cliente
           </button>
-          <button
-            onClick={() => setModal({ kind: "item" })}
-            className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
-          >
-            + Oportunidad
-          </button>
+          {view === "ventas" ? (
+            <button
+              onClick={() => setModal({ kind: "sale" })}
+              className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
+            >
+              + Venta
+            </button>
+          ) : (
+            <button
+              onClick={() => setModal({ kind: "item" })}
+              className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
+            >
+              + Oportunidad
+            </button>
+          )}
         </header>
 
         <div className="flex-1 overflow-auto p-7">
@@ -219,8 +250,14 @@ export default function Crm({
               onOpen={(id) => setModal({ kind: "item", id })}
               onAdd={(stageId) => setModal({ kind: "item", presetStageId: stageId })}
             />
-          ) : (
+          ) : view === "clientes" ? (
             <Clientes customers={customers} items={items} onOpen={(id) => setModal({ kind: "customer", id })} />
+          ) : (
+            <Ventas
+              sales={sales}
+              onOpen={(id) => setModal({ kind: "saleDetail", id })}
+              onNew={() => setModal({ kind: "sale" })}
+            />
           )}
         </div>
       </main>
@@ -242,6 +279,22 @@ export default function Crm({
           onNeedCustomer={() => setModal({ kind: "customer" })}
           onClose={() => setModal(null)}
           onSaved={(msg) => { setModal(null); refreshItems(); flash(msg); }}
+        />
+      )}
+      {modal?.kind === "sale" && (
+        <SaleModal
+          customers={customers}
+          sellerName={user.name ?? user.email}
+          onClose={() => setModal(null)}
+          onSaved={(msg) => { setModal(null); refreshSales(); flash(msg); }}
+        />
+      )}
+      {modal?.kind === "saleDetail" && (
+        <SaleDetailModal
+          saleId={modal.id}
+          onClose={() => setModal(null)}
+          onChanged={(msg) => { refreshSales(); flash(msg); }}
+          onDeleted={(msg) => { setModal(null); refreshSales(); flash(msg); }}
         />
       )}
 
@@ -785,6 +838,475 @@ function ItemModal({
           Guardar
         </button>
       </div>
+    </Modal>
+  );
+}
+
+/* ───────── Ventas ───────── */
+function fmtDate(s?: string) {
+  if (!s) return "—";
+  const d = new Date(s);
+  return isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
+}
+
+function Ventas({
+  sales,
+  onOpen,
+  onNew,
+}: {
+  sales: Sale[];
+  onOpen: (id: string) => void;
+  onNew: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const query = q.toLowerCase();
+  const rows = sales.filter((s) => !query || s.customerName.toLowerCase().includes(query));
+  const vendido = sales.reduce((a, s) => a + s.total, 0);
+  const cobrado = sales.reduce((a, s) => a + s.totalPaid, 0);
+  const porCobrar = sales.reduce((a, s) => a + Math.max(0, s.balance), 0);
+
+  if (sales.length === 0) {
+    return (
+      <div className="py-16 text-center text-text-dim">
+        <div className="mb-3 text-4xl">$</div>
+        <p className="mb-4">Todavía no registraste ventas.</p>
+        <button
+          onClick={onNew}
+          className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover"
+        >
+          + Registrar venta
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-5 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
+        {[
+          { label: "Vendido", value: money(vendido, "ARS") },
+          { label: "Cobrado", value: money(cobrado, "ARS") },
+          { label: "Por cobrar", value: money(porCobrar, "ARS") },
+          { label: "Ventas", value: String(sales.length) },
+        ].map((k) => (
+          <div key={k.label} className="rounded-xl border border-border bg-surface p-5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-text-dim">{k.label}</div>
+            <div className="mt-1.5 text-2xl font-extrabold tracking-tight">{k.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mb-4 max-w-sm">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por cliente…"
+          className="w-full rounded-lg border border-border bg-surface-2 px-4 py-2.5 text-sm outline-none focus:border-primary"
+        />
+      </div>
+
+      {rows.length ? (
+        <div className="overflow-hidden rounded-xl border border-border">
+          <table className="w-full border-collapse bg-surface">
+            <thead>
+              <tr>
+                {["Fecha", "Cliente", "Total", "Cobrado", "Estado"].map((h) => (
+                  <th
+                    key={h}
+                    className="border-b border-border px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-text-dim"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((s) => (
+                <tr
+                  key={s.id}
+                  onClick={() => onOpen(s.id)}
+                  className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-hover"
+                >
+                  <td className="px-4 py-3 text-sm text-text-muted">{fmtDate(s.saleDate ?? s.createdAt)}</td>
+                  <td className="px-4 py-3 font-semibold">{s.customerName}</td>
+                  <td className="px-4 py-3 text-sm font-bold">{money(s.total, "ARS")}</td>
+                  <td className="px-4 py-3 text-sm">{money(s.totalPaid, "ARS")}</td>
+                  <td className="px-4 py-3">
+                    {s.isPaid ? (
+                      <span className="rounded-full bg-[rgba(16,185,129,0.12)] px-2.5 py-1 text-xs font-semibold text-[#10B981]">
+                        Pagada
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-[rgba(245,158,11,0.12)] px-2.5 py-1 text-xs font-semibold text-warning">
+                        Debe {money(s.balance, "ARS")}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="py-16 text-center text-text-dim">Sin resultados.</div>
+      )}
+    </div>
+  );
+}
+
+/* ───────── Sale modal (crear) ───────── */
+type SaleLine = { description: string; quantity: string; unitPrice: string };
+
+function SaleModal({
+  customers,
+  sellerName,
+  onClose,
+  onSaved,
+}: {
+  customers: Customer[];
+  sellerName: string;
+  onClose: () => void;
+  onSaved: (msg: string) => void;
+}) {
+  const [customerId, setCustomerId] = useState(""); // "" = consumidor final
+  const [lines, setLines] = useState<SaleLine[]>([{ description: "", quantity: "1", unitPrice: "" }]);
+  const [method, setMethod] = useState<string>("efectivo");
+  const [paidFull, setPaidFull] = useState(true);
+  const [partial, setPartial] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const total = lines.reduce((a, l) => a + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0), 0);
+  const paidAmount = paidFull ? total : Number(partial) || 0;
+  const balance = total - paidAmount;
+
+  function setLine(i: number, patch: Partial<SaleLine>) {
+    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }
+  function addLine() {
+    setLines((prev) => [...prev, { description: "", quantity: "1", unitPrice: "" }]);
+  }
+  function removeLine(i: number) {
+    setLines((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+  }
+
+  const validLines = lines.filter((l) => l.description.trim() && Number(l.unitPrice) > 0);
+  const canSave = validLines.length > 0 && total > 0 && !busy;
+
+  async function save() {
+    if (!canSave) return;
+    setBusy(true);
+    const cust = customers.find((c) => c.id === customerId);
+    const payments = paidAmount > 0 ? [{ method, amount: paidAmount, currency: "ARS" as Currency }] : [];
+    try {
+      await api.createSale({
+        customerId: cust?.id,
+        customerName: cust?.name ?? "Consumidor final",
+        sellerName,
+        notes: notes.trim() || undefined,
+        items: validLines.map((l) => ({
+          description: l.description.trim(),
+          quantity: Number(l.quantity) || 1,
+          unitPrice: Number(l.unitPrice) || 0,
+        })),
+        payments,
+      });
+      onSaved("Venta registrada");
+    } catch {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="Nueva venta" onClose={onClose}>
+      <div className="flex flex-col gap-3.5 p-5">
+        <label className="flex flex-col gap-1.5">
+          <span className={labelCls}>Cliente</span>
+          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={fieldCls}>
+            <option value="">Consumidor final</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="flex flex-col gap-2">
+          <span className={labelCls}>Productos / ítems</span>
+          {lines.map((l, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                value={l.description}
+                onChange={(e) => setLine(i, { description: e.target.value })}
+                placeholder="Descripción"
+                className={`${fieldCls} flex-1`}
+              />
+              <input
+                type="number"
+                value={l.quantity}
+                onChange={(e) => setLine(i, { quantity: e.target.value })}
+                className={`${fieldCls} w-14`}
+              />
+              <input
+                type="number"
+                value={l.unitPrice}
+                onChange={(e) => setLine(i, { unitPrice: e.target.value })}
+                placeholder="Precio"
+                className={`${fieldCls} w-24`}
+              />
+              <button
+                onClick={() => removeLine(i)}
+                disabled={lines.length === 1}
+                className="text-lg text-text-dim hover:text-danger disabled:opacity-30"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button onClick={addLine} className="self-start text-xs font-semibold text-primary-hover hover:underline">
+            + Agregar ítem
+          </button>
+        </div>
+
+        <div className="rounded-lg bg-surface-2 p-3 text-sm">
+          <div className="flex justify-between">
+            <span className="text-text-muted">Total</span>
+            <span className="font-bold">{money(total, "ARS")}</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1.5">
+            <span className={labelCls}>Método de pago</span>
+            <select value={method} onChange={(e) => setMethod(e.target.value)} className={fieldCls}>
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {PAYMENT_METHOD_LABELS[m]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={labelCls}>Cobro</span>
+            <select
+              value={paidFull ? "full" : "partial"}
+              onChange={(e) => setPaidFull(e.target.value === "full")}
+              className={fieldCls}
+            >
+              <option value="full">Pagado total</option>
+              <option value="partial">Pago parcial / fiado</option>
+            </select>
+          </label>
+        </div>
+        {!paidFull && (
+          <label className="flex flex-col gap-1.5">
+            <span className={labelCls}>Monto cobrado ahora</span>
+            <input
+              type="number"
+              value={partial}
+              onChange={(e) => setPartial(e.target.value)}
+              placeholder="0"
+              className={fieldCls}
+            />
+            <span className="text-xs text-text-dim">Queda debiendo {money(Math.max(0, balance), "ARS")}</span>
+          </label>
+        )}
+
+        <label className="flex flex-col gap-1.5">
+          <span className={labelCls}>Notas</span>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className={`${fieldCls} min-h-16 resize-y`} />
+        </label>
+      </div>
+      <div className="flex items-center gap-2.5 border-t border-border px-5 py-4">
+        <div className="flex-1" />
+        <button onClick={onClose} className="rounded-lg bg-surface-2 px-3.5 py-2 text-sm font-semibold hover:bg-border-strong">
+          Cancelar
+        </button>
+        <button
+          onClick={save}
+          disabled={!canSave}
+          className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50"
+        >
+          Registrar venta
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ───────── Sale detail modal (ver + cobrar + eliminar) ───────── */
+function SaleDetailModal({
+  saleId,
+  onClose,
+  onChanged,
+  onDeleted,
+}: {
+  saleId: string;
+  onClose: () => void;
+  onChanged: (msg: string) => void;
+  onDeleted: (msg: string) => void;
+}) {
+  const [sale, setSale] = useState<SaleDetail | null>(null);
+  const [loadErr, setLoadErr] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [payMethod, setPayMethod] = useState<string>("efectivo");
+  const [payAmount, setPayAmount] = useState("");
+
+  async function load() {
+    setLoadErr(false);
+    try {
+      setSale(await api.getSale(saleId));
+    } catch {
+      setLoadErr(true);
+    }
+  }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saleId]);
+
+  async function addPay() {
+    const amt = Number(payAmount);
+    if (!amt || amt <= 0) return;
+    setBusy(true);
+    try {
+      await api.addPayment(saleId, { method: payMethod, amount: amt, currency: "ARS" });
+      setPayAmount("");
+      await load();
+      onChanged("Pago registrado");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    if (!confirm("¿Eliminar esta venta?")) return;
+    setBusy(true);
+    try {
+      await api.deleteSale(saleId);
+      onDeleted("Venta eliminada");
+    } catch {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="Detalle de venta" onClose={onClose}>
+      {!sale ? (
+        <div className="p-6 text-sm text-text-dim">{loadErr ? "No se pudo cargar la venta." : "Cargando…"}</div>
+      ) : (
+        <>
+          <div className="flex flex-col gap-4 p-5">
+            <div>
+              <div className="text-lg font-bold">{sale.customerName}</div>
+              <div className="text-xs text-text-dim">
+                {fmtDate(sale.saleDate ?? sale.createdAt)}
+                {sale.sellerName ? ` · ${sale.sellerName}` : ""}
+              </div>
+            </div>
+
+            <div>
+              <div className={`${labelCls} mb-1.5`}>Ítems</div>
+              <div className="overflow-hidden rounded-lg border border-border">
+                {sale.items.length ? (
+                  sale.items.map((it) => (
+                    <div
+                      key={it.id}
+                      className="flex items-center justify-between border-b border-border px-3 py-2 text-sm last:border-0"
+                    >
+                      <span>
+                        {it.quantity}× {it.description}
+                      </span>
+                      <span className="font-semibold">{money(it.subtotal, "ARS")}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-sm text-text-dim">Sin ítems</div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-surface-2 p-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-text-muted">Total</span>
+                <span className="font-bold">{money(sale.total, "ARS")}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-muted">Cobrado</span>
+                <span>{money(sale.totalPaid, "ARS")}</span>
+              </div>
+              <div className="mt-1 flex justify-between border-t border-border pt-1">
+                <span className="text-text-muted">Saldo</span>
+                <span className={`font-bold ${sale.balance > 0.01 ? "text-warning" : "text-[#10B981]"}`}>
+                  {money(sale.balance, "ARS")}
+                </span>
+              </div>
+            </div>
+
+            {sale.payments.length > 0 && (
+              <div>
+                <div className={`${labelCls} mb-1.5`}>Pagos</div>
+                <div className="flex flex-col gap-1">
+                  {sale.payments.map((p) => (
+                    <div key={p.id} className="flex justify-between text-sm">
+                      <span className="text-text-muted">
+                        {PAYMENT_METHOD_LABELS[p.method as keyof typeof PAYMENT_METHOD_LABELS] ?? p.method}
+                      </span>
+                      <span>{money(p.amount, p.currency)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {sale.notes && <div className="text-sm text-text-muted">{sale.notes}</div>}
+
+            {sale.balance > 0.01 && (
+              <div className="rounded-lg border border-border p-3">
+                <div className={`${labelCls} mb-2`}>Registrar un pago</div>
+                <div className="flex items-end gap-2">
+                  <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className={`${fieldCls} flex-1`}>
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>
+                        {PAYMENT_METHOD_LABELS[m]}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    placeholder="Monto"
+                    className={`${fieldCls} w-28`}
+                  />
+                  <button
+                    onClick={addPay}
+                    disabled={busy || !(Number(payAmount) > 0)}
+                    className="rounded-lg bg-primary px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50"
+                  >
+                    Cobrar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2.5 border-t border-border px-5 py-4">
+            <button
+              onClick={remove}
+              disabled={busy}
+              className="rounded-lg bg-[rgba(239,68,68,0.12)] px-3 py-2 text-sm font-semibold text-danger hover:bg-danger hover:text-white disabled:opacity-50"
+            >
+              Eliminar
+            </button>
+            <div className="flex-1" />
+            <button onClick={onClose} className="rounded-lg bg-surface-2 px-3.5 py-2 text-sm font-semibold hover:bg-border-strong">
+              Cerrar
+            </button>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }
