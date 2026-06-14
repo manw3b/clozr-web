@@ -130,6 +130,20 @@ Invocalos con `/clozr-endpoint`, `/clozr-release`, etc., o se activan solos cuan
 
 > Para probar login real hoy: `pyter.import@gmail.com` (único email habilitado en Resend hasta verificar dominio).
 
+### Almacenamiento de imágenes/assets — NO hace falta nube nueva
+Dos tipos, y los dos ya están resueltos:
+
+| Tipo de imagen | Dónde va | ¿Nube nueva? |
+|---|---|---|
+| **Assets estáticos** (logo, SVGs, íconos, UI) | repo → `clozr-web/public/` (lo sirve el CDN de Vercel, gratis) | ❌ No |
+| **Subidas por el usuario en runtime** (logo/banner de workspace, fotos de productos) | **Cloudflare R2** — ya montado en el Worker (bucket `clozr-assets`, binding `env.ASSETS`, ruta `cf-worker/src/routes/workspace-assets.ts`) | ❌ No |
+
+- Subir un asset estático = copiarlo a `public/` y referenciarlo con `/archivo.svg`.
+- R2: 10 GB gratis, después ~$0.015/GB/mes, **sin cargo por egress**. Es el "Feature I" de la desktop.
+- Al portar **Ajustes** (logo/banner) o **Catálogo** (fotos) a la webapp, conectá la webapp a esa ruta R2
+  existente (skill `clozr-endpoint` si hay que exponer algo nuevo). NO crear storage de cero.
+- **Decisión:** no agregar S3 / Cloudinary / Firebase Storage — `public/` + R2 cubren todo.
+
 ---
 
 ## 7. Decisiones acordadas (no re-discutir)
