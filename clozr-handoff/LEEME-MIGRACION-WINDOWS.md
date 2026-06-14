@@ -63,43 +63,59 @@ Después `cd clozr-web && npm install`. Dev server: `npm run dev` (puerto por de
 
 ---
 
-## 4. ⏯️ DÓNDE RETOMAR — Login con Google (verificado hoy 2026-06-14)
+## 4. ✅ COMPLETADO el 2026-06-14 (en la sesión de Ubuntu) — NO rehacer
 
-El **código** del login con Google está listo y commiteado (front y worker). Faltan **3 pasos manuales**.
-Estado verificado hoy:
+**Login con Google — LIVE y probado end-to-end.** El usuario entró por Google a https://www.clozr.online/app
+y quedó logueado en el CRM. Lo hecho:
+- `wrangler` autenticado como `pyter.import@gmail.com`.
+- OAuth client creado en Google Cloud Console (app `Clozr`, publicada a producción, scopes `openid email profile`).
+  Redirect URI registrada: `https://clozr-auth.pyter-import.workers.dev/auth/google/callback`.
+- Secrets cargados en el worker: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+- Worker deployado (Version ID `84cc6ccf-...`). `/auth/google/start` ahora hace 302 a Google. ✅
 
-| Componente | Estado |
-|---|---|
-| Código front (botón "Continuar con Google" + manejo de `#token`) | ✅ commiteado y auto-deployado en Vercel |
-| Código worker (`/auth/google/start` + `/callback`) | ✅ commiteado (commit `4319dcd`) |
-| **Worker deployado con ese código** | ❌ NO — `/auth/google/start` da 404 en prod |
-| Webapp en prod | ✅ LIVE en https://www.clozr.online |
-
-**Pasos pendientes (hacelos en Windows con wrangler autenticado):**
-
-1. **Google Cloud Console** → crear OAuth client:
-   - Redirect URI: `https://clozr-auth.pyter-import.workers.dev/auth/google/callback`
-   - Publicar la consent screen (scopes básicos email/profile/openid no requieren verificación de Google).
-2. **Secrets del worker** (desde `clozr/cf-worker`):
-   ```
-   npx wrangler secret put GOOGLE_CLIENT_ID
-   npx wrangler secret put GOOGLE_CLIENT_SECRET
-   ```
-3. **Deploy del worker:**
-   ```
-   npx wrangler deploy
-   ```
-4. Verificar el flujo end-to-end: entrar a https://www.clozr.online → "Continuar con Google" → loguear.
+**AI Triage matutino — configurado y activo.** El secret `ANTHROPIC_API_KEY` quedó cargado en el worker
+y la key validada (Haiku responde). El cron `0 11 * * *` (8am ART) está registrado. Código en
+`clozr/cf-worker/src/cron/aiTriage.ts`. Aún NO se vio una corrida real con datos (corre solo, o trigger
+manual `POST /admin/ai-triage` con header `x-admin-secret: <JWT_SECRET del worker>`).
 
 ---
 
-## 5. Temas en cola (después de Google)
+## 5. ⏯️ DÓNDE RETOMAR EN WINDOWS
 
+**🔒 PRIMERO — rotar credenciales expuestas en el chat (seguridad):**
+La `ANTHROPIC_API_KEY` y el `GOOGLE_CLIENT_SECRET` se pegaron en texto plano durante la sesión.
+La API key de Anthropic es la urgente (gasto directo). Pasos:
+1. Console Anthropic → API Keys → borrar la `clozr-worker` vieja → crear una nueva →
+   `cd clozr/cf-worker && printf '%s' "NUEVA_KEY" | npx wrangler secret put ANTHROPIC_API_KEY`
+2. (Menos urgente) Google Cloud Console → rotar el client secret → `wrangler secret put GOOGLE_CLIENT_SECRET`.
+> En Windows, `wrangler` está autenticado por máquina — vas a tener que correr `npx wrangler login` de nuevo allá.
+
+**Después — verificar el AI Triage:** disparar `POST /admin/ai-triage` (o esperar al cron) y confirmar que
+crea tasks `template_id = 'ai-triage'`. Si no hay leads estancados (open, sin update hace 5+ días), da
+`tasksCreated: 0` y está OK.
+
+**Luego — temas en cola:**
 - **Abrir el login por email a todos:** hoy el magic-code solo llega a `pyter.import@gmail.com`
   (sandbox de Resend). Para abrirlo: verificar el dominio `clozr.online` en Resend + actualizar `RESEND_FROM` del worker.
 - **Billing:** Mercado Pago (cobro en moneda local LATAM) o Lemon Squeezy (USD, merchant of record).
   Mantener capa desacoplada: webhook → flag de plan en Turso. Stripe NO sirve para vender desde Argentina.
+- **Mostrar tasks de IA en la webapp** con badge "sugerido por Clozr" (filtro `template_id = 'ai-triage'`).
 - **PWA / móvil:** post-lanzamiento.
+
+---
+
+## 5b. Skills de Claude Code disponibles (viajan por git, ya en los repos)
+
+En `clozr-web/.claude/skills/`:
+- **clozr-endpoint** — scaffold cross-repo de un endpoint nuevo (handler worker + dispatch + cliente `api.ts`) con guard multi-tenant ya puesto.
+
+En `clozr/.claude/skills/`:
+- **clozr-multitenant-audit** — audita que cada handler filtre por `workspace_id` + auth/membership antes de deploy.
+- **clozr-release** — `npm run release` + CHANGELOG + `wrangler deploy` del worker.
+- **clozr-feature** — feature full-stack en desktop siguiendo golden rules (mapper+test, `qk.*`, `can()`).
+- **clozr-ai-triage** — testear/deployar/extender el AI Triage matutino (cron + llamada a Claude).
+
+Invocalos con `/clozr-endpoint`, `/clozr-release`, etc., o se activan solos cuando la tarea encaja.
 
 ---
 
