@@ -7,15 +7,22 @@
  */
 import type {
   Currency,
+  CashKind,
+  CashMovement,
   Customer,
   LeadPriority,
   LeadSource,
+  Member,
+  PaymentOption,
   PipelineItem,
   PipelineStage,
+  Product,
   Sale,
   SaleDetail,
   SaleItem,
   SalePayment,
+  Task,
+  TaskType,
   User,
   Workspace,
 } from "./types";
@@ -454,4 +461,283 @@ export async function addPayment(
 
 export async function deleteSale(id: string): Promise<void> {
   await req(`/workspaces/${ws()}/sales/${id}`, { method: "DELETE" });
+}
+
+/* ---------- tasks ---------- */
+interface TaskRaw {
+  id: string;
+  title: string;
+  type?: string | null;
+  notes?: string | null;
+  due_at?: string | null;
+  completed?: number | null;
+  template_id?: string | null;
+  customer_id?: string | null;
+  created_at?: string | null;
+}
+function mapTask(r: TaskRaw): Task {
+  return {
+    id: r.id,
+    title: r.title,
+    type: r.type === "rutina" ? "rutina" : "puntual",
+    notes: r.notes ?? undefined,
+    dueAt: r.due_at ?? undefined,
+    completed: r.completed === 1,
+    templateId: r.template_id ?? undefined,
+    customerId: r.customer_id ?? undefined,
+    createdAt: r.created_at ?? undefined,
+  };
+}
+
+export async function listTasks(): Promise<Task[]> {
+  const data = await req<{ items: TaskRaw[] }>(`/workspaces/${ws()}/tasks`);
+  return (data.items ?? []).map(mapTask);
+}
+
+export async function createTask(input: {
+  title: string;
+  type: TaskType;
+  dueAt?: string | null;
+}): Promise<string> {
+  const r = await req<{ id: string }>(`/workspaces/${ws()}/tasks`, {
+    method: "POST",
+    body: JSON.stringify({ title: input.title, type: input.type, due_at: input.dueAt ?? null }),
+  });
+  return r.id;
+}
+
+export async function setTaskCompleted(id: string, completed: boolean): Promise<void> {
+  await req(`/workspaces/${ws()}/tasks/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      completed: completed ? 1 : 0,
+      completed_at: completed ? new Date().toISOString() : null,
+    }),
+  });
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/tasks/${id}`, { method: "DELETE" });
+}
+
+/* ---------- team / members ---------- */
+interface MemberRaw {
+  id: string;
+  user_id?: string | null;
+  email: string;
+  role: string;
+  status: string;
+  invited_at?: string | null;
+  accepted_at?: string | null;
+  user_name?: string | null;
+}
+function mapMember(r: MemberRaw): Member {
+  return {
+    id: r.id,
+    userId: r.user_id ?? undefined,
+    email: r.email,
+    role: r.role,
+    status: r.status,
+    userName: r.user_name ?? undefined,
+    invitedAt: r.invited_at ?? undefined,
+    acceptedAt: r.accepted_at ?? undefined,
+  };
+}
+
+export async function listMembers(): Promise<Member[]> {
+  const data = await req<{ members: MemberRaw[] }>(`/workspaces/${ws()}/members`);
+  return (data.members ?? []).map(mapMember);
+}
+
+export async function inviteMember(email: string, role: "admin" | "vendedor" | "viewer"): Promise<void> {
+  await req(`/workspaces/${ws()}/invite`, { method: "POST", body: JSON.stringify({ email, role }) });
+}
+
+export async function patchMemberRole(memberId: string, role: string): Promise<void> {
+  await req(`/workspaces/${ws()}/members/${memberId}`, { method: "PATCH", body: JSON.stringify({ role }) });
+}
+
+export async function revokeMember(memberId: string): Promise<void> {
+  await req(`/workspaces/${ws()}/members/${memberId}`, { method: "DELETE" });
+}
+
+export async function issueAccessCode(
+  memberId: string,
+): Promise<{ code: string; email: string; expiresInMin: number }> {
+  return req(`/workspaces/${ws()}/members/${memberId}/access-code`, { method: "POST" });
+}
+
+/* ---------- catalog / inventory (CRUD simple; IMEIs diferidos) ---------- */
+interface ProductRaw {
+  id: string;
+  name: string;
+  category?: string | null;
+  price?: number | null;
+  currency?: string | null;
+  cost?: number | null;
+  sku?: string | null;
+  notes?: string | null;
+  track_stock?: number | null;
+  stock?: number | null;
+  stock_min?: number | null;
+  active?: number | null;
+  image_path?: string | null;
+  condition?: string | null;
+  created_at?: string | null;
+}
+function mapProduct(r: ProductRaw): Product {
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category ?? undefined,
+    price: Number(r.price ?? 0),
+    currency: r.currency === "USD" ? "USD" : "ARS",
+    cost: r.cost != null ? Number(r.cost) : undefined,
+    sku: r.sku ?? undefined,
+    notes: r.notes ?? undefined,
+    trackStock: r.track_stock === 1,
+    stock: Number(r.stock ?? 0),
+    stockMin: r.stock_min != null ? Number(r.stock_min) : undefined,
+    active: r.active !== 0,
+    imagePath: r.image_path ?? undefined,
+    condition: r.condition ?? undefined,
+    createdAt: r.created_at ?? undefined,
+  };
+}
+
+export interface ProductInput {
+  name?: string;
+  category?: string | null;
+  price?: number;
+  cost?: number | null;
+  sku?: string | null;
+  notes?: string | null;
+  trackStock?: boolean;
+  stock?: number;
+  stockMin?: number | null;
+  active?: boolean;
+  condition?: string | null;
+}
+function productBody(p: ProductInput): Record<string, unknown> {
+  const b: Record<string, unknown> = {};
+  if (p.name !== undefined) b.name = p.name;
+  if (p.category !== undefined) b.category = p.category;
+  if (p.price !== undefined) b.price = p.price;
+  if (p.cost !== undefined) b.cost = p.cost;
+  if (p.sku !== undefined) b.sku = p.sku;
+  if (p.notes !== undefined) b.notes = p.notes;
+  if (p.trackStock !== undefined) b.track_stock = p.trackStock ? 1 : 0;
+  if (p.stock !== undefined) b.stock = p.stock;
+  if (p.stockMin !== undefined) b.stock_min = p.stockMin;
+  if (p.active !== undefined) b.active = p.active ? 1 : 0;
+  if (p.condition !== undefined) b.condition = p.condition;
+  return b;
+}
+
+export async function listCatalog(): Promise<Product[]> {
+  const data = await req<{ items: ProductRaw[] }>(`/workspaces/${ws()}/catalog`);
+  return (data.items ?? []).map(mapProduct);
+}
+export async function createProduct(input: ProductInput): Promise<string> {
+  const r = await req<{ id: string }>(`/workspaces/${ws()}/catalog`, {
+    method: "POST",
+    body: JSON.stringify({ currency: "ARS", ...productBody(input) }),
+  });
+  return r.id;
+}
+export async function updateProduct(id: string, patch: ProductInput): Promise<void> {
+  await req(`/workspaces/${ws()}/catalog/${id}`, { method: "PATCH", body: JSON.stringify(productBody(patch)) });
+}
+export async function deleteProduct(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/catalog/${id}`, { method: "DELETE" });
+}
+
+/* ---------- workspace settings ---------- */
+export async function updateWorkspace(patch: { name?: string; industry?: string }): Promise<void> {
+  await req(`/workspaces/${ws()}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+/* ---------- payment methods (config) ---------- */
+interface PayMethodRaw {
+  id: string;
+  name: string;
+  enabled?: number | null;
+  currency?: string | null;
+  sort_order?: number | null;
+}
+function mapPayMethod(r: PayMethodRaw): PaymentOption {
+  return {
+    id: r.id,
+    name: r.name,
+    enabled: r.enabled !== 0,
+    currency: r.currency ?? undefined,
+    sortOrder: r.sort_order ?? undefined,
+  };
+}
+export async function listPaymentMethods(): Promise<PaymentOption[]> {
+  const data = await req<{ items: PayMethodRaw[] }>(`/workspaces/${ws()}/payment-methods`);
+  return (data.items ?? []).map(mapPayMethod);
+}
+export async function createPaymentMethod(name: string): Promise<void> {
+  await req(`/workspaces/${ws()}/payment-methods`, { method: "POST", body: JSON.stringify({ name }) });
+}
+export async function deletePaymentMethod(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/payment-methods/${id}`, { method: "DELETE" });
+}
+
+/* ---------- cash movements (sesión abrir/cerrar diferida) ---------- */
+interface CashMovementRaw {
+  id: string;
+  kind?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  description?: string | null;
+  category?: string | null;
+  payment_method?: string | null;
+  customer_name?: string | null;
+  sale_id?: string | null;
+  moved_at?: string | null;
+  created_at?: string | null;
+}
+function mapCashMovement(r: CashMovementRaw): CashMovement {
+  return {
+    id: r.id,
+    kind: r.kind === "expense" ? "expense" : "income",
+    amount: Number(r.amount ?? 0),
+    currency: r.currency === "USD" ? "USD" : "ARS",
+    description: r.description ?? undefined,
+    category: r.category ?? undefined,
+    paymentMethod: r.payment_method ?? undefined,
+    customerName: r.customer_name ?? undefined,
+    saleId: r.sale_id ?? undefined,
+    movedAt: r.moved_at ?? r.created_at ?? undefined,
+  };
+}
+
+export async function listCashMovements(): Promise<CashMovement[]> {
+  const data = await req<{ items: CashMovementRaw[] }>(`/workspaces/${ws()}/cash`);
+  return (data.items ?? []).map(mapCashMovement);
+}
+export async function createCashMovement(input: {
+  kind: CashKind;
+  amount: number;
+  currency: Currency;
+  description?: string | null;
+  category?: string | null;
+}): Promise<string> {
+  const r = await req<{ id: string }>(`/workspaces/${ws()}/cash`, {
+    method: "POST",
+    body: JSON.stringify({
+      kind: input.kind,
+      amount: input.amount,
+      currency: input.currency,
+      description: input.description ?? null,
+      category: input.category ?? null,
+      moved_at: new Date().toISOString(),
+    }),
+  });
+  return r.id;
+}
+export async function deleteCashMovement(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/cash/${id}`, { method: "DELETE" });
 }

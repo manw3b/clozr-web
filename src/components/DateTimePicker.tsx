@@ -1,0 +1,648 @@
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Calendar, ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
+import { Button } from './Button';
+import { color, radius, space, text, weight, duration, ease } from '../tokens';
+
+/** Tamaño nominal del popover — usado para decidir flip up/down y left/right.
+ *  Conviene mantener sincronizado con el contenido real (margen de error ~30px). */
+const POPOVER_W = 320;
+const POPOVER_H = 480;
+
+/**
+ * DateTimePicker — popover propio con presets + tiempo + confirm.
+ *
+ * Reemplaza el `<input type="datetime-local">` nativo del browser, que en
+ * webview2/Tauri no tiene botón de confirmar y obliga al usuario a hacer
+ * click fuera para cerrar — UX mala.
+ *
+ * Patrón: trigger estilo Input → click abre popover. Popover tiene:
+ *   - Presets relativos (Hoy / Mañana / En 3 días / En 1 semana)
+ *   - Selector de fecha exacta (input type=date, sólo fecha)
+ *   - Selector de hora (HH:MM)
+ *   - Botones Borrar / Confirmar
+ *
+ * Emite ISO string en formato `YYYY-MM-DDTHH:MM` (compatible con
+ * datetime-local existente — drop-in replacement).
+ */
+
+interface DateTimePickerProps {
+  value: string; // ISO "YYYY-MM-DDTHH:MM" o ""
+  onChange: (next: string) => void;
+  placeholder?: string;
+  /** Hora por defecto cuando elegís un preset y no había hora seteada. */
+  defaultHour?: number; // 0-23, default 10
+}
+
+export function DateTimePicker({
+  value,
+  onChange,
+  placeholder = 'Programar',
+  defaultHour = 10,
+}: DateTimePickerProps) {
+  const [open, setOpen] = useState(false);
+  const [draftDate, setDraftDate] = useState(''); // YYYY-MM-DD
+  const [draftHour, setDraftHour] = useState(defaultHour);
+  const [draftMinute, setDraftMinute] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; placement: 'top' | 'bottom' } | null>(null);
+
+  // Sincronizar drafts cuando se abre el popover
+  useEffect(() => {
+    if (!open) return;
+    if (value) {
+      const [d, t] = value.split('T');
+      setDraftDate(d ?? '');
+      const [h, m] = (t ?? '').split(':');
+      setDraftHour(parseInt(h ?? String(defaultHour), 10) || defaultHour);
+      setDraftMinute(parseInt(m ?? '0', 10) || 0);
+    } else {
+      setDraftDate('');
+      setDraftHour(defaultHour);
+      setDraftMinute(0);
+    }
+  }, [open, value, defaultHour]);
+
+  // Calcular posición del popover según el rect del trigger y el viewport.
+  // Flip vertical (top vs bottom) si no entra abajo, y clamp horizontal a
+  // los bordes del viewport.
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    function reposition() {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const margin = 8;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const placement: 'top' | 'bottom' =
+        spaceBelow < POPOVER_H + margin && spaceAbove > spaceBelow ? 'top' : 'bottom';
+
+      let top =
+        placement === 'bottom' ? rect.bottom + margin : rect.top - POPOVER_H - margin;
+      // Clamp vertical para no salirse del viewport
+      top = Math.max(8, Math.min(top, window.innerHeight - POPOVER_H - 8));
+
+      let left = rect.left;
+      // Si no entra a la derecha, alineamos el borde derecho del popover al
+      // borde derecho del trigger (típico cuando el trigger está cerca del
+      // borde derecho de la pantalla).
+      if (left + POPOVER_W > window.innerWidth - 8) {
+        left = rect.right - POPOVER_W;
+      }
+      left = Math.max(8, left);
+
+      setPos({ top, left, placement });
+    }
+    reposition();
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true); // capture: scroll en cualquier ancestor
+    return () => {
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [open]);
+
+  // Click outside / Esc cierra
+  useEffect(() => {
+    if (!open) return;
+    function onClickOutside(e: MouseEvent) {
+      const target = e.target as Node;
+      const inTrigger = wrapRef.current?.contains(target);
+      const inPopover = popoverRef.current?.contains(target);
+      if (!inTrigger && !inPopover) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  function applyPreset(daysFromNow: number) {
+    const d = new Date();
+    d.setDate(d.getDate() + daysFromNow);
+    setDraftDate(toIsoDate(d));
+  }
+
+  function commit() {
+    if (!draftDate) {
+      onChange('');
+      setOpen(false);
+      return;
+    }
+    const hh = String(draftHour).padStart(2, '0');
+    const mm = String(draftMinute).padStart(2, '0');
+    onChange(`${draftDate}T${hh}:${mm}`);
+    setOpen(false);
+  }
+
+  function clear() {
+    onChange('');
+    setOpen(false);
+  }
+
+  // Display label
+  const displayLabel = value ? formatDisplay(value) : placeholder;
+  const hasValue = !!value;
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      {/* Trigger — estilo Input */}
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: '100%',
+          height: 36,
+          display: 'flex',
+          alignItems: 'center',
+          gap: space[2],
+          padding: `0 ${space[3]}`,
+          background: color.surface2,
+          border: `1px solid ${open ? color.primary : color.border}`,
+          borderRadius: radius.md,
+          color: hasValue ? color.text : color.textDim,
+          fontSize: text.base,
+          textAlign: 'left',
+          cursor: 'pointer',
+          boxShadow: open ? 'var(--shadow-focus)' : 'none',
+          transition: `border-color ${duration.fast} ${ease}, box-shadow ${duration.fast} ${ease}`,
+        }}
+      >
+        <Calendar size={14} color={color.textDim} />
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {displayLabel}
+        </span>
+        {hasValue && (
+          <span
+            role="button"
+            aria-label="Limpiar fecha"
+            onClick={(e) => {
+              e.stopPropagation();
+              clear();
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: 2,
+              borderRadius: radius.sm,
+              color: color.textDim,
+              cursor: 'pointer',
+            }}
+          >
+            <X size={14} />
+          </span>
+        )}
+      </button>
+
+      {/* Popover — renderizado por portal a document.body para escapar
+          el overflow del modal. Posición calculada en layout effect. */}
+      {open && pos && createPortal(
+        <div
+          ref={popoverRef}
+          role="dialog"
+          style={{
+            position: 'fixed',
+            top: pos.top,
+            left: pos.left,
+            zIndex: 1000,
+            width: POPOVER_W,
+            background: color.surface,
+            border: `1px solid ${color.borderStrong}`,
+            borderRadius: radius.md,
+            boxShadow: 'var(--shadow-lg)',
+            padding: space[4],
+            display: 'flex',
+            flexDirection: 'column',
+            gap: space[3],
+          }}
+        >
+          {/* Presets */}
+          <div>
+            <SectionLabel>Atajos</SectionLabel>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+              <PresetChip label="Hoy" onClick={() => applyPreset(0)} />
+              <PresetChip label="Mañana" onClick={() => applyPreset(1)} />
+              <PresetChip label="En 3 días" onClick={() => applyPreset(3)} />
+              <PresetChip label="En 1 semana" onClick={() => applyPreset(7)} />
+              <PresetChip label="En 2 semanas" onClick={() => applyPreset(14)} />
+            </div>
+          </div>
+
+          {/* Calendario inline */}
+          <MiniCalendar value={draftDate} onChange={setDraftDate} />
+
+          {/* Hora */}
+          <div>
+            <SectionLabel>
+              <Clock size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+              Hora
+            </SectionLabel>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+              <NumStepper
+                value={draftHour}
+                min={0}
+                max={23}
+                onChange={setDraftHour}
+                ariaLabel="Hora"
+              />
+              <span style={{ color: color.textDim, fontWeight: weight.bold }}>:</span>
+              <NumStepper
+                value={draftMinute}
+                min={0}
+                max={59}
+                step={5}
+                onChange={setDraftMinute}
+                ariaLabel="Minuto"
+              />
+              <div style={{ flex: 1 }} />
+              <TimeShortcut label="9:00" onClick={() => { setDraftHour(9); setDraftMinute(0); }} />
+              <TimeShortcut label="14:00" onClick={() => { setDraftHour(14); setDraftMinute(0); }} />
+              <TimeShortcut label="18:00" onClick={() => { setDraftHour(18); setDraftMinute(0); }} />
+            </div>
+          </div>
+
+          {/* Footer — botones */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: space[2],
+              paddingTop: space[3],
+              borderTop: `1px solid ${color.border}`,
+            }}
+          >
+            <Button variant="ghost" size="sm" onClick={clear}>
+              Borrar
+            </Button>
+            <div style={{ display: 'flex', gap: space[2] }}>
+              <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                Cancelar
+              </Button>
+              <Button variant="primary" size="sm" onClick={commit} disabled={!draftDate}>
+                Confirmar
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ *  MiniCalendar — grid de mes con navegación, dark theme
+ * ============================================================ */
+
+const MONTH_NAMES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
+const DAY_NAMES_SHORT = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+function MiniCalendar({
+  value,
+  onChange,
+}: {
+  value: string; // YYYY-MM-DD
+  onChange: (next: string) => void;
+}) {
+  // Mes que estamos viendo. Inicia en el mes del valor o en el actual.
+  const [viewYear, viewMonth] = useMemo(() => {
+    if (value) {
+      const [y, m] = value.split('-').map(Number);
+      if (y && m) return [y, m - 1] as const;
+    }
+    const now = new Date();
+    return [now.getFullYear(), now.getMonth()] as const;
+  }, [value]);
+
+  const [year, setYear] = useState(viewYear);
+  const [month, setMonth] = useState(viewMonth);
+
+  // Resyncar si el value cambia desde afuera (preset chip)
+  useEffect(() => {
+    setYear(viewYear);
+    setMonth(viewMonth);
+  }, [viewYear, viewMonth]);
+
+  const today = new Date();
+  const todayKey = isoDateOf(today);
+
+  // Generar 6 filas × 7 días empezando desde el lunes anterior al día 1
+  const cells = useMemo(() => {
+    const firstOfMonth = new Date(year, month, 1);
+    // getDay(): 0=Dom, 1=Lun ... 6=Sáb. Queremos 0=Lun ... 6=Dom.
+    const weekdayOfFirst = (firstOfMonth.getDay() + 6) % 7;
+    const start = new Date(year, month, 1 - weekdayOfFirst);
+    const out: Array<{ date: Date; key: string; inMonth: boolean }> = [];
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      out.push({ date: d, key: isoDateOf(d), inMonth: d.getMonth() === month });
+    }
+    return out;
+  }, [year, month]);
+
+  function prev() {
+    if (month === 0) {
+      setYear((y) => y - 1);
+      setMonth(11);
+    } else {
+      setMonth((m) => m - 1);
+    }
+  }
+  function next() {
+    if (month === 11) {
+      setYear((y) => y + 1);
+      setMonth(0);
+    } else {
+      setMonth((m) => m + 1);
+    }
+  }
+
+  return (
+    <div>
+      {/* Header: navegación + mes actual */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: space[2],
+        }}
+      >
+        <button
+          type="button"
+          onClick={prev}
+          aria-label="Mes anterior"
+          style={iconBtnStyle()}
+          onMouseEnter={(e) => (e.currentTarget.style.background = color.surfaceHover)}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <span
+          style={{
+            fontSize: text.sm,
+            fontWeight: weight.semibold,
+            color: color.text,
+            letterSpacing: '-0.2px',
+          }}
+        >
+          {MONTH_NAMES[month]} {year}
+        </span>
+        <button
+          type="button"
+          onClick={next}
+          aria-label="Mes siguiente"
+          style={iconBtnStyle()}
+          onMouseEnter={(e) => (e.currentTarget.style.background = color.surfaceHover)}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
+
+      {/* Header de días de la semana */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+        {DAY_NAMES_SHORT.map((d, i) => (
+          <div
+            key={i}
+            style={{
+              fontSize: 10,
+              fontWeight: weight.semibold,
+              color: color.textDim,
+              textAlign: 'center',
+              padding: '4px 0',
+            }}
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Grid de días */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+        {cells.map(({ date, key, inMonth }) => {
+          const isSelected = key === value;
+          const isToday = key === todayKey;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onChange(key)}
+              style={{
+                aspectRatio: '1',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: text.xs,
+                fontWeight: isToday || isSelected ? weight.semibold : weight.medium,
+                color: isSelected
+                  ? '#fff'
+                  : !inMonth
+                  ? color.textDim
+                  : isToday
+                  ? color.primary
+                  : color.text,
+                background: isSelected ? color.primary : 'transparent',
+                border: isToday && !isSelected ? `1px solid ${color.primary}` : '1px solid transparent',
+                borderRadius: radius.sm,
+                cursor: 'pointer',
+                transition: 'all 80ms',
+                opacity: !inMonth ? 0.45 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!isSelected) e.currentTarget.style.background = color.surfaceHover;
+              }}
+              onMouseLeave={(e) => {
+                if (!isSelected) e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              {date.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function iconBtnStyle(): React.CSSProperties {
+  return {
+    width: 26,
+    height: 26,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+    color: color.textMuted,
+    background: 'transparent',
+    cursor: 'pointer',
+    transition: `background ${duration.fast} ${ease}`,
+  };
+}
+
+function isoDateOf(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/* ── Helpers ───────────────────────────────────────────────── */
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: text.xs,
+        fontWeight: weight.semibold,
+        color: color.textDim,
+        textTransform: 'uppercase',
+        letterSpacing: '0.6px',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function PresetChip({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: `5px ${space[3]}`,
+        fontSize: text.xs,
+        fontWeight: weight.semibold,
+        color: color.text,
+        background: color.surface2,
+        border: `1px solid ${color.border}`,
+        borderRadius: radius.full,
+        cursor: 'pointer',
+        transition: 'all 100ms',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = color.primary;
+        e.currentTarget.style.color = color.primary;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = color.border;
+        e.currentTarget.style.color = color.text;
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function TimeShortcut({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: `2px 6px`,
+        fontSize: text.xs,
+        fontWeight: weight.medium,
+        color: color.textMuted,
+        background: 'transparent',
+        cursor: 'pointer',
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.color = color.text)}
+      onMouseLeave={(e) => (e.currentTarget.style.color = color.textMuted)}
+    >
+      {label}
+    </button>
+  );
+}
+
+function NumStepper({
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+  ariaLabel,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (n: number) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <input
+      type="number"
+      value={String(value).padStart(2, '0')}
+      min={min}
+      max={max}
+      step={step}
+      aria-label={ariaLabel}
+      onChange={(e) => {
+        const n = parseInt(e.target.value, 10);
+        if (Number.isFinite(n) && n >= min && n <= max) onChange(n);
+      }}
+      style={{
+        width: 56,
+        height: 32,
+        textAlign: 'center',
+        background: color.surface2,
+        border: `1px solid ${color.border}`,
+        borderRadius: radius.sm,
+        color: color.text,
+        fontSize: text.base,
+        fontWeight: weight.semibold,
+        outline: 'none',
+      }}
+    />
+  );
+}
+
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Formato amigable: "Hoy 14:30", "Mañana 09:00", "Vie 16/5 14:30" */
+function formatDisplay(iso: string): string {
+  const [d, t] = iso.split('T');
+  if (!d) return iso;
+  const date = new Date(`${d}T${t || '00:00'}`);
+  if (Number.isNaN(date.getTime())) return iso;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+  if (diffDays === 0) return `Hoy ${time}`;
+  if (diffDays === 1) return `Mañana ${time}`;
+  if (diffDays === -1) return `Ayer ${time}`;
+  if (diffDays >= 2 && diffDays <= 6) {
+    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    return `${dayNames[date.getDay()]} ${time}`;
+  }
+  // Fecha completa para algo más lejano
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm} ${time}`;
+}

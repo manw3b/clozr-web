@@ -1,27 +1,110 @@
 @import "tailwindcss";
 
-/* ===== Clozr Design Tokens (de tokens.css del repo desktop) =====
-   Modo oscuro obligatorio, sistema único. */
+/* =============================================================================
+   Clozr Design Tokens — portados verbatim de clozr/src/tokens/tokens.css
+   Modo oscuro obligatorio, sistema único, sin variantes.
+   ============================================================================= */
 :root {
-  --bg: #020617;
-  --surface: #0F172A;
-  --surface-hover: #131F37;
-  --surface-2: #1E293B;
-  --border: #1E293B;
-  --border-strong: #334155;
-  --text: #F8FAFC;
-  --text-muted: #94A3B8;
-  --text-dim: #64748B;
+  /* ===== COLORES — Superficies ===== */
+  --bg: #020617;            /* Fondo de la app */
+  --surface: #0F172A;       /* Cards, sidebar, topbar, drawer */
+  --surface-hover: #131F37; /* Hover sobre surface */
+  --surface-2: #1E293B;     /* Inputs, segments, badges neutros */
+  --border: #1E293B;        /* Bordes default */
+  --border-strong: #334155; /* Bordes en focus / hover */
+
+  /* ===== COLORES — Texto ===== */
+  --text: #F8FAFC;          /* Principal */
+  --text-muted: #94A3B8;    /* Secundario / labels */
+  --text-dim: #64748B;      /* Terciario / placeholders */
+  --text-inverse: #020617;  /* Sobre fondos claros (botones primarios) */
+
+  /* ===== COLORES — Marca / Acción ===== */
   --primary: #E11D48;
   --primary-hover: #F43F5E;
   --primary-press: #BE123C;
+  --primary-bg: rgba(225, 29, 72, 0.12);
+  --primary-bg-strong: rgba(225, 29, 72, 0.2);
+
+  /* ===== COLORES — Semánticos ===== */
   --success: #10B981;
+  --success-bg: rgba(16, 185, 129, 0.12);
   --warning: #F59E0B;
+  --warning-bg: rgba(245, 158, 11, 0.12);
   --danger: #EF4444;
+  --danger-bg: rgba(239, 68, 68, 0.12);
   --info: #3B82F6;
+  --info-bg: rgba(59, 130, 246, 0.12);
+
+  /* ===== TIPOGRAFÍA ===== */
+  /* --font-sans se define en @theme inline (usa la var de next/font). */
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  /* ===== ESPACIADO (escala 4px) ===== */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ===== RADIOS ===== */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* ===== SOMBRAS ===== */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-focus: 0 0 0 3px rgba(225, 29, 72, 0.35);
+
+  /* ===== TRANSICIONES ===== */
+  --duration-fast: 100ms;
+  --duration: 150ms;
+  --duration-slow: 250ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ===== Z-INDEX ===== */
+  --z-sticky: 10;
+  --z-drawer: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+
+  /* ===== LAYOUT ===== */
+  --sidebar-w: 220px;
+  --sidebar-w-collapsed: 64px;
+  --topbar-h: 56px;
+  --drawer-w: 420px;
 }
 
-/* Exponemos los tokens como utilidades Tailwind v4 (bg-surface, text-primary, …) */
+/* Exponemos tokens como utilidades Tailwind v4 (bg-surface, text-primary, …)
+   para la landing pública (que usa Tailwind). La app usa var(--*) directo. */
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -42,15 +125,487 @@
   --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
 }
 
-* { border-color: var(--border); }
+/* =============================================================================
+   Reset base
+   ============================================================================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
 
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 9999px; }
-::-webkit-scrollbar-track { background: transparent; }
+button {
+  font-family: inherit;
+  font-size: inherit;
+  border: 0;
+  cursor: pointer;
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* number inputs: ocultar spinners (feos en dark, poco útiles para montos) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* date / datetime indicator invertido para dark theme */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7) opacity(0.55);
+  cursor: pointer;
+  transition: opacity 120ms;
+}
+input[type="date"]:hover::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]:hover::-webkit-calendar-picker-indicator,
+input[type="time"]:hover::-webkit-calendar-picker-indicator {
+  filter: invert(0.85) opacity(0.9);
+}
+input[type="date"]:not(:focus):invalid,
+input[type="datetime-local"]:not(:focus):invalid {
+  color: var(--text-dim);
+}
+
+/* scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-2);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* =============================================================================
+   Animaciones
+   ============================================================================= */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-in {
+  animation: fadeIn 0.15s ease forwards;
+}
+
+/* Table rows */
+tr.hoverable:hover td {
+  background: var(--surface-hover);
+  cursor: pointer;
+}
+
+/* =============================================================================
+   Clases utilitarias interactivas — portadas de clozr/src/styles/globals.css
+   Reemplazan los pares onMouseEnter/onMouseLeave inline (menos re-renders,
+   mejor a11y con :focus-visible, un solo lugar para cambiar el efecto).
+   ============================================================================= */
+.btn-icon {
+  background: transparent;
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.btn-icon:hover:not(:disabled),
+.btn-icon.active {
+  background: var(--surface-hover);
+}
+.btn-icon:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.btn-icon.wa {
+  color: var(--success);
+}
+.btn-icon.wa:hover:not(:disabled),
+.btn-icon.wa.active {
+  background: var(--success-bg);
+}
+.btn-icon.success-bg:hover:not(:disabled),
+.btn-icon.success-bg.active {
+  background: var(--success-bg);
+}
+.btn-icon.muted {
+  color: var(--text-muted);
+}
+.btn-icon.muted:hover:not(:disabled),
+.btn-icon.muted.active {
+  color: var(--text);
+}
+.btn-icon.danger:hover:not(:disabled),
+.btn-icon.danger.active {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.btn-icon.primary {
+  color: var(--primary);
+}
+.btn-icon.primary:hover:not(:disabled),
+.btn-icon.primary.active {
+  background: var(--primary-bg);
+  color: var(--primary);
+}
+
+/* Task checkbox (mi-dia/TasksBlock) */
+.task-checkbox {
+  border: 2px solid var(--border);
+  background: transparent;
+  transition: all 150ms;
+}
+.task-checkbox:hover:not(.done) {
+  border-color: var(--primary);
+}
+.task-checkbox.done {
+  border-color: var(--success);
+  background: var(--success);
+}
+
+/* Image upload trigger (ui/WorkspaceAssetUpload.tsx) */
+.image-upload-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 100ms;
+}
+.image-upload-trigger {
+  cursor: pointer;
+}
+.image-upload-trigger:hover .image-upload-overlay {
+  opacity: 1;
+}
+
+/* Botón con borde + bg compuestos */
+.btn-bordered {
+  cursor: pointer;
+  transition: background 100ms, border-color 100ms;
+}
+.btn-bordered:hover:not(:disabled),
+.btn-bordered.active {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.btn-bordered:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Row hover para items de menús, popovers, listas */
+.row-hover {
+  background: transparent;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.row-hover:hover {
+  background: var(--surface-hover);
+}
+
+/* Focus visible */
+.btn-icon:focus-visible,
+.btn-bordered:focus-visible,
+.row-hover:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* DataTable rows */
+.dt-row {
+  background: transparent;
+  transition: background 100ms;
+}
+.dt-row:hover {
+  background: var(--surface-hover);
+}
+.dt-row.selected,
+.dt-row.selected:hover {
+  background: rgba(225, 29, 72, 0.06);
+}
+.dt-row.active,
+.dt-row.active:hover,
+.dt-row.active.selected,
+.dt-row.active.selected:hover {
+  background: var(--primary-bg);
+}
+
+/* Checkbox de DataTable */
+.dt-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 100ms;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.dt-checkbox:hover:not(.filled) {
+  border-color: var(--border-strong);
+}
+.dt-checkbox.filled {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+/* Select trigger (ui/Select.tsx) */
+.select-trigger {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 120ms;
+}
+.select-trigger:hover:not(:disabled),
+.select-trigger.open {
+  border-color: var(--border-strong);
+}
+.select-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.select-option {
+  background: transparent;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.select-option:hover:not(.active) {
+  background: var(--surface-2);
+}
+.select-option.active {
+  background: rgba(232, 0, 29, 0.08);
+}
+
+/* Sidebar items (layout/Sidebar.tsx) */
+.sidebar-item {
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.sidebar-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.sidebar-item.danger:hover {
+  color: var(--danger);
+}
+.sidebar-nav {
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.sidebar-nav:hover:not(.active) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.sidebar-nav.active {
+  background: var(--primary-bg);
+  color: var(--primary);
+}
+
+/* Modal close button */
+.modal-close {
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.modal-close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* ContextMenu item */
+.ctx-item {
+  background: transparent;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.ctx-item:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.ctx-item.danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+.ctx-item:disabled {
+  cursor: not-allowed;
+}
+
+/* Card hoverable */
+.card-hoverable {
+  transition: background 100ms, border-color 100ms;
+  cursor: pointer;
+}
+.card-hoverable:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+/* TagChip close × */
+.tag-chip-close {
+  opacity: 0.7;
+  cursor: pointer;
+  transition: opacity 100ms;
+  border: none;
+  background: transparent;
+}
+.tag-chip-close:hover {
+  opacity: 1;
+}
+
+/* Button (Button.tsx) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  outline: none;
+  transition: background 100ms, color 100ms, border-color 100ms, transform 100ms;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:focus-visible {
+  box-shadow: var(--shadow-focus);
+}
+.btn:disabled {
+  cursor: not-allowed;
+  color: var(--text-dim);
+}
+.btn.primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn.primary:hover:not(:disabled) { background: var(--primary-hover); }
+.btn.primary:active:not(:disabled) { background: var(--primary-press); }
+.btn.primary:disabled { background: var(--surface-2); }
+.btn.danger {
+  background: var(--danger);
+  color: #fff;
+}
+.btn.danger:hover:not(:disabled) { background: #DC2626; }
+.btn.danger:disabled { background: var(--surface-2); }
+.btn.success {
+  background: var(--success);
+  color: #fff;
+}
+.btn.success:hover:not(:disabled) { background: #22C55E; }
+.btn.success:disabled { background: var(--surface-2); }
+.btn.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn.secondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.btn.secondary:disabled { background: var(--surface-2); border-color: transparent; }
+.btn.ghost {
+  background: transparent;
+  color: var(--text);
+}
+.btn.ghost:hover:not(:disabled) { background: var(--surface-hover); }
+.btn.ghost:disabled { background: transparent; }
+
+/* Tabs (Tabs.tsx) */
+.tab-underline {
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: color 100ms, border-color 100ms;
+}
+.tab-underline:hover:not(:disabled):not(.active) {
+  color: var(--text);
+}
+.tab-underline.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+.tab-underline:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tab-pill {
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: color 100ms, background 100ms;
+}
+.tab-pill:hover:not(:disabled):not(.active) {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+.tab-pill.active {
+  color: #fff;
+  background: var(--primary);
+}
+.tab-pill:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Sort button del header de DataTable */
+.dt-sort-btn {
+  color: var(--text-muted);
+  transition: color 100ms;
+}
+.dt-sort-btn:hover,
+.dt-sort-btn.sorted {
+  color: var(--text);
+}

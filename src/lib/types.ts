@@ -7,6 +7,7 @@ export type ClientType = "final" | "revendedor" | "mayorista" | "empresa";
 export type LeadPriority = "low" | "medium" | "high" | "hot";
 export type LeadSource = "referido" | "walk-in" | "web" | "redes" | "otro";
 export type Currency = "ARS" | "USD";
+export type TaskType = "puntual" | "rutina";
 
 export interface User {
   id: string;
@@ -20,6 +21,70 @@ export interface Workspace {
   name: string;
   role: string;
   status: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  type: TaskType;
+  notes?: string | null;
+  dueAt?: string | null;
+  completed: boolean;
+  /** Si viene de un template (ej. 'ai-triage' = sugerida por la IA matutina). */
+  templateId?: string | null;
+  customerId?: string | null;
+  createdAt?: string | null;
+}
+
+export interface Member {
+  id: string;
+  userId?: string | null;
+  email: string;
+  role: string;
+  status: string;
+  userName?: string | null;
+  invitedAt?: string | null;
+  acceptedAt?: string | null;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  category?: string | null;
+  price: number;
+  currency: Currency;
+  cost?: number | null;
+  sku?: string | null;
+  notes?: string | null;
+  trackStock: boolean;
+  stock: number;
+  stockMin?: number | null;
+  active: boolean;
+  imagePath?: string | null;
+  condition?: string | null;
+  createdAt?: string | null;
+}
+
+export interface PaymentOption {
+  id: string;
+  name: string;
+  enabled: boolean;
+  currency?: string | null;
+  sortOrder?: number | null;
+}
+
+export type CashKind = "income" | "expense";
+export interface CashMovement {
+  id: string;
+  kind: CashKind;
+  amount: number;
+  currency: Currency;
+  description?: string | null;
+  category?: string | null;
+  paymentMethod?: string | null;
+  customerName?: string | null;
+  saleId?: string | null;
+  movedAt?: string | null;
 }
 
 export interface Customer {

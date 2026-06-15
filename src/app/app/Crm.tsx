@@ -25,6 +25,20 @@ import type {
   User,
   Workspace,
 } from "@/lib/types";
+import { AppShell } from "@/layout/AppShell";
+import type { NewAction } from "@/layout/Topbar";
+import { useWorkspaceStore } from "@/store/workspaceStore";
+import { EmptyState } from "@/components/EmptyState";
+import { ConfirmHost } from "@/components/ConfirmHost";
+import Toaster from "@/components/Toaster";
+import { Tareas } from "./Tareas";
+import { Deudas } from "./Deudas";
+import { Equipo } from "./Equipo";
+import { Reportes } from "./Reportes";
+import { Inventario } from "./Inventario";
+import { MiDia } from "./MiDia";
+import { Ajustes } from "./Ajustes";
+import { Caja } from "./Caja";
 
 /* ───────── helpers ───────── */
 function initials(name: string) {
@@ -56,11 +70,37 @@ type ModalState =
   | { kind: "saleDetail"; id: string }
   | null;
 
-type View = "dashboard" | "pipeline" | "clientes" | "ventas";
+type View =
+  | "home"
+  | "pipeline"
+  | "customers"
+  | "sales"
+  | "cash"
+  | "deudas"
+  | "inventory"
+  | "tasks"
+  | "reportes"
+  | "team"
+  | "settings";
+
+const VIEW_META: Record<View, { title: string; subtitle: string }> = {
+  home: { title: "Mi Día", subtitle: "Tu resumen del día" },
+  pipeline: { title: "Pipeline", subtitle: "Arrastrá las oportunidades entre etapas" },
+  customers: { title: "Clientes", subtitle: "Tu cartera de contactos" },
+  sales: { title: "Ventas", subtitle: "Tus ventas registradas" },
+  cash: { title: "Caja", subtitle: "Entradas y salidas de dinero" },
+  deudas: { title: "Deudas", subtitle: "Cobros pendientes" },
+  inventory: { title: "Inventario", subtitle: "Stock y catálogo" },
+  tasks: { title: "Tareas", subtitle: "Tu lista de tareas" },
+  reportes: { title: "Reportes", subtitle: "Analítica de ventas" },
+  team: { title: "Equipo", subtitle: "Miembros del espacio" },
+  settings: { title: "Ajustes", subtitle: "Configuración del espacio" },
+};
 
 export default function Crm({
   user,
   workspace,
+  workspaces,
   onLogout,
 }: {
   user: User;
@@ -69,7 +109,7 @@ export default function Crm({
   onSwitchWorkspace: (w: Workspace) => void;
   onLogout: () => void;
 }) {
-  const [view, setView] = useState<View>("dashboard");
+  const [view, setView] = useState<View>("home");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stages, setStages] = useState<PipelineStage[]>([]);
@@ -82,6 +122,21 @@ export default function Crm({
   function flash(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 1900);
+  }
+
+  // Sembrar el workspaceStore desde los props (el switcher del topbar lo usa).
+  useEffect(() => {
+    useWorkspaceStore.setState({ workspaces, activeWorkspace: workspace, isLoading: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const activeWs = useWorkspaceStore((s) => s.activeWorkspace) ?? workspace;
+
+  function handleNew(action: NewAction) {
+    if (action === "cliente") setModal({ kind: "customer" });
+    else if (action === "venta") setModal({ kind: "sale" });
+    else if (action === "lead") setModal({ kind: "item" });
+    else if (action === "tarea") setView("tasks");
+    else flash("Próximamente");
   }
 
   async function loadAll() {
@@ -116,151 +171,100 @@ export default function Crm({
   useEffect(() => {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace.id]);
+  }, [activeWs.id]);
 
   const refreshCustomers = () => api.listCustomers().then(setCustomers);
   const refreshItems = () => api.listItems().then(setItems);
   const refreshSales = () => api.listSales().then(setSales);
 
   return (
-    <div className="grid h-screen grid-cols-[240px_1fr]">
-      {/* Sidebar */}
-      <aside className="flex flex-col border-r border-border bg-surface p-3">
-        <div className="flex items-center gap-2.5 px-2 py-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-isotipo.svg" alt="Clozr" className="h-8 w-auto shrink-0" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold">{workspace.name}</div>
-            <div className="text-xs text-text-dim capitalize">{workspace.role}</div>
-          </div>
-        </div>
-        <nav className="mt-2 flex flex-col gap-0.5">
-          {([
-            ["dashboard", "◧", "Resumen"],
-            ["pipeline", "▦", "Pipeline"],
-            ["clientes", "☰", "Clientes"],
-            ["ventas", "$", "Ventas"],
-          ] as const).map(([v, ico, label]) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${
-                view === v
-                  ? "bg-[rgba(225,29,72,0.12)] text-primary-hover"
-                  : "text-text-muted hover:bg-surface-hover hover:text-text"
-              }`}
-            >
-              <span className="w-4 text-center">{ico}</span> {label}
-            </button>
-          ))}
-        </nav>
-        <div className="mt-auto border-t border-border pt-2">
-          <div className="px-3 py-1.5 text-xs text-text-dim">{user.email}</div>
-          <button
-            onClick={onLogout}
-            className="w-full rounded-md px-3 py-2 text-left text-xs text-text-dim hover:bg-surface-hover hover:text-text"
-          >
-            ↩ Cerrar sesión
-          </button>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className="flex flex-col overflow-hidden">
-        <header className="flex items-center gap-4 border-b border-border bg-surface px-7 py-4">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight">
-              {view === "dashboard"
-                ? "Resumen"
-                : view === "pipeline"
-                  ? "Pipeline"
-                  : view === "clientes"
-                    ? "Clientes"
-                    : "Ventas"}
-            </h2>
-            <p className="text-xs text-text-dim">
-              {view === "dashboard"
-                ? "Tu actividad de ventas de un vistazo"
-                : view === "pipeline"
-                  ? "Arrastrá las oportunidades entre etapas"
-                  : view === "clientes"
-                    ? "Tu cartera de contactos"
-                    : "Tus ventas registradas"}
-            </p>
-          </div>
-          <div className="flex-1" />
-          <button
-            onClick={() => setModal({ kind: "customer" })}
-            className="rounded-lg bg-surface-2 px-3.5 py-2 text-sm font-semibold transition hover:bg-border-strong"
-          >
-            + Cliente
-          </button>
-          {view === "ventas" ? (
-            <button
-              onClick={() => setModal({ kind: "sale" })}
-              className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
-            >
-              + Venta
-            </button>
-          ) : (
-            <button
-              onClick={() => setModal({ kind: "item" })}
-              className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
-            >
-              + Oportunidad
-            </button>
-          )}
-        </header>
-
-        <div className="flex-1 overflow-auto p-7">
-          {loading ? (
-            <div className="animate-pulse text-text-dim">Cargando datos…</div>
-          ) : error ? (
-            <div className="flex flex-col items-start gap-3 text-text-muted">
-              <p>{error}</p>
-              <button
-                onClick={loadAll}
-                className="rounded-lg bg-surface-2 px-4 py-2 text-sm font-semibold hover:bg-border-strong"
-              >
-                Reintentar
-              </button>
+    <>
+      <AppShell
+        active={view}
+        onNavigate={(id) => setView(id as View)}
+        workspace={{ name: activeWs.name }}
+        user={{ name: user.name ?? user.email, email: user.email }}
+        onLogout={onLogout}
+        onSearchClick={() => flash("Búsqueda global — próximamente")}
+        onNewAction={handleNew}
+      >
+        {view !== "home" && view !== "tasks" && view !== "deudas" && view !== "team" && view !== "reportes" && view !== "inventory" && view !== "settings" && view !== "cash" && (
+          <div className="mb-6 flex items-center gap-4">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">{VIEW_META[view].title}</h2>
+              <p className="text-xs text-text-dim">{VIEW_META[view].subtitle}</p>
             </div>
-          ) : view === "dashboard" ? (
-            <Dashboard stages={stages} items={items} customers={customers} />
-          ) : view === "pipeline" ? (
-            <Pipeline
-              stages={stages}
-              items={items}
-              onMove={async (item, stage) => {
-                setItems((prev) =>
-                  prev.map((i) =>
-                    i.id === item.id
-                      ? { ...i, stageId: stage.id, stageName: stage.name, stageOrder: stage.order }
-                      : i,
-                  ),
-                );
-                try {
-                  await api.moveItem(item.id, stage);
-                  flash(`Movido a ${stage.name}`);
-                } catch {
-                  refreshItems();
-                  flash("No se pudo mover");
-                }
-              }}
-              onOpen={(id) => setModal({ kind: "item", id })}
-              onAdd={(stageId) => setModal({ kind: "item", presetStageId: stageId })}
-            />
-          ) : view === "clientes" ? (
-            <Clientes customers={customers} items={items} onOpen={(id) => setModal({ kind: "customer", id })} />
-          ) : (
-            <Ventas
-              sales={sales}
-              onOpen={(id) => setModal({ kind: "saleDetail", id })}
-              onNew={() => setModal({ kind: "sale" })}
-            />
-          )}
-        </div>
-      </main>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="animate-pulse text-text-dim">Cargando datos…</div>
+        ) : error ? (
+          <div className="flex flex-col items-start gap-3 text-text-muted">
+            <p>{error}</p>
+            <button
+              onClick={loadAll}
+              className="rounded-lg bg-surface-2 px-4 py-2 text-sm font-semibold hover:bg-border-strong"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : view === "home" ? (
+          <MiDia
+            key={activeWs.id}
+            user={user}
+            onNavigate={(v) => setView(v as View)}
+            onNewSale={() => setModal({ kind: "sale" })}
+          />
+        ) : view === "pipeline" ? (
+          <Pipeline
+            stages={stages}
+            items={items}
+            onMove={async (item, stage) => {
+              setItems((prev) =>
+                prev.map((i) =>
+                  i.id === item.id
+                    ? { ...i, stageId: stage.id, stageName: stage.name, stageOrder: stage.order }
+                    : i,
+                ),
+              );
+              try {
+                await api.moveItem(item.id, stage);
+                flash(`Movido a ${stage.name}`);
+              } catch {
+                refreshItems();
+                flash("No se pudo mover");
+              }
+            }}
+            onOpen={(id) => setModal({ kind: "item", id })}
+            onAdd={(stageId) => setModal({ kind: "item", presetStageId: stageId })}
+          />
+        ) : view === "customers" ? (
+          <Clientes customers={customers} items={items} onOpen={(id) => setModal({ kind: "customer", id })} />
+        ) : view === "sales" ? (
+          <Ventas
+            sales={sales}
+            onOpen={(id) => setModal({ kind: "saleDetail", id })}
+            onNew={() => setModal({ kind: "sale" })}
+          />
+        ) : view === "tasks" ? (
+          <Tareas key={activeWs.id} />
+        ) : view === "deudas" ? (
+          <Deudas key={activeWs.id} />
+        ) : view === "team" ? (
+          <Equipo key={activeWs.id} user={user} />
+        ) : view === "reportes" ? (
+          <Reportes key={activeWs.id} />
+        ) : view === "inventory" ? (
+          <Inventario key={activeWs.id} />
+        ) : view === "settings" ? (
+          <Ajustes key={activeWs.id} user={user} onLogout={onLogout} />
+        ) : view === "cash" ? (
+          <Caja key={activeWs.id} />
+        ) : (
+          <EmptyState title="Próximamente" description="Esta vista se está portando desde la app desktop." />
+        )}
+      </AppShell>
 
       {/* Modales */}
       {modal?.kind === "customer" && (
@@ -303,7 +307,10 @@ export default function Crm({
           {toast}
         </div>
       )}
-    </div>
+
+      <Toaster />
+      <ConfirmHost />
+    </>
   );
 }
 
