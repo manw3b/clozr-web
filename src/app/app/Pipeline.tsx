@@ -13,18 +13,41 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { Plus, Search, Flame } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Flame,
+  Phone,
+  DollarSign,
+  Eye,
+  ArrowRight,
+  Trophy,
+  XCircle,
+  Trash2,
+} from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
+import { Tabs } from "@/components/Tabs";
 import { MetricCard } from "@/components/Card";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import {
+  ContextMenu,
+  ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuDivider,
+  ContextMenuLabel,
+  useContextMenu,
+} from "@/components/ContextMenu";
+import { confirmAsync } from "@/lib/confirmAsync";
+import { openWhatsApp, openTel } from "@/lib/openExternal";
 import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
-import type { PipelineItem, PipelineStage, LeadPriority } from "@/lib/types";
+import type { PipelineItem, PipelineStage, LeadPriority, Customer } from "@/lib/types";
 
 /* ───────── prioridad → estilo del pill (tokens, nada hardcodeado) ───────── */
 const PRIORITY_STYLE: Record<LeadPriority, { bg: string; fg: string }> = {
@@ -42,6 +65,12 @@ const PILL_LABEL: Record<LeadPriority, string> = {
   medium: "Media",
   low: "Baja",
 };
+
+const PRIORITY_FILTERS: { value: string; label: string }[] = [
+  { value: "todas", label: "Todas" },
+  { value: "hot", label: "Caliente" },
+  { value: "high", label: "Alta" },
+];
 
 /** Convierte un hex de etapa (#RGB o #RRGGBB) en rgba con alpha para tintes
  *  suaves. Si el hex es inválido, cae a un wash translúcido neutro (nunca a un
@@ -62,68 +91,89 @@ const COL_WIDTH = 290;
  * Vista Pipeline — re-portada desde la desktop (kanban dnd-kit). Columnas por
  * etapa con acento de color + cards tipo LeadCard. Drag de una card a otra
  * columna → moveItem. Click → modal de oportunidad (de Crm, vía callbacks).
- * Self-fetch de stages + items; recarga al escuchar `clozr:item-changed`.
+ * Acciones por card (footer + menú contextual): convertir en venta, WhatsApp,
+ * llamar, mover de etapa, marcar ganada/perdida, eliminar. Filtro por
+ * prioridad. Self-fetch de stages + items + customers (para teléfonos);
+ * recarga al escuchar `clozr:item-changed`.
  * DIFERIDO de la desktop: reorder/resize de columnas, sort dentro de columna,
- * filtros avanzados, acciones masivas, menú contextual, agendar visita,
- * convertir a venta, snooze, notas inline.
+ * filtros avanzados, acciones masivas, agendar visita, snooze, notas inline,
+ * plantillas de WhatsApp.
  */
 export function Pipeline({
   onOpenItem,
   onAddItem,
+  onConvertItem,
 }: {
   onOpenItem: (id: string) => void;
   onAddItem: (stageId: string) => void;
+  onConvertItem: (item: PipelineItem) => void;
 }) {
   const { showToast } = useUIStore();
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [items, setItems] = useState<PipelineItem[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("todas");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const ctxMenu = useContextMenu();
+  const [ctxItem, setCtxItem] = useState<PipelineItem | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // Refetch SIN tocar `loading` — así cada acción (drag/menú) que dispara
+  // clozr:item-changed reconcilia con el server sin parpadear todo el board.
+  const refresh = useCallback(async () => {
     try {
       let st = await api.listStages();
       if (st.length === 0) {
         await api.seedDefaultStages();
         st = await api.listStages();
       }
-      const it = await api.listItems();
+      const [it, cs] = await Promise.all([api.listItems(), api.listCustomers()]);
       setStages([...st].sort((a, b) => a.order - b.order));
       setItems(it);
+      setCustomers(cs);
     } catch {
       showToast("No se pudo cargar el pipeline", "error");
-    } finally {
-      setLoading(false);
     }
   }, [showToast]);
 
   useEffect(() => {
-    load();
-    const onChanged = () => load();
+    // `loading` solo para la carga inicial; los refetch por evento son silenciosos.
+    setLoading(true);
+    refresh().finally(() => setLoading(false));
+    const onChanged = () => refresh();
     window.addEventListener("clozr:item-changed", onChanged);
     return () => window.removeEventListener("clozr:item-changed", onChanged);
-  }, [load]);
+  }, [refresh]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
+  const customersById = useMemo(
+    () => new Map(customers.map((c) => [c.id, c])),
+    [customers],
+  );
+  const phoneOf = useCallback(
+    (item: PipelineItem) => customersById.get(item.customerId)?.phone || undefined,
+    [customersById],
+  );
+
   const query = search.trim().toLowerCase();
   const filtered = useMemo(
     () =>
-      query
-        ? items.filter(
-            (i) =>
-              i.customerName.toLowerCase().includes(query) ||
-              (i.product ?? "").toLowerCase().includes(query),
-          )
-        : items,
-    [items, query],
+      items.filter((i) => {
+        if (priorityFilter !== "todas" && i.priority !== priorityFilter) return false;
+        if (!query) return true;
+        return (
+          i.customerName.toLowerCase().includes(query) ||
+          (i.product ?? "").toLowerCase().includes(query)
+        );
+      }),
+    [items, query, priorityFilter],
   );
 
-  /* ── métricas ── */
+  /* ── métricas (sobre TODOS los items, no el filtro) ── */
   const metrics = useMemo(() => {
     const wonIds = new Set(stages.filter((s) => s.isWon).map((s) => s.id));
     const lostIds = new Set(stages.filter((s) => s.isLost).map((s) => s.id));
@@ -138,7 +188,72 @@ export function Pipeline({
     return { open: open.length, won, pipelineArs, conv };
   }, [items, stages]);
 
+  const wonStage = useMemo(() => stages.find((s) => s.isWon), [stages]);
+  const lostStage = useMemo(() => stages.find((s) => s.isLost), [stages]);
+  const isTerminal = useCallback(
+    (item: PipelineItem) => {
+      const s = stages.find((x) => x.id === item.stageId);
+      return !!s && (s.isWon || s.isLost);
+    },
+    [stages],
+  );
+
   const activeItem = activeId ? items.find((i) => i.id === activeId) ?? null : null;
+
+  /* ── helper compartido: mover (drag + menú contextual) ── */
+  const moveItemTo = useCallback(
+    async (item: PipelineItem, stage: PipelineStage) => {
+      if (item.stageId === stage.id) return;
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === item.id
+            ? { ...i, stageId: stage.id, stageName: stage.name, stageOrder: stage.order }
+            : i,
+        ),
+      );
+      try {
+        await api.moveItem(item.id, stage);
+        showToast(`Movido a ${stage.name}`, "success");
+        window.dispatchEvent(new Event("clozr:item-changed"));
+      } catch {
+        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, ...item } : i)));
+        showToast("No se pudo mover", "error");
+      }
+    },
+    [showToast],
+  );
+
+  async function deleteItemLocal(item: PipelineItem) {
+    const ok = await confirmAsync({
+      title: "Eliminar oportunidad",
+      message: `¿Eliminar la oportunidad de ${item.customerName}? No se puede deshacer.`,
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
+    setItems((p) => p.filter((i) => i.id !== item.id)); // optimista
+    try {
+      await api.deleteItem(item.id);
+      showToast("Oportunidad eliminada", "success");
+      window.dispatchEvent(new Event("clozr:item-changed"));
+    } catch {
+      showToast("No se pudo eliminar", "error");
+      // El refetch reconcilia desde el server (restaura el item si seguía vivo).
+      window.dispatchEvent(new Event("clozr:item-changed"));
+    }
+  }
+
+  async function markLost(item: PipelineItem) {
+    if (!lostStage) return;
+    const ok = await confirmAsync({
+      title: "Marcar como perdida",
+      message: `¿Marcar la oportunidad de ${item.customerName} como perdida?`,
+      confirmText: "Marcar perdida",
+      tone: "danger",
+    });
+    if (!ok) return;
+    moveItemTo(item, lostStage);
+  }
 
   function handleDragStart(e: DragStartEvent) {
     setActiveId(String(e.active.id));
@@ -151,30 +266,19 @@ export function Pipeline({
     const item = items.find((i) => i.id === String(active.id));
     const stage = stages.find((s) => s.id === String(over.id));
     if (!item || !stage || item.stageId === stage.id) return;
-
-    // Optimista: reasignamos la etapa en local y revertimos si falla.
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === item.id
-          ? { ...i, stageId: stage.id, stageName: stage.name, stageOrder: stage.order }
-          : i,
-      ),
-    );
-    try {
-      await api.moveItem(item.id, stage);
-      showToast(`Movido a ${stage.name}`, "success");
-      // Avisar a Crm para que refresque SU copia de items (evita que el
-      // ItemModal arranque con la etapa vieja y revierta el movimiento).
-      window.dispatchEvent(new Event("clozr:item-changed"));
-    } catch {
-      setItems((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, ...item } : i)),
-      );
-      showToast("No se pudo mover", "error");
+    // Soltar en "Perdido" confirma, igual que el menú contextual (es destructivo).
+    if (stage.isLost) {
+      await markLost(item);
+      return;
     }
+    await moveItemTo(item, stage);
   }
 
   const totalCount = items.length;
+
+  const moveOptions = ctxItem
+    ? stages.filter((s) => !s.isWon && !s.isLost && s.id !== ctxItem.stageId)
+    : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[5], height: "100%" }}>
@@ -204,7 +308,7 @@ export function Pipeline({
         <MetricCard label="Conversión" value={`${metrics.conv}%`} />
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+      <div style={{ display: "flex", alignItems: "center", gap: space[3], flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 240, maxWidth: 380 }}>
           <Input
             placeholder="Buscar por cliente o producto…"
@@ -213,6 +317,13 @@ export function Pipeline({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <Tabs
+          variant="pills"
+          size="sm"
+          value={priorityFilter}
+          onChange={setPriorityFilter}
+          items={PRIORITY_FILTERS}
+        />
       </div>
 
       {loading ? (
@@ -262,7 +373,14 @@ export function Pipeline({
                         key={item.id}
                         item={item}
                         dimmed={activeId === item.id}
+                        phone={phoneOf(item)}
+                        canConvert={!(stage.isWon || stage.isLost)}
                         onClick={() => onOpenItem(item.id)}
+                        onConvert={() => onConvertItem(item)}
+                        onContextMenu={(e) => {
+                          setCtxItem(item);
+                          ctxMenu.openAt(e);
+                        }}
                       />
                     ))
                   )}
@@ -275,6 +393,114 @@ export function Pipeline({
             {activeItem ? <LeadCardView item={activeItem} overlay /> : null}
           </DragOverlay>
         </DndContext>
+      )}
+
+      {ctxMenu.open && ctxItem && (
+        <ContextMenu position={ctxMenu.position} onClose={ctxMenu.close}>
+          <ContextMenuLabel>
+            {ctxItem.customerName}
+            {ctxItem.amount != null ? ` · ${formatMoney(ctxItem.amount, ctxItem.currency)}` : ""}
+          </ContextMenuLabel>
+          <ContextMenuItem
+            icon={<Eye size={14} />}
+            onClick={() => {
+              const it = ctxItem;
+              ctxMenu.close();
+              onOpenItem(it.id);
+            }}
+          >
+            Abrir
+          </ContextMenuItem>
+          {!isTerminal(ctxItem) && (
+            <ContextMenuItem
+              icon={<DollarSign size={14} />}
+              onClick={() => {
+                const it = ctxItem;
+                ctxMenu.close();
+                onConvertItem(it);
+              }}
+            >
+              Convertir en venta
+            </ContextMenuItem>
+          )}
+          {phoneOf(ctxItem) && (
+            <>
+              <ContextMenuItem
+                icon={<WhatsAppIcon size={14} />}
+                onClick={() => {
+                  const p = phoneOf(ctxItem);
+                  ctxMenu.close();
+                  if (p) openWhatsApp(p);
+                }}
+              >
+                WhatsApp
+              </ContextMenuItem>
+              <ContextMenuItem
+                icon={<Phone size={14} />}
+                onClick={() => {
+                  const p = phoneOf(ctxItem);
+                  ctxMenu.close();
+                  if (p) openTel(p);
+                }}
+              >
+                Llamar
+              </ContextMenuItem>
+            </>
+          )}
+          <ContextMenuDivider />
+          {moveOptions.length > 0 && (
+            <ContextMenuSub label="Mover a etapa" icon={<ArrowRight size={14} />}>
+              {moveOptions.map((s) => (
+                <ContextMenuItem
+                  key={s.id}
+                  onClick={() => {
+                    const it = ctxItem;
+                    ctxMenu.close();
+                    moveItemTo(it, s);
+                  }}
+                >
+                  {s.name}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSub>
+          )}
+          {wonStage && ctxItem.stageId !== wonStage.id && (
+            <ContextMenuItem
+              icon={<Trophy size={14} />}
+              onClick={() => {
+                const it = ctxItem;
+                ctxMenu.close();
+                moveItemTo(it, wonStage);
+              }}
+            >
+              Marcar como ganada
+            </ContextMenuItem>
+          )}
+          {lostStage && ctxItem.stageId !== lostStage.id && (
+            <ContextMenuItem
+              icon={<XCircle size={14} />}
+              onClick={() => {
+                const it = ctxItem;
+                ctxMenu.close();
+                markLost(it);
+              }}
+            >
+              Marcar como perdida
+            </ContextMenuItem>
+          )}
+          <ContextMenuDivider />
+          <ContextMenuItem
+            tone="danger"
+            icon={<Trash2 size={14} />}
+            onClick={() => {
+              const it = ctxItem;
+              ctxMenu.close();
+              deleteItemLocal(it);
+            }}
+          >
+            Eliminar
+          </ContextMenuItem>
+        </ContextMenu>
       )}
     </div>
   );
@@ -479,11 +705,19 @@ function ColumnEmpty({ isTerminal, onAdd }: { isTerminal: boolean; onAdd: () => 
 function DraggableCard({
   item,
   dimmed,
+  phone,
+  canConvert,
   onClick,
+  onConvert,
+  onContextMenu,
 }: {
   item: PipelineItem;
   dimmed: boolean;
+  phone?: string;
+  canConvert: boolean;
   onClick: () => void;
+  onConvert: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id: item.id });
   return (
@@ -491,131 +725,201 @@ function DraggableCard({
       ref={setNodeRef}
       item={item}
       dimmed={dimmed || isDragging}
+      phone={phone}
+      canConvert={canConvert}
       onClick={onClick}
+      onConvert={onConvert}
+      onContextMenu={onContextMenu}
       dragHandleProps={{ ...listeners, ...attributes }}
     />
   );
 }
 
+const stopPD = (e: React.PointerEvent) => e.stopPropagation();
+const cardActionBtnStyle: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  borderRadius: radius.sm,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
 interface LeadCardViewProps {
   item: PipelineItem;
   dimmed?: boolean;
   overlay?: boolean;
+  phone?: string;
+  canConvert?: boolean;
   onClick?: () => void;
+  onConvert?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   dragHandleProps?: Record<string, unknown>;
 }
 
 const LeadCardView = forwardRef<HTMLDivElement, LeadCardViewProps>(function LeadCardView(
-  { item, dimmed, overlay, onClick, dragHandleProps },
+  { item, dimmed, overlay, phone, canConvert, onClick, onConvert, onContextMenu, dragHandleProps },
   ref,
 ) {
-    const isHot = item.priority === "hot";
-    const pill = PRIORITY_STYLE[item.priority];
-    return (
-      <div
-        ref={ref}
-        onClick={() => {
-          if (!overlay) onClick?.();
-        }}
-        style={{
-          background: color.surface,
-          border: `1px solid ${isHot ? color.primary : color.border}`,
-          borderRadius: radius.md,
-          padding: space[3],
-          display: "flex",
-          flexDirection: "column",
-          gap: space[2],
-          cursor: overlay ? "grabbing" : "grab",
-          position: "relative",
-          width: overlay ? COL_WIDTH - 24 : undefined,
-          transition: "border-color 100ms, box-shadow 100ms, background 100ms",
-          boxShadow: overlay ? "0 12px 32px rgba(0, 0, 0, 0.5)" : "none",
-          opacity: dimmed ? 0.4 : 1,
-          userSelect: "none",
-        }}
-        {...dragHandleProps}
-      >
-        {isHot && (
+  const isHot = item.priority === "hot";
+  const pill = PRIORITY_STYLE[item.priority];
+  return (
+    <div
+      ref={ref}
+      onClick={() => {
+        if (!overlay) onClick?.();
+      }}
+      onContextMenu={overlay ? undefined : onContextMenu}
+      style={{
+        background: color.surface,
+        border: `1px solid ${isHot ? color.primary : color.border}`,
+        borderRadius: radius.md,
+        padding: space[3],
+        display: "flex",
+        flexDirection: "column",
+        gap: space[2],
+        cursor: overlay ? "grabbing" : "grab",
+        position: "relative",
+        width: overlay ? COL_WIDTH - 24 : undefined,
+        transition: "border-color 100ms, box-shadow 100ms, background 100ms",
+        boxShadow: overlay ? "0 12px 32px rgba(0, 0, 0, 0.5)" : "none",
+        opacity: dimmed ? 0.4 : 1,
+        userSelect: "none",
+      }}
+      {...dragHandleProps}
+    >
+      {isHot && (
+        <div
+          style={{
+            position: "absolute",
+            left: -1,
+            top: 8,
+            bottom: 8,
+            width: 3,
+            background: color.primary,
+            borderRadius: radius.full,
+          }}
+        />
+      )}
+
+      {/* Línea 1: Cliente + producto */}
+      <div style={{ display: "flex", alignItems: "center", gap: space[2], minWidth: 0 }}>
+        <Avatar name={item.customerName} size={28} />
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              position: "absolute",
-              left: -1,
-              top: 8,
-              bottom: 8,
-              width: 3,
-              background: color.primary,
-              borderRadius: radius.full,
-            }}
-          />
-        )}
-
-        {/* Línea 1: Cliente + producto */}
-        <div style={{ display: "flex", alignItems: "center", gap: space[2], minWidth: 0 }}>
-          <Avatar name={item.customerName} size={28} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: text.sm,
-                fontWeight: weight.semibold,
-                color: color.text,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                lineHeight: 1.3,
-              }}
-            >
-              {item.customerName}
-            </div>
-            <div
-              style={{
-                fontSize: text.xs,
-                color: item.product ? color.textMuted : color.textDim,
-                fontStyle: item.product ? "normal" : "italic",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                marginTop: 1,
-              }}
-            >
-              {item.product || "Sin producto definido"}
-            </div>
-          </div>
-          {isHot && <Flame size={14} color={color.primary} strokeWidth={2.4} />}
-        </div>
-
-        {/* Línea 2: Monto */}
-        {item.amount != null && (
-          <div
-            style={{
-              fontSize: text.lg,
-              fontWeight: weight.bold,
+              fontSize: text.sm,
+              fontWeight: weight.semibold,
               color: color.text,
-              letterSpacing: "-0.3px",
-              lineHeight: 1.1,
-              fontVariantNumeric: "tabular-nums",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              lineHeight: 1.3,
             }}
           >
-            {formatMoney(item.amount, item.currency)}
+            {item.customerName}
           </div>
-        )}
-
-        {/* Footer: prioridad */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-          <span
+          <div
             style={{
-              fontSize: 10,
-              fontWeight: weight.bold,
-              textTransform: "uppercase",
-              letterSpacing: "0.3px",
-              padding: "2px 7px",
-              borderRadius: radius.full,
-              background: pill.bg,
-              color: pill.fg,
+              fontSize: text.xs,
+              color: item.product ? color.textMuted : color.textDim,
+              fontStyle: item.product ? "normal" : "italic",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              marginTop: 1,
             }}
           >
-            {PILL_LABEL[item.priority]}
-          </span>
+            {item.product || "Sin producto definido"}
+          </div>
         </div>
+        {isHot && <Flame size={14} color={color.primary} strokeWidth={2.4} />}
       </div>
-    );
+
+      {/* Línea 2: Monto */}
+      {item.amount != null && (
+        <div
+          style={{
+            fontSize: text.lg,
+            fontWeight: weight.bold,
+            color: color.text,
+            letterSpacing: "-0.3px",
+            lineHeight: 1.1,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {formatMoney(item.amount, item.currency)}
+        </div>
+      )}
+
+      {/* Footer: acciones rápidas + prioridad */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2] }}>
+        <div style={{ display: "flex", gap: 2 }}>
+          {!overlay && canConvert && (
+            <button
+              type="button"
+              aria-label="Convertir en venta"
+              title="Convertir en venta"
+              className="btn-icon primary"
+              style={cardActionBtnStyle}
+              onPointerDown={stopPD}
+              onClick={(e) => {
+                e.stopPropagation();
+                onConvert?.();
+              }}
+            >
+              <DollarSign size={13} strokeWidth={2.4} />
+            </button>
+          )}
+          {!overlay && phone && (
+            <button
+              type="button"
+              aria-label="WhatsApp"
+              title="WhatsApp"
+              className="btn-icon wa"
+              style={cardActionBtnStyle}
+              onPointerDown={stopPD}
+              onClick={(e) => {
+                e.stopPropagation();
+                openWhatsApp(phone);
+              }}
+            >
+              <WhatsAppIcon size={13} />
+            </button>
+          )}
+          {!overlay && phone && (
+            <button
+              type="button"
+              aria-label="Llamar"
+              title="Llamar"
+              className="btn-icon muted"
+              style={cardActionBtnStyle}
+              onPointerDown={stopPD}
+              onClick={(e) => {
+                e.stopPropagation();
+                openTel(phone);
+              }}
+            >
+              <Phone size={13} strokeWidth={2.2} />
+            </button>
+          )}
+        </div>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: weight.bold,
+            textTransform: "uppercase",
+            letterSpacing: "0.3px",
+            padding: "2px 7px",
+            borderRadius: radius.full,
+            background: pill.bg,
+            color: pill.fg,
+            flexShrink: 0,
+          }}
+        >
+          {PILL_LABEL[item.priority]}
+        </span>
+      </div>
+    </div>
+  );
 });

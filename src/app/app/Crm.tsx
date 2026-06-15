@@ -52,10 +52,18 @@ function money(n: number | null | undefined, cur: Currency) {
     : `$ ${Number(n).toLocaleString("es-AR")}`;
 }
 
+type SalePreset = {
+  customerId?: string;
+  /** Nombre del cliente del preset — sirve de fallback si el id no está en la
+   *  lista local de customers (cliente borrado o lista desincronizada). */
+  customerName?: string;
+  lines?: { description: string; quantity: string; unitPrice: string }[];
+};
+
 type ModalState =
   | { kind: "customer"; id?: string }
   | { kind: "item"; id?: string; presetStageId?: string }
-  | { kind: "sale" }
+  | { kind: "sale"; preset?: SalePreset; fromItemId?: string }
   | { kind: "saleDetail"; id: string }
   | null;
 
@@ -199,6 +207,23 @@ export default function Crm({
             key={activeWs.id}
             onOpenItem={(id) => setModal({ kind: "item", id })}
             onAddItem={(stageId) => setModal({ kind: "item", presetStageId: stageId })}
+            onConvertItem={(item) =>
+              setModal({
+                kind: "sale",
+                fromItemId: item.id,
+                preset: {
+                  customerId: item.customerId,
+                  customerName: item.customerName,
+                  lines: [
+                    {
+                      description: item.product || item.customerName,
+                      quantity: "1",
+                      unitPrice: item.amount != null ? String(item.amount) : "",
+                    },
+                  ],
+                },
+              })
+            }
           />
         ) : view === "customers" ? (
           <ClientesView key={activeWs.id} onNewSale={() => setModal({ kind: "sale" })} />
@@ -246,8 +271,30 @@ export default function Crm({
         <SaleModal
           customers={customers}
           sellerName={user.name ?? user.email}
+          preset={modal.preset}
+          title={modal.fromItemId ? "Convertir en venta" : "Nueva venta"}
           onClose={() => setModal(null)}
-          onSaved={(msg) => { setModal(null); refreshSales(); flash(msg); window.dispatchEvent(new Event("clozr:sale-changed")); }}
+          onSaved={async (msg) => {
+            const fromItemId = modal.fromItemId;
+            setModal(null);
+            refreshSales();
+            flash(msg);
+            window.dispatchEvent(new Event("clozr:sale-changed"));
+            // Convertir: al registrar la venta, mover la oportunidad a "ganada".
+            if (fromItemId) {
+              const won = stages.find((s) => s.isWon);
+              if (!won) {
+                flash("Venta registrada. No hay etapa “ganada” configurada.");
+                return;
+              }
+              try {
+                await api.moveItem(fromItemId, won);
+                window.dispatchEvent(new Event("clozr:item-changed"));
+              } catch {
+                flash("Venta registrada, pero no se pudo marcar la oportunidad como ganada.");
+              }
+            }
+          }}
         />
       )}
       {modal?.kind === "saleDetail" && (
@@ -580,16 +627,24 @@ type SaleLine = { description: string; quantity: string; unitPrice: string };
 function SaleModal({
   customers,
   sellerName,
+  preset,
+  title = "Nueva venta",
   onClose,
   onSaved,
 }: {
   customers: Customer[];
   sellerName: string;
+  preset?: SalePreset;
+  title?: string;
   onClose: () => void;
   onSaved: (msg: string) => void;
 }) {
-  const [customerId, setCustomerId] = useState(""); // "" = consumidor final
-  const [lines, setLines] = useState<SaleLine[]>([{ description: "", quantity: "1", unitPrice: "" }]);
+  const [customerId, setCustomerId] = useState(preset?.customerId ?? ""); // "" = consumidor final
+  const [lines, setLines] = useState<SaleLine[]>(
+    preset?.lines && preset.lines.length
+      ? preset.lines
+      : [{ description: "", quantity: "1", unitPrice: "" }],
+  );
   const [method, setMethod] = useState<string>("efectivo");
   const [paidFull, setPaidFull] = useState(true);
   const [partial, setPartial] = useState("");
@@ -617,11 +672,17 @@ function SaleModal({
     if (!canSave) return;
     setBusy(true);
     const cust = customers.find((c) => c.id === customerId);
+    // Si el cliente del preset no está en la lista local (cliente borrado o
+    // lista vieja), igual mandamos su id+nombre — existe en la DB.
+    const isPresetCust = !!customerId && customerId === preset?.customerId;
+    const finalCustomerId = cust?.id ?? (isPresetCust ? customerId : undefined);
+    const finalCustomerName =
+      cust?.name || (isPresetCust ? preset?.customerName : "") || "Consumidor final";
     const payments = paidAmount > 0 ? [{ method, amount: paidAmount, currency: "ARS" as Currency }] : [];
     try {
       await api.createSale({
-        customerId: cust?.id,
-        customerName: cust?.name ?? "Consumidor final",
+        customerId: finalCustomerId,
+        customerName: finalCustomerName,
         sellerName,
         notes: notes.trim() || undefined,
         items: validLines.map((l) => ({
@@ -638,12 +699,15 @@ function SaleModal({
   }
 
   return (
-    <Modal title="Nueva venta" onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <div className="flex flex-col gap-3.5 p-5">
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Cliente</span>
           <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={fieldCls}>
             <option value="">Consumidor final</option>
+            {preset?.customerId && !customers.some((c) => c.id === preset.customerId) && (
+              <option value={preset.customerId}>{preset.customerName ?? "Cliente de la oportunidad"}</option>
+            )}
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}

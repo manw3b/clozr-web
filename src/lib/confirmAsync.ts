@@ -52,7 +52,13 @@ interface ConfirmState {
 
 export const useConfirmStore = create<ConfirmState>((set, get) => ({
   pending: null,
-  open: (p) => set({ pending: p }),
+  open: (p) => {
+    // Si ya había un confirm abierto, lo resolvemos como cancelado en vez de
+    // dejar su promise colgada para siempre (dos confirms encadenados).
+    const cur = get().pending;
+    if (cur) cur.resolve(false);
+    set({ pending: p });
+  },
   finish: (ok) => {
     const cur = get().pending;
     if (cur) cur.resolve(ok);
