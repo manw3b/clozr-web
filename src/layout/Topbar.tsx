@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Plus,
   ChevronDown,
   Bell,
+  AlertCircle,
+  Clock,
   Command,
   Users,
   ShoppingCart,
@@ -18,9 +20,13 @@ import { Modal, ModalField } from '../components/Modal';
 import { Input } from '../components/Input';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUIStore } from '../store/uiStore';
+import { DollarChip } from './DollarChip';
+import * as api from '../lib/api';
+import { formatMoney } from '../lib/format';
+import type { Sale, Task } from '../lib/types';
 
 export type NewAction = 'cliente' | 'venta' | 'lead' | 'tarea' | 'movimiento';
-export type NotifNavigate = 'tasks' | 'cash' | 'pipeline';
+export type NotifNavigate = 'tasks' | 'cash' | 'pipeline' | 'deudas';
 
 /**
  * Versión web del Topbar del desktop. Misma estructura visual (switcher a la
@@ -52,9 +58,14 @@ export function Topbar({ onSearchClick, onNewAction, onNotificationClick }: Topb
         flexShrink: 0,
       }}
     >
-      {/* IZQUIERDA — Workspace switcher */}
+      {/* IZQUIERDA — Workspace switcher + cotización */}
       <div style={{ display: 'flex', alignItems: 'center', gap: space[3] }}>
         <WorkspaceSwitcher />
+        <span
+          style={{ width: 1, height: 22, background: color.border, display: 'inline-block' }}
+          aria-hidden
+        />
+        <DollarChip />
       </div>
 
       {/* CENTRO — Búsqueda global */}
@@ -69,30 +80,69 @@ export function Topbar({ onSearchClick, onNewAction, onNotificationClick }: Topb
   );
 }
 
-/* ===== Notifications dropdown (placeholder hasta Fase 3) ===== */
+/* ===== Notifications dropdown (datos reales: tareas vencidas + cobros) ===== */
+
+interface NotifItem {
+  id: string;
+  kind: 'task' | 'collection';
+  title: string;
+  subtitle: string;
+  screen: NotifNavigate;
+}
 
 function NotificationsMenu({ onNavigate }: { onNavigate: (s: NotifNavigate) => void }) {
-  void onNavigate;
   const [open, setOpen] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const total = 0;
+
+  const refresh = useCallback(() => {
+    api.listTasks().then(setTasks).catch(() => {});
+    api.listSales().then(setSales).catch(() => {});
+  }, []);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const items = useMemo<NotifItem[]>(() => {
+    const now = Date.now();
+    const out: NotifItem[] = [];
+    const pending = sales.filter((s) => !s.isPaid && s.balance > 0);
+    if (pending.length > 0) {
+      const total = pending.reduce((s, v) => s + v.balance, 0);
+      out.push({
+        id: 'collections',
+        kind: 'collection',
+        title: `${pending.length} cobro${pending.length === 1 ? '' : 's'} pendiente${pending.length === 1 ? '' : 's'}`,
+        subtitle: `${formatMoney(total)} por cobrar`,
+        screen: 'deudas',
+      });
+    }
+    for (const t of tasks) {
+      if (!t.completed && t.dueAt && new Date(t.dueAt).getTime() < now) {
+        out.push({ id: `task-${t.id}`, kind: 'task', title: t.title, subtitle: 'Tarea vencida', screen: 'tasks' });
+      }
+    }
+    return out;
+  }, [tasks, sales]);
+  const total = items.length;
 
   useEffect(() => {
+    if (!open) return;
+    refresh();
     function onClickOutside(e: MouseEvent) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpen(false);
     }
-    if (open) {
-      document.addEventListener('mousedown', onClickOutside);
-      document.addEventListener('keydown', onKey);
-      return () => {
-        document.removeEventListener('mousedown', onClickOutside);
-        document.removeEventListener('keydown', onKey);
-      };
-    }
-  }, [open]);
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, refresh]);
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
@@ -132,15 +182,76 @@ function NotificationsMenu({ onNavigate }: { onNavigate: (s: NotifNavigate) => v
           >
             <span>Notificaciones</span>
             <span style={{ fontSize: text.xs, color: color.textMuted, fontWeight: weight.medium }}>
-              Todo al día
+              {total === 0 ? 'Todo al día' : `${total} pendiente${total === 1 ? '' : 's'}`}
             </span>
           </header>
-          <div style={{ padding: `${space[8]} ${space[4]}`, textAlign: 'center' }}>
-            <div style={{ fontSize: 28, marginBottom: space[2] }}>✨</div>
-            <p style={{ margin: 0, fontSize: text.sm, color: color.textMuted }}>
-              No tenés tareas vencidas, cobros atrasados ni leads estancados.
-            </p>
-          </div>
+          {total === 0 ? (
+            <div style={{ padding: `${space[8]} ${space[4]}`, textAlign: 'center' }}>
+              <div style={{ fontSize: 28, marginBottom: space[2] }}>✨</div>
+              <p style={{ margin: 0, fontSize: text.sm, color: color.textMuted }}>
+                No tenés tareas vencidas ni cobros atrasados.
+              </p>
+            </div>
+          ) : (
+            <div style={{ overflowY: 'auto' }}>
+              {items.map((item) => {
+                const Icon = item.kind === 'collection' ? AlertCircle : CheckSquare;
+                const accent = item.kind === 'collection' ? color.danger : color.warning;
+                return (
+                  <button
+                    key={item.id}
+                    className="row-hover"
+                    onClick={() => {
+                      setOpen(false);
+                      onNavigate(item.screen);
+                    }}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: `${space[3]} ${space[4]}`,
+                      borderBottom: `1px solid ${color.border}`,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: space[3],
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: radius.sm,
+                        background: color.surface2,
+                        color: accent,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Icon size={14} strokeWidth={2.2} />
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: text.sm,
+                          fontWeight: weight.medium,
+                          color: color.text,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {item.title}
+                      </div>
+                      <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Clock size={10} /> {item.subtitle}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

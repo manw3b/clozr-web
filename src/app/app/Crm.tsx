@@ -39,6 +39,7 @@ import { Inventario } from "./Inventario";
 import { MiDia } from "./MiDia";
 import { Ajustes } from "./Ajustes";
 import { Caja } from "./Caja";
+import { CommandPalette } from "./CommandPalette";
 
 /* ───────── helpers ───────── */
 function initials(name: string) {
@@ -118,6 +119,7 @@ export default function Crm({
   const [sales, setSales] = useState<Sale[]>([]);
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   function flash(msg: string) {
     setToast(msg);
@@ -185,8 +187,9 @@ export default function Crm({
         workspace={{ name: activeWs.name }}
         user={{ name: user.name ?? user.email, email: user.email }}
         onLogout={onLogout}
-        onSearchClick={() => flash("Búsqueda global — próximamente")}
+        onSearchClick={() => setPaletteOpen(true)}
         onNewAction={handleNew}
+        onNotificationClick={(s) => setView(s as View)}
       >
         {view !== "home" && view !== "tasks" && view !== "deudas" && view !== "team" && view !== "reportes" && view !== "inventory" && view !== "settings" && view !== "cash" && (
           <div className="mb-6 flex items-center gap-4">
@@ -310,6 +313,14 @@ export default function Crm({
 
       <Toaster />
       <ConfirmHost />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onNavigate={(v) => setView(v as View)}
+        onOpenCustomer={(id) => setModal({ kind: "customer", id })}
+        onOpenSale={(id) => setModal({ kind: "saleDetail", id })}
+        onOpenItem={(id) => setModal({ kind: "item", id })}
+      />
     </>
   );
 }
