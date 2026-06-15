@@ -40,29 +40,17 @@ import { MiDia } from "./MiDia";
 import { Ajustes } from "./Ajustes";
 import { Caja } from "./Caja";
 import { CommandPalette } from "./CommandPalette";
+import { Clientes as ClientesView } from "./Clientes";
+import { Ventas as VentasView } from "./Ventas";
+import { Pipeline as PipelineView } from "./Pipeline";
 
 /* ───────── helpers ───────── */
-function initials(name: string) {
-  return (name || "?")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0] ?? "")
-    .join("")
-    .toUpperCase();
-}
 function money(n: number | null | undefined, cur: Currency) {
   if (n == null) return "—";
   return cur === "USD"
     ? `US$ ${Number(n).toLocaleString("en-US")}`
     : `$ ${Number(n).toLocaleString("es-AR")}`;
 }
-const PRIORITY_PILL: Record<LeadPriority, string> = {
-  hot: "bg-[rgba(239,68,68,0.12)] text-danger",
-  high: "bg-[rgba(245,158,11,0.12)] text-warning",
-  medium: "bg-[rgba(59,130,246,0.12)] text-info",
-  low: "bg-surface text-text-dim",
-};
 
 type ModalState =
   | { kind: "customer"; id?: string }
@@ -84,19 +72,6 @@ type View =
   | "team"
   | "settings";
 
-const VIEW_META: Record<View, { title: string; subtitle: string }> = {
-  home: { title: "Mi Día", subtitle: "Tu resumen del día" },
-  pipeline: { title: "Pipeline", subtitle: "Arrastrá las oportunidades entre etapas" },
-  customers: { title: "Clientes", subtitle: "Tu cartera de contactos" },
-  sales: { title: "Ventas", subtitle: "Tus ventas registradas" },
-  cash: { title: "Caja", subtitle: "Entradas y salidas de dinero" },
-  deudas: { title: "Deudas", subtitle: "Cobros pendientes" },
-  inventory: { title: "Inventario", subtitle: "Stock y catálogo" },
-  tasks: { title: "Tareas", subtitle: "Tu lista de tareas" },
-  reportes: { title: "Reportes", subtitle: "Analítica de ventas" },
-  team: { title: "Equipo", subtitle: "Miembros del espacio" },
-  settings: { title: "Ajustes", subtitle: "Configuración del espacio" },
-};
 
 export default function Crm({
   user,
@@ -179,6 +154,15 @@ export default function Crm({
   const refreshItems = () => api.listItems().then(setItems);
   const refreshSales = () => api.listSales().then(setSales);
 
+  // Refrescar items cuando el Pipeline mueve una oportunidad por drag (o
+  // cualquier emisor del evento), para que el ItemModal no arranque con la
+  // etapa vieja y revierta el movimiento al guardar.
+  useEffect(() => {
+    const onItemChanged = () => { api.listItems().then(setItems); };
+    window.addEventListener("clozr:item-changed", onItemChanged);
+    return () => window.removeEventListener("clozr:item-changed", onItemChanged);
+  }, []);
+
   return (
     <>
       <AppShell
@@ -191,15 +175,6 @@ export default function Crm({
         onNewAction={handleNew}
         onNotificationClick={(s) => setView(s as View)}
       >
-        {view !== "home" && view !== "tasks" && view !== "deudas" && view !== "team" && view !== "reportes" && view !== "inventory" && view !== "settings" && view !== "cash" && (
-          <div className="mb-6 flex items-center gap-4">
-            <div>
-              <h2 className="text-xl font-bold tracking-tight">{VIEW_META[view].title}</h2>
-              <p className="text-xs text-text-dim">{VIEW_META[view].subtitle}</p>
-            </div>
-          </div>
-        )}
-
         {loading ? (
           <div className="animate-pulse text-text-dim">Cargando datos…</div>
         ) : error ? (
@@ -220,36 +195,15 @@ export default function Crm({
             onNewSale={() => setModal({ kind: "sale" })}
           />
         ) : view === "pipeline" ? (
-          <Pipeline
-            stages={stages}
-            items={items}
-            onMove={async (item, stage) => {
-              setItems((prev) =>
-                prev.map((i) =>
-                  i.id === item.id
-                    ? { ...i, stageId: stage.id, stageName: stage.name, stageOrder: stage.order }
-                    : i,
-                ),
-              );
-              try {
-                await api.moveItem(item.id, stage);
-                flash(`Movido a ${stage.name}`);
-              } catch {
-                refreshItems();
-                flash("No se pudo mover");
-              }
-            }}
-            onOpen={(id) => setModal({ kind: "item", id })}
-            onAdd={(stageId) => setModal({ kind: "item", presetStageId: stageId })}
+          <PipelineView
+            key={activeWs.id}
+            onOpenItem={(id) => setModal({ kind: "item", id })}
+            onAddItem={(stageId) => setModal({ kind: "item", presetStageId: stageId })}
           />
         ) : view === "customers" ? (
-          <Clientes customers={customers} items={items} onOpen={(id) => setModal({ kind: "customer", id })} />
+          <ClientesView key={activeWs.id} onNewSale={() => setModal({ kind: "sale" })} />
         ) : view === "sales" ? (
-          <Ventas
-            sales={sales}
-            onOpen={(id) => setModal({ kind: "saleDetail", id })}
-            onNew={() => setModal({ kind: "sale" })}
-          />
+          <VentasView key={activeWs.id} onNewSale={() => setModal({ kind: "sale" })} />
         ) : view === "tasks" ? (
           <Tareas key={activeWs.id} />
         ) : view === "deudas" ? (
@@ -285,7 +239,7 @@ export default function Crm({
           customers={customers}
           onNeedCustomer={() => setModal({ kind: "customer" })}
           onClose={() => setModal(null)}
-          onSaved={(msg) => { setModal(null); refreshItems(); flash(msg); }}
+          onSaved={(msg) => { setModal(null); refreshItems(); flash(msg); window.dispatchEvent(new Event("clozr:item-changed")); }}
         />
       )}
       {modal?.kind === "sale" && (
@@ -293,7 +247,7 @@ export default function Crm({
           customers={customers}
           sellerName={user.name ?? user.email}
           onClose={() => setModal(null)}
-          onSaved={(msg) => { setModal(null); refreshSales(); flash(msg); }}
+          onSaved={(msg) => { setModal(null); refreshSales(); flash(msg); window.dispatchEvent(new Event("clozr:sale-changed")); }}
         />
       )}
       {modal?.kind === "saleDetail" && (
@@ -322,255 +276,6 @@ export default function Crm({
         onOpenItem={(id) => setModal({ kind: "item", id })}
       />
     </>
-  );
-}
-
-/* ───────── Dashboard ───────── */
-function Dashboard({
-  stages,
-  items,
-  customers,
-}: {
-  stages: PipelineStage[];
-  items: PipelineItem[];
-  customers: Customer[];
-}) {
-  const wonIds = new Set(stages.filter((s) => s.isWon).map((s) => s.id));
-  const lostIds = new Set(stages.filter((s) => s.isLost).map((s) => s.id));
-  const open = items.filter((i) => !wonIds.has(i.stageId) && !lostIds.has(i.stageId));
-  const won = items.filter((i) => wonIds.has(i.stageId));
-  const lost = items.filter((i) => lostIds.has(i.stageId));
-  const sum = (arr: PipelineItem[], cur: Currency) =>
-    arr.filter((i) => i.currency === cur).reduce((a, i) => a + (Number(i.amount) || 0), 0);
-  const closed = won.length + lost.length;
-  const conv = closed ? Math.round((won.length / closed) * 100) : 0;
-
-  const kpis = [
-    { label: "Oportunidades abiertas", value: String(open.length), sub: `${items.length} en total` },
-    { label: "Pipeline (ARS)", value: money(sum(open, "ARS"), "ARS"), sub: "por cerrar", sm: true },
-    { label: "Pipeline (USD)", value: money(sum(open, "USD"), "USD"), sub: "por cerrar", sm: true },
-    { label: "Ganados", value: String(won.length), sub: `${conv}% de conversión` },
-    { label: "Clientes", value: String(customers.length), sub: "en cartera" },
-  ];
-
-  return (
-    <div>
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
-        {kpis.map((k) => (
-          <div key={k.label} className="rounded-xl border border-border bg-surface p-5">
-            <div className="text-xs font-semibold uppercase tracking-wide text-text-dim">{k.label}</div>
-            <div className={`mt-1.5 font-extrabold tracking-tight ${k.sm ? "text-2xl" : "text-3xl"}`}>
-              {k.value}
-            </div>
-            <div className="mt-1 text-xs text-text-muted">{k.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      <h3 className="mb-3 mt-8 text-xs font-bold uppercase tracking-wider text-text-dim">
-        Embudo por etapa
-      </h3>
-      <div className="flex max-w-xl flex-col gap-2">
-        {stages.map((s) => {
-          const n = items.filter((i) => i.stageId === s.id).length;
-          const pct = items.length ? Math.round((n / items.length) * 100) : 0;
-          return (
-            <div key={s.id} className="flex items-center gap-3">
-              <div className="w-32 text-sm font-medium text-text-muted">{s.name}</div>
-              <div className="h-5 flex-1 overflow-hidden rounded-full bg-surface-2">
-                <div
-                  className="flex h-full items-center justify-end pr-2 text-xs font-bold text-white"
-                  style={{ width: `${pct}%`, minWidth: n ? 26 : 0, background: s.color }}
-                >
-                  {n || ""}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ───────── Pipeline (kanban) ───────── */
-function Pipeline({
-  stages,
-  items,
-  onMove,
-  onOpen,
-  onAdd,
-}: {
-  stages: PipelineStage[];
-  items: PipelineItem[];
-  onMove: (item: PipelineItem, stage: PipelineStage) => void;
-  onOpen: (id: string) => void;
-  onAdd: (stageId: string) => void;
-}) {
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [overStage, setOverStage] = useState<string | null>(null);
-
-  return (
-    <div className="flex items-start gap-3.5 overflow-x-auto pb-3">
-      {stages.map((s) => {
-        const colItems = items.filter((i) => i.stageId === s.id);
-        const ars = colItems.filter((i) => i.currency === "ARS").reduce((a, i) => a + (Number(i.amount) || 0), 0);
-        return (
-          <div
-            key={s.id}
-            className="flex max-h-[calc(100vh-200px)] w-[270px] flex-none flex-col rounded-xl border border-border bg-surface"
-          >
-            <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
-              <span className="text-sm font-bold">{s.name}</span>
-              <span className="ml-auto rounded-full bg-surface-2 px-2 py-0.5 text-xs font-bold text-text-muted">
-                {colItems.length}
-              </span>
-            </div>
-            <div className="px-3.5 pb-2.5 text-xs font-semibold text-text-dim">
-              {ars ? money(ars, "ARS") : " "}
-            </div>
-            <div
-              onDragOver={(e) => { e.preventDefault(); setOverStage(s.id); }}
-              onDragLeave={() => setOverStage((cur) => (cur === s.id ? null : cur))}
-              onDrop={() => {
-                setOverStage(null);
-                const item = items.find((i) => i.id === dragId);
-                if (item && item.stageId !== s.id) onMove(item, s);
-                setDragId(null);
-              }}
-              className={`flex min-h-[60px] flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5 ${
-                overStage === s.id ? "rounded-lg outline-2 outline-dashed outline-primary -outline-offset-4" : ""
-              }`}
-            >
-              {colItems.map((i) => (
-                <div
-                  key={i.id}
-                  draggable
-                  onDragStart={() => setDragId(i.id)}
-                  onDragEnd={() => setDragId(null)}
-                  onClick={() => onOpen(i.id)}
-                  className={`cursor-grab rounded-lg border border-border bg-surface-2 p-3 transition hover:border-border-strong hover:bg-surface-hover ${
-                    dragId === i.id ? "opacity-40" : ""
-                  }`}
-                >
-                  <div className="mb-1.5 flex items-center gap-2">
-                    <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-[rgba(225,29,72,0.2)] text-[11px] font-bold text-primary-hover">
-                      {initials(i.customerName)}
-                    </span>
-                    <span className="truncate text-sm font-semibold">{i.customerName}</span>
-                  </div>
-                  {i.product && <div className="mb-2 truncate text-xs text-text-dim">{i.product}</div>}
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="text-sm font-bold">{money(i.amount, i.currency)}</span>
-                    <span
-                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${PRIORITY_PILL[i.priority]}`}
-                    >
-                      {PRIORITY_LABELS[i.priority]}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => onAdd(s.id)}
-              className="m-2.5 rounded-lg border border-dashed border-border-strong py-2 text-xs font-semibold text-text-dim transition hover:border-primary hover:text-primary-hover"
-            >
-              + Oportunidad
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ───────── Clientes ───────── */
-function Clientes({
-  customers,
-  items,
-  onOpen,
-}: {
-  customers: Customer[];
-  items: PipelineItem[];
-  onOpen: (id: string) => void;
-}) {
-  const [q, setQ] = useState("");
-  const query = q.toLowerCase();
-  const rows = customers.filter(
-    (c) =>
-      !query ||
-      c.name.toLowerCase().includes(query) ||
-      (c.email ?? "").toLowerCase().includes(query) ||
-      (c.phone ?? "").includes(query),
-  );
-  const TYPE_BADGE: Record<ClientType, string> = {
-    empresa: "bg-[rgba(59,130,246,0.12)] text-info",
-    mayorista: "bg-[rgba(225,29,72,0.12)] text-primary-hover",
-    revendedor: "bg-[rgba(245,158,11,0.12)] text-warning",
-    final: "bg-surface-2 text-text-muted",
-  };
-
-  return (
-    <div>
-      <div className="mb-4 max-w-sm">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre, email o teléfono…"
-          className="w-full rounded-lg border border-border bg-surface-2 px-4 py-2.5 text-sm outline-none focus:border-primary"
-        />
-      </div>
-      {rows.length ? (
-        <div className="overflow-hidden rounded-xl border border-border">
-          <table className="w-full border-collapse bg-surface">
-            <thead>
-              <tr>
-                {["Nombre", "Tipo", "Teléfono", "Email", "Oportunidades"].map((h) => (
-                  <th
-                    key={h}
-                    className="border-b border-border px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-text-dim"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((c) => (
-                <tr
-                  key={c.id}
-                  onClick={() => onOpen(c.id)}
-                  className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-hover"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2.5 font-semibold">
-                      <span className="grid h-7 w-7 place-items-center rounded-full bg-[rgba(225,29,72,0.2)] text-[11px] font-bold text-primary-hover">
-                        {initials(c.name)}
-                      </span>
-                      {c.name}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TYPE_BADGE[c.type]}`}>
-                      {CLIENT_TYPE_LABELS[c.type]}
-                    </span>
-                  </td>
-                  <td className={`px-4 py-3 text-sm ${c.phone ? "" : "text-text-dim"}`}>{c.phone || "—"}</td>
-                  <td className={`px-4 py-3 text-sm ${c.email ? "" : "text-text-dim"}`}>{c.email || "—"}</td>
-                  <td className="px-4 py-3 text-sm">{items.filter((i) => i.customerId === c.id).length}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="py-16 text-center text-text-dim">
-          <div className="mb-3 text-4xl">☰</div>
-          {customers.length ? "Sin resultados." : "Todavía no cargaste clientes."}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -717,7 +422,7 @@ function ItemModal({
   const [product, setProduct] = useState(item?.product ?? "");
   const [amount, setAmount] = useState<string>(item?.amount != null ? String(item.amount) : "");
   const [currency, setCurrency] = useState<Currency>(item?.currency ?? "ARS");
-  const [stageId, setStageId] = useState(item?.stageId ?? presetStageId ?? stages[0]?.id ?? "");
+  const [stageId, setStageId] = useState(item?.stageId || presetStageId || stages[0]?.id || "");
   const [priority, setPriority] = useState<LeadPriority>(item?.priority ?? "medium");
   const [source, setSource] = useState<LeadSource>(item?.source ?? "otro");
   const [busy, setBusy] = useState(false);
@@ -860,118 +565,13 @@ function ItemModal({
   );
 }
 
-/* ───────── Ventas ───────── */
+/* ───────── helper de fecha (compartido por los modales de venta) ───────── */
 function fmtDate(s?: string) {
   if (!s) return "—";
   const d = new Date(s);
   return isNaN(d.getTime())
     ? "—"
     : d.toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
-}
-
-function Ventas({
-  sales,
-  onOpen,
-  onNew,
-}: {
-  sales: Sale[];
-  onOpen: (id: string) => void;
-  onNew: () => void;
-}) {
-  const [q, setQ] = useState("");
-  const query = q.toLowerCase();
-  const rows = sales.filter((s) => !query || s.customerName.toLowerCase().includes(query));
-  const vendido = sales.reduce((a, s) => a + s.total, 0);
-  const cobrado = sales.reduce((a, s) => a + s.totalPaid, 0);
-  const porCobrar = sales.reduce((a, s) => a + Math.max(0, s.balance), 0);
-
-  if (sales.length === 0) {
-    return (
-      <div className="py-16 text-center text-text-dim">
-        <div className="mb-3 text-4xl">$</div>
-        <p className="mb-4">Todavía no registraste ventas.</p>
-        <button
-          onClick={onNew}
-          className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover"
-        >
-          + Registrar venta
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="mb-5 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
-        {[
-          { label: "Vendido", value: money(vendido, "ARS") },
-          { label: "Cobrado", value: money(cobrado, "ARS") },
-          { label: "Por cobrar", value: money(porCobrar, "ARS") },
-          { label: "Ventas", value: String(sales.length) },
-        ].map((k) => (
-          <div key={k.label} className="rounded-xl border border-border bg-surface p-5">
-            <div className="text-xs font-semibold uppercase tracking-wide text-text-dim">{k.label}</div>
-            <div className="mt-1.5 text-2xl font-extrabold tracking-tight">{k.value}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mb-4 max-w-sm">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por cliente…"
-          className="w-full rounded-lg border border-border bg-surface-2 px-4 py-2.5 text-sm outline-none focus:border-primary"
-        />
-      </div>
-
-      {rows.length ? (
-        <div className="overflow-hidden rounded-xl border border-border">
-          <table className="w-full border-collapse bg-surface">
-            <thead>
-              <tr>
-                {["Fecha", "Cliente", "Total", "Cobrado", "Estado"].map((h) => (
-                  <th
-                    key={h}
-                    className="border-b border-border px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-text-dim"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((s) => (
-                <tr
-                  key={s.id}
-                  onClick={() => onOpen(s.id)}
-                  className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-hover"
-                >
-                  <td className="px-4 py-3 text-sm text-text-muted">{fmtDate(s.saleDate ?? s.createdAt)}</td>
-                  <td className="px-4 py-3 font-semibold">{s.customerName}</td>
-                  <td className="px-4 py-3 text-sm font-bold">{money(s.total, "ARS")}</td>
-                  <td className="px-4 py-3 text-sm">{money(s.totalPaid, "ARS")}</td>
-                  <td className="px-4 py-3">
-                    {s.isPaid ? (
-                      <span className="rounded-full bg-[rgba(16,185,129,0.12)] px-2.5 py-1 text-xs font-semibold text-[#10B981]">
-                        Pagada
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-[rgba(245,158,11,0.12)] px-2.5 py-1 text-xs font-semibold text-warning">
-                        Debe {money(s.balance, "ARS")}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="py-16 text-center text-text-dim">Sin resultados.</div>
-      )}
-    </div>
-  );
 }
 
 /* ───────── Sale modal (crear) ───────── */

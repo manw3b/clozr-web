@@ -20,3 +20,8 @@ export function openTel(phone: string): void {
   if (!p) return;
   window.location.href = `tel:${p}`;
 }
+
+export function openMail(email: string): void {
+  if (!email) return;
+  window.location.href = `mailto:${email}`;
+}

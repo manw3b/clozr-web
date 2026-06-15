@@ -1,0 +1,613 @@
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Search, Plus, MoreHorizontal, Check, Copy, Eye, Trash2, CheckCircle2, Clock, AlertCircle, Package } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/Button";
+import { Input, Select } from "@/components/Input";
+import { Tabs } from "@/components/Tabs";
+import { Badge } from "@/components/Badge";
+import { Avatar } from "@/components/Avatar";
+import { Drawer } from "@/components/Drawer";
+import { Modal, ModalField } from "@/components/Modal";
+import { Card, MetricCard } from "@/components/Card";
+import { EmptyState } from "@/components/EmptyState";
+import { DataTable, applySort, type ColumnDef } from "@/components/data-table";
+import {
+  ContextMenu,
+  ContextMenuItem,
+  ContextMenuDivider,
+  ContextMenuLabel,
+  useContextMenu,
+} from "@/components/ContextMenu";
+import { confirmAsync } from "@/lib/confirmAsync";
+import { useUIStore } from "@/store/uiStore";
+import { color, radius, space, text, weight } from "@/tokens";
+import { formatMoney, formatRelative, formatDateLong, formatTime } from "@/lib/format";
+import * as api from "@/lib/api";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS } from "@/lib/types";
+import type { Currency, Sale, SaleDetail } from "@/lib/types";
+
+type SaleStatus = "paid" | "partial" | "pending";
+
+function statusOf(s: Sale): SaleStatus {
+  if (s.isPaid || s.balance <= 0.01) return "paid";
+  if (s.totalPaid > 0) return "partial";
+  return "pending";
+}
+
+const STATUS_FILTERS = [
+  { value: "todos", label: "Todas" },
+  { value: "paid", label: "Pagadas" },
+  { value: "partial", label: "Parciales" },
+  { value: "pending", label: "Pendientes" },
+];
+
+const PERIOD_FILTERS = [
+  { value: "today", label: "Hoy" },
+  { value: "7d", label: "7 días" },
+  { value: "30d", label: "30 días" },
+  { value: "all", label: "Todas" },
+];
+
+/**
+ * Vista Ventas — re-portada desde la desktop (antes era la versión vieja en
+ * Tailwind). Tabla + KPIs + filtros + drawer de detalle (ítems + cobros)
+ * con los componentes reales. La creación reusa el modal de Crm (callback
+ * onNewSale + evento `clozr:sale-changed` para refrescar). DIFERIDO: spark
+ * chart lateral, export CSV, mensaje/comprobante por WhatsApp, banner de
+ * regularización.
+ */
+export function Ventas({ onNewSale }: { onNewSale: () => void }) {
+  const { showToast } = useUIStore();
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [periodFilter, setPeriodFilter] = useState("30d");
+  const [sort, setSort] = useState<{ columnId: string; direction: "asc" | "desc" } | null>({
+    columnId: "createdAt",
+    direction: "desc",
+  });
+  const [openId, setOpenId] = useState<string | null>(null);
+  const ctxMenu = useContextMenu();
+  const [ctxSale, setCtxSale] = useState<Sale | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api
+      .listSales()
+      .then(setSales)
+      .catch(() => showToast("No se pudieron cargar las ventas", "error"))
+      .finally(() => setLoading(false));
+  }, [showToast]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Refrescar cuando se crea/cambia una venta desde fuera (modal de Crm).
+  useEffect(() => {
+    const handler = () => load();
+    window.addEventListener("clozr:sale-changed", handler);
+    return () => window.removeEventListener("clozr:sale-changed", handler);
+  }, [load]);
+
+  const periodFiltered = useMemo(() => {
+    if (periodFilter === "all") return sales;
+    const now = Date.now();
+    let cutoff = 0;
+    if (periodFilter === "today") {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      cutoff = d.getTime();
+    } else if (periodFilter === "7d") cutoff = now - 7 * 86400_000;
+    else if (periodFilter === "30d") cutoff = now - 30 * 86400_000;
+    return sales.filter((s) => {
+      const dt = s.createdAt ?? s.saleDate;
+      return dt ? new Date(dt).getTime() >= cutoff : false;
+    });
+  }, [sales, periodFilter]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return periodFiltered.filter((s) => {
+      if (statusFilter !== "todos" && statusOf(s) !== statusFilter) return false;
+      if (q) return (s.customerName ?? "").toLowerCase().includes(q) || String(s.total).includes(q);
+      return true;
+    });
+  }, [periodFiltered, search, statusFilter]);
+
+  const totals = useMemo(() => {
+    let vendido = 0,
+      cobrado = 0,
+      porCobrar = 0;
+    for (const s of periodFiltered) {
+      vendido += s.total;
+      cobrado += s.totalPaid;
+      if (s.balance > 0) porCobrar += s.balance;
+    }
+    return { vendido, cobrado, porCobrar, count: periodFiltered.length };
+  }, [periodFiltered]);
+
+  const columns = useMemo<ColumnDef<Sale>[]>(
+    () => [
+      {
+        id: "clientName",
+        header: "Cliente",
+        sortable: true,
+        width: "minmax(200px, 1.5fr)",
+        cell: (s) => (
+          <div style={{ display: "flex", alignItems: "center", gap: space[3], minWidth: 0 }}>
+            <Avatar name={s.customerName || "Consumidor final"} size={28} />
+            <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {s.customerName || "Consumidor final"}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "amount",
+        header: "Monto",
+        sortable: true,
+        width: "150px",
+        align: "right",
+        cell: (s) => (
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text, fontVariantNumeric: "tabular-nums" }}>
+              {formatMoney(s.total)}
+            </div>
+            {statusOf(s) === "partial" && (
+              <div style={{ fontSize: 10, color: color.warning, fontWeight: weight.semibold, marginTop: 1 }}>
+                Falta {formatMoney(s.balance)}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: "status",
+        header: "Estado",
+        sortable: true,
+        width: "120px",
+        cell: (s) => {
+          const st = statusOf(s);
+          return st === "paid" ? (
+            <Badge tone="success" size="sm" dot>Pagado</Badge>
+          ) : st === "partial" ? (
+            <Badge tone="warning" size="sm" dot>Parcial</Badge>
+          ) : (
+            <Badge tone="danger" size="sm" dot>Pendiente</Badge>
+          );
+        },
+      },
+      {
+        id: "paymentMethod",
+        header: "Pago",
+        sortable: true,
+        width: "130px",
+        cell: (s) => (
+          <span style={{ fontSize: text.xs, color: color.textMuted }}>
+            {s.paymentMethod ? PAYMENT_METHOD_LABELS[s.paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? s.paymentMethod : "—"}
+          </span>
+        ),
+      },
+      {
+        id: "createdAt",
+        header: "Fecha",
+        sortable: true,
+        width: "120px",
+        cell: (s) => (
+          <span style={{ fontSize: text.xs, color: color.textMuted }}>
+            {s.createdAt || s.saleDate ? formatRelative((s.createdAt ?? s.saleDate)!) : "—"}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        width: "56px",
+        align: "right",
+        cell: (s) => (
+          <button
+            aria-label="Más acciones"
+            className="btn-icon muted"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCtxSale(s);
+              ctxMenu.openAt(e);
+            }}
+            style={{ width: 28, height: 28, borderRadius: 6, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <MoreHorizontal size={14} strokeWidth={2.2} />
+          </button>
+        ),
+      },
+    ],
+    [ctxMenu],
+  );
+
+  const sortedRows = useMemo(
+    () =>
+      applySort(filtered, columns, sort, (row, columnId) => {
+        const s = row as Sale;
+        switch (columnId) {
+          case "clientName":
+            return s.customerName ?? "";
+          case "amount":
+            return s.total;
+          case "status":
+            return statusOf(s);
+          case "paymentMethod":
+            return s.paymentMethod ?? "";
+          case "createdAt":
+            return new Date((s.createdAt ?? s.saleDate) ?? 0).getTime();
+          default:
+            return "";
+        }
+      }),
+    [filtered, columns, sort],
+  );
+
+  async function markPaid(s: Sale) {
+    try {
+      await api.addPayment(s.id, { method: "efectivo", amount: s.balance, currency: "ARS" });
+      showToast("Venta marcada como pagada", "success");
+      load();
+    } catch {
+      showToast("No se pudo registrar el pago", "error");
+    }
+  }
+
+  async function remove(s: Sale) {
+    const ok = await confirmAsync({
+      title: "Eliminar venta",
+      message: `¿Eliminar la venta de ${s.customerName || "Consumidor final"} por ${formatMoney(s.total)}?`,
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
+    const snapshot = sales;
+    setSales((prev) => prev.filter((x) => x.id !== s.id));
+    if (openId === s.id) setOpenId(null);
+    try {
+      await api.deleteSale(s.id);
+      showToast("Venta eliminada", "success");
+    } catch {
+      setSales(snapshot);
+      showToast("No se pudo eliminar", "error");
+    }
+  }
+
+  const openSale = openId ? sales.find((s) => s.id === openId) ?? null : null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: space[5], height: "100%" }}>
+      <PageHeader
+        title="Ventas"
+        subtitle={loading ? "Cargando…" : `${filtered.length} ${filtered.length === 1 ? "venta" : "ventas"} · ${formatMoney(totals.vendido)} en el período`}
+        actions={
+          <Button variant="primary" size="md" iconLeft={<Plus size={16} />} onClick={onNewSale}>
+            Nueva venta
+          </Button>
+        }
+      />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: space[3] }}>
+        <MetricCard label="Vendido" value={formatMoney(totals.vendido)} />
+        <MetricCard label="Cobrado" value={formatMoney(totals.cobrado)} tone="success" />
+        <MetricCard label="Por cobrar" value={formatMoney(totals.porCobrar)} tone={totals.porCobrar > 0 ? "warning" : "neutral"} />
+        <MetricCard label="Ventas" value={String(totals.count)} />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: space[3], flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 240, maxWidth: 380 }}>
+          <Input placeholder="Buscar por cliente o monto…" iconLeft={<Search size={15} />} value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <Tabs variant="pills" size="sm" value={statusFilter} onChange={setStatusFilter} items={STATUS_FILTERS} />
+        <div style={{ flex: 1 }} />
+        <Tabs variant="pills" size="sm" value={periodFilter} onChange={setPeriodFilter} items={PERIOD_FILTERS} />
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <DataTable
+          rows={sortedRows}
+          columns={columns}
+          getRowId={(s) => s.id}
+          onRowClick={(s) => setOpenId(s.id)}
+          onRowContextMenu={(s, e) => {
+            setCtxSale(s);
+            ctxMenu.openAt(e);
+          }}
+          activeRowId={openId || undefined}
+          sort={sort || undefined}
+          onSortChange={setSort}
+          density="normal"
+          empty={
+            <EmptyState
+              icon={<Search size={24} />}
+              title={search.trim() ? "Sin resultados" : "Sin ventas en este período"}
+              description={search.trim() ? `No encontramos ventas que coincidan con "${search}"` : "Probá ampliar el período o crear una nueva venta."}
+              action={search.trim() ? { label: "Limpiar búsqueda", onClick: () => setSearch(""), variant: "secondary" } : { label: "Nueva venta", onClick: onNewSale, iconLeft: <Plus size={14} /> }}
+            />
+          }
+        />
+      </div>
+
+      {openSale && <SaleDrawer sale={openSale} onClose={() => setOpenId(null)} onChanged={load} />}
+
+      {ctxMenu.open && ctxSale && (
+        <ContextMenu position={ctxMenu.position} onClose={ctxMenu.close}>
+          <ContextMenuLabel>
+            {(ctxSale.customerName || "Sin cliente") + " · " + formatMoney(ctxSale.total)}
+          </ContextMenuLabel>
+          <ContextMenuItem icon={<Eye size={14} />} onClick={() => { setOpenId(ctxSale.id); ctxMenu.close(); }}>
+            Ver detalle
+          </ContextMenuItem>
+          {statusOf(ctxSale) !== "paid" && (
+            <ContextMenuItem icon={<Check size={14} />} onClick={() => { const s = ctxSale; ctxMenu.close(); markPaid(s); }}>
+              Marcar como pagada
+            </ContextMenuItem>
+          )}
+          <ContextMenuItem icon={<Copy size={14} />} onClick={() => { navigator.clipboard.writeText(ctxSale.id).catch(() => {}); showToast("ID copiado", "success"); ctxMenu.close(); }}>
+            Copiar ID
+          </ContextMenuItem>
+          <ContextMenuDivider />
+          <ContextMenuItem tone="danger" icon={<Trash2 size={14} />} onClick={() => { const s = ctxSale; ctxMenu.close(); remove(s); }}>
+            Eliminar
+          </ContextMenuItem>
+        </ContextMenu>
+      )}
+    </div>
+  );
+}
+
+/* ───────── SaleDrawer ───────── */
+
+function SaleDrawer({ sale, onClose, onChanged }: { sale: Sale; onClose: () => void; onChanged: () => void }) {
+  const { showToast } = useUIStore();
+  const [detail, setDetail] = useState<SaleDetail | null>(null);
+  const [payOpen, setPayOpen] = useState(false);
+
+  const reload = useCallback(() => {
+    api.getSale(sale.id).then(setDetail).catch(() => {});
+  }, [sale.id]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const st = statusOf(sale);
+  const remaining = sale.balance;
+
+  async function markPaid() {
+    try {
+      await api.addPayment(sale.id, { method: "efectivo", amount: remaining, currency: "ARS" });
+      showToast("Venta cobrada", "success");
+      reload();
+      onChanged();
+    } catch {
+      showToast("No se pudo registrar el pago", "error");
+    }
+  }
+
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      width="560px"
+      header={
+        <header style={{ padding: `${space[4]} ${space[5]}`, borderBottom: `1px solid ${color.border}`, display: "flex", alignItems: "flex-start", gap: space[3], flexShrink: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 2 }}>
+              Venta
+            </div>
+            <h2 style={{ margin: 0, fontSize: text.lg, fontWeight: weight.bold, color: color.text, letterSpacing: "-0.3px" }}>
+              {sale.customerName || "Consumidor final"}
+            </h2>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="btn-icon muted" style={{ width: 28, height: 28, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 300 }}>×</span>
+          </button>
+        </header>
+      }
+      footer={
+        st !== "paid" ? (
+          <div style={{ display: "flex", gap: space[2] }}>
+            <Button variant="secondary" size="md" onClick={() => setPayOpen(true)} fullWidth>
+              Registrar pago
+            </Button>
+            <Button variant="primary" size="md" iconLeft={<CheckCircle2 size={15} />} onClick={markPaid} fullWidth>
+              Marcar pagado
+            </Button>
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", fontSize: text.sm, color: color.success, fontWeight: weight.semibold }}>✓ Venta cobrada</div>
+        )
+      }
+    >
+      <div style={{ padding: space[5], borderBottom: `1px solid ${color.border}`, textAlign: "center" }}>
+        <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 4 }}>
+          Total de la venta
+        </div>
+        <div style={{ fontSize: text["3xl"], fontWeight: weight.bold, color: color.text, letterSpacing: "-0.8px", lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
+          {formatMoney(sale.total)}
+        </div>
+        <div style={{ marginTop: space[2], display: "inline-flex" }}>
+          {st === "paid" ? <Badge tone="success" size="md" dot>Pagado</Badge> : st === "partial" ? <Badge tone="warning" size="md" dot>Parcial</Badge> : <Badge tone="danger" size="md" dot>Sin pagar</Badge>}
+        </div>
+        {st !== "paid" && (
+          <div style={{ marginTop: space[3], padding: `${space[2]} ${space[3]}`, background: color.warningBg, border: `1px solid ${color.warning}`, borderRadius: radius.md, display: "inline-flex", alignItems: "center", gap: space[2], fontSize: text.sm, fontWeight: weight.semibold, color: color.warning }}>
+            <AlertCircle size={14} strokeWidth={2.4} />
+            <span>Falta {formatMoney(remaining)}</span>
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding: space[5] }}>
+        <Section title={`Productos${detail ? ` · ${detail.items.length}` : ""}`}>
+          {!detail ? (
+            <div style={{ fontSize: text.sm, color: color.textMuted, padding: space[3] }}>Cargando…</div>
+          ) : detail.items.length === 0 ? (
+            <div style={{ padding: space[3], background: color.surface2, border: `1px solid ${color.border}`, borderRadius: radius.md, fontSize: text.sm, color: color.textMuted }}>Sin ítems detallados.</div>
+          ) : (
+            <div style={{ background: color.surface2, border: `1px solid ${color.border}`, borderRadius: radius.md, overflow: "hidden" }}>
+              {detail.items.map((it, idx) => (
+                <div key={it.id} style={{ display: "flex", alignItems: "center", gap: space[3], padding: space[3], borderBottom: idx < detail.items.length - 1 ? `1px solid ${color.border}` : "none" }}>
+                  <div style={{ width: 40, height: 40, background: color.surface, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: color.textDim }}>
+                    <Package size={18} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.description}</div>
+                    <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: 2 }}>
+                      {it.quantity > 1 ? `${it.quantity} × ${formatMoney(it.unitPrice)}` : formatMoney(it.unitPrice)}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text, fontVariantNumeric: "tabular-nums" }}>{formatMoney(it.subtotal)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        <Section title="Detalle">
+          <Row label="Forma de pago" value={sale.paymentMethod ? PAYMENT_METHOD_LABELS[sale.paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? sale.paymentMethod : "—"} />
+          {(sale.createdAt || sale.saleDate) && <Row label="Fecha" value={`${formatDateLong((sale.createdAt ?? sale.saleDate)!)} · ${formatTime((sale.createdAt ?? sale.saleDate)!)}`} />}
+          {sale.sellerName && <Row label="Vendedor" value={sale.sellerName} />}
+        </Section>
+
+        <Section title="Cobros">
+          {detail && detail.payments.length > 0 ? (
+            detail.payments.map((p) => (
+              <PaymentRow key={p.id} amount={p.amount} kind="paid" method={p.method} />
+            ))
+          ) : sale.totalPaid > 0 ? (
+            <PaymentRow amount={sale.totalPaid} kind="paid" method={sale.paymentMethod} />
+          ) : null}
+          {remaining > 0 && <PaymentRow amount={remaining} kind="pending" />}
+        </Section>
+
+        {sale.notes && (
+          <Section title="Notas">
+            <p style={{ margin: 0, fontSize: text.sm, color: color.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{sale.notes}</p>
+          </Section>
+        )}
+      </div>
+
+      <PaymentModal
+        open={payOpen}
+        maxAmount={remaining}
+        onClose={() => setPayOpen(false)}
+        onSubmit={async (amount, method) => {
+          try {
+            await api.addPayment(sale.id, { method, amount, currency: "ARS" });
+            showToast("Pago registrado", "success");
+            setPayOpen(false);
+            reload();
+            onChanged();
+          } catch {
+            showToast("No se pudo registrar el pago", "error");
+          }
+        }}
+      />
+    </Drawer>
+  );
+}
+
+function PaymentModal({
+  open,
+  maxAmount,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  maxAmount: number;
+  onClose: () => void;
+  onSubmit: (amount: number, method: string) => void;
+}) {
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState("efectivo");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setAmount(maxAmount > 0 ? String(maxAmount) : "");
+      setMethod("efectivo");
+    }
+  }, [open, maxAmount]);
+
+  const n = Number(amount);
+  const canSubmit = n > 0;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Registrar pago"
+      maxWidth={420}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button
+            variant="primary"
+            disabled={!canSubmit}
+            loading={saving}
+            onClick={async () => {
+              setSaving(true);
+              await onSubmit(n, method);
+              setSaving(false);
+            }}
+          >
+            Registrar
+          </Button>
+        </>
+      }
+    >
+      <ModalField label="Monto" required>
+        <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
+      </ModalField>
+      <ModalField label="Método">
+        <Select value={method} onChange={(e) => setMethod(e.target.value)}>
+          {PAYMENT_METHODS.map((m) => (
+            <option key={m} value={m}>
+              {PAYMENT_METHOD_LABELS[m]}
+            </option>
+          ))}
+        </Select>
+      </ModalField>
+    </Modal>
+  );
+}
+
+/* ───────── helpers ───────── */
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div style={{ marginBottom: space[5] }}>
+      <h3 style={{ margin: 0, marginBottom: space[3], fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, textTransform: "uppercase", letterSpacing: "0.8px" }}>{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: space[3], padding: `${space[2]} 0`, borderBottom: `1px solid ${color.border}` }}>
+      <span style={{ fontSize: text.sm, color: color.textMuted }}>{label}</span>
+      <span style={{ fontSize: text.sm, color: color.text, fontWeight: weight.medium, textAlign: "right", minWidth: 0 }}>{value}</span>
+    </div>
+  );
+}
+
+function PaymentRow({ amount, kind, method }: { amount: number; kind: "paid" | "pending"; method?: string }) {
+  return (
+    <div style={{ padding: space[3], background: color.surface2, border: `1px solid ${color.border}`, borderRadius: radius.md, display: "flex", alignItems: "center", gap: space[3], marginBottom: space[2] }}>
+      <div style={{ width: 32, height: 32, borderRadius: radius.md, background: kind === "paid" ? color.successBg : color.warningBg, color: kind === "paid" ? color.success : color.warning, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {kind === "paid" ? <CheckCircle2 size={15} strokeWidth={2.4} /> : <Clock size={15} strokeWidth={2.4} />}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text, marginBottom: 1 }}>{kind === "paid" ? "Cobrado" : "Pendiente de cobro"}</div>
+        {method && <div style={{ fontSize: text.xs, color: color.textMuted }}>{PAYMENT_METHOD_LABELS[method as keyof typeof PAYMENT_METHOD_LABELS] ?? method}</div>}
+      </div>
+      <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text, fontVariantNumeric: "tabular-nums" }}>{formatMoney(amount)}</div>
+    </div>
+  );
+}
