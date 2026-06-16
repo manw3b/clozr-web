@@ -10,6 +10,7 @@ import {
   Mail,
   Copy,
   DollarSign,
+  Upload,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
@@ -29,6 +30,7 @@ import {
   useContextMenu,
 } from "@/components/ContextMenu";
 import { DataTable, applySort, type ColumnDef } from "@/components/data-table";
+import { ImportClientsModal } from "./ImportClientsModal";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { openWhatsApp, openTel, openMail } from "@/lib/openExternal";
 import { useUIStore } from "@/store/uiStore";
@@ -86,6 +88,7 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
   });
   const [openId, setOpenId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const ctxMenu = useContextMenu();
   const [ctxCustomer, setCtxCustomer] = useState<Customer | null>(null);
@@ -292,17 +295,27 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
         title="Clientes"
         subtitle={loading ? "Cargando…" : `${filtered.length} de ${customers.length} ${customers.length === 1 ? "cliente" : "clientes"}`}
         actions={
-          <Button
-            variant="primary"
-            size="md"
-            iconLeft={<Plus size={16} />}
-            onClick={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-          >
-            Nuevo cliente
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              size="md"
+              iconLeft={<Upload size={16} />}
+              onClick={() => setImportOpen(true)}
+            >
+              Importar
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              iconLeft={<Plus size={16} />}
+              onClick={() => {
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
+              Nuevo cliente
+            </Button>
+          </>
         }
       />
 
@@ -373,6 +386,12 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
           setFormOpen(false);
           load();
         }}
+      />
+
+      <ImportClientsModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={load}
       />
 
       {ctxMenu.open && ctxCustomer && (
