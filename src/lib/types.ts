@@ -87,6 +87,18 @@ export interface CashMovement {
   movedAt?: string | null;
 }
 
+/** Sesión de caja del día (apertura/cierre + arqueo). Una por día por workspace. */
+export interface CashSession {
+  id: string;
+  date: string; // YYYY-MM-DD (session_date)
+  openedAt: string;
+  openedBalanceArs: number;
+  openedBalanceUsd: number;
+  closedAt?: string | null;
+  closedBalanceArs?: number | null;
+  closedBalanceUsd?: number | null;
+}
+
 export interface Customer {
   id: string;
   name: string;

@@ -9,6 +9,7 @@ import type {
   Currency,
   CashKind,
   CashMovement,
+  CashSession,
   Customer,
   LeadPriority,
   LeadSource,
@@ -740,4 +741,72 @@ export async function createCashMovement(input: {
 }
 export async function deleteCashMovement(id: string): Promise<void> {
   await req(`/workspaces/${ws()}/cash/${id}`, { method: "DELETE" });
+}
+
+/* ---------- cash sessions (apertura/cierre diario + arqueo) ---------- */
+interface CashSessionRaw {
+  id: string;
+  session_date?: string | null;
+  opened_at?: string | null;
+  opened_balance_ars?: number | null;
+  opened_balance_usd?: number | null;
+  closed_at?: string | null;
+  closed_balance_ars?: number | null;
+  closed_balance_usd?: number | null;
+}
+/** El Worker devuelve datetime('now') = "YYYY-MM-DD HH:MM:SS" (UTC, sin zona).
+ *  Lo normalizamos a ISO-UTC para que new Date()/formatRelative lo interpreten
+ *  como instante UTC y lo muestren en hora local correcta (sino se corre 3h). */
+function toIsoUtc(s: string | null | undefined): string {
+  if (!s) return "";
+  const t = s.includes("T") ? s : s.replace(" ", "T");
+  return /[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : t + "Z";
+}
+function mapCashSession(r: CashSessionRaw): CashSession {
+  return {
+    id: r.id,
+    date: r.session_date ?? "",
+    openedAt: toIsoUtc(r.opened_at),
+    openedBalanceArs: Number(r.opened_balance_ars ?? 0),
+    openedBalanceUsd: Number(r.opened_balance_usd ?? 0),
+    closedAt: r.closed_at ? toIsoUtc(r.closed_at) : null,
+    closedBalanceArs: r.closed_balance_ars != null ? Number(r.closed_balance_ars) : null,
+    closedBalanceUsd: r.closed_balance_usd != null ? Number(r.closed_balance_usd) : null,
+  };
+}
+
+export async function listCashSessions(): Promise<CashSession[]> {
+  const data = await req<{ items: CashSessionRaw[] }>(`/workspaces/${ws()}/cash-sessions`);
+  return (data.items ?? []).map(mapCashSession);
+}
+export async function openCashSession(input: {
+  date: string;
+  ars?: number;
+  usd?: number;
+}): Promise<CashSession> {
+  const data = await req<{ session: CashSessionRaw }>(`/workspaces/${ws()}/cash-sessions/open`, {
+    method: "POST",
+    body: JSON.stringify({
+      session_date: input.date,
+      opened_balance_ars: input.ars ?? 0,
+      opened_balance_usd: input.usd ?? 0,
+    }),
+  });
+  return mapCashSession(data.session);
+}
+export async function closeCashSession(
+  sessionId: string,
+  input: { ars: number; usd: number },
+): Promise<CashSession> {
+  const data = await req<{ session: CashSessionRaw }>(
+    `/workspaces/${ws()}/cash-sessions/${sessionId}/close`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        closed_balance_ars: input.ars,
+        closed_balance_usd: input.usd,
+      }),
+    },
+  );
+  return mapCashSession(data.session);
 }

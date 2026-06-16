@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, ArrowDownRight, Trash2, Wallet, Search } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Trash2, Wallet, Search, Lock } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card, MetricCard } from "@/components/Card";
@@ -7,12 +7,15 @@ import { Input } from "@/components/Input";
 import { Tabs } from "@/components/Tabs";
 import { Modal, ModalField } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
+import { CashSessionChip } from "@/components/CashSessionChip";
+import { CloseCashModal } from "./CloseCashModal";
+import { OpenCashModal } from "./OpenCashModal";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, toLocalISODate } from "@/lib/format";
 import * as api from "@/lib/api";
-import type { CashKind, CashMovement, Currency } from "@/lib/types";
+import type { CashKind, CashMovement, CashSession, Currency } from "@/lib/types";
 
 type Period = "today" | "week" | "month";
 
@@ -46,16 +49,26 @@ function inPeriod(movedAt: string | null | undefined, period: Period): boolean {
 export function Caja() {
   const { showToast } = useUIStore();
   const [movements, setMovements] = useState<CashMovement[]>([]);
+  const [sessions, setSessions] = useState<CashSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<Period>("today");
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<null | CashKind>(null);
+  const [openOpen, setOpenOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
-    api
-      .listCashMovements()
-      .then(setMovements)
+    Promise.all([
+      api.listCashMovements(),
+      // best-effort: si el endpoint de sesiones no está (Worker viejo / migración
+      // con lag), la Caja sigue mostrando los movimientos igual.
+      api.listCashSessions().catch(() => [] as CashSession[]),
+    ])
+      .then(([mv, ss]) => {
+        setMovements(mv);
+        setSessions(ss);
+      })
       .catch(() => showToast("No se pudo cargar la caja", "error"))
       .finally(() => setLoading(false));
   }, [showToast]);
@@ -63,6 +76,50 @@ export function Caja() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const todayISO = toLocalISODate(new Date());
+  const todaySession = useMemo(
+    () => sessions.find((s) => s.date === todayISO) ?? null,
+    [sessions, todayISO],
+  );
+  const isOpen = !!todaySession && !todaySession.closedAt;
+
+  // Saldo esperado HOY (para el arqueo) = apertura + (ingresos − egresos) de
+  // hoy, por moneda. Sin conversión: ARS y USD son cajas físicas distintas.
+  const expected = useMemo(() => {
+    let ars = todaySession?.openedBalanceArs ?? 0;
+    let usd = todaySession?.openedBalanceUsd ?? 0;
+    for (const m of movements) {
+      if (!inPeriod(m.movedAt, "today")) continue;
+      const delta = m.kind === "income" ? m.amount : -m.amount;
+      if (m.currency === "USD") usd += delta;
+      else ars += delta;
+    }
+    return { ars, usd };
+  }, [movements, todaySession]);
+
+  async function handleOpenSession(input: { ars: number; usd: number }) {
+    try {
+      await api.openCashSession({ date: todayISO, ars: input.ars, usd: input.usd });
+      showToast("Caja abierta", "success");
+      load();
+    } catch (e) {
+      showToast("No se pudo abrir la caja", "error");
+      throw e; // mantener el modal abierto para reintentar
+    }
+  }
+
+  async function handleCloseSession(input: { ars: number; usd: number }) {
+    if (!todaySession) return;
+    try {
+      await api.closeCashSession(todaySession.id, input);
+      showToast("Caja cerrada · arqueo guardado", "success");
+      load();
+    } catch (e) {
+      showToast("No se pudo cerrar la caja", "error");
+      throw e;
+    }
+  }
 
   const periodMovements = useMemo(
     () => movements.filter((m) => inPeriod(m.movedAt, period)),
@@ -114,16 +171,43 @@ export function Caja() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[5], height: "100%" }}>
       <PageHeader
-        title="Caja"
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center" }}>
+            Caja
+            <CashSessionChip session={todaySession} />
+          </span>
+        }
         subtitle="Ingresos y egresos de dinero"
         actions={
           <>
-            <Button variant="success" iconLeft={<ArrowUpRight size={16} strokeWidth={2.4} />} onClick={() => setForm("income")}>
+            {!todaySession && (
+              <Button variant="primary" iconLeft={<Wallet size={16} />} onClick={() => setOpenOpen(true)}>
+                Abrir caja
+              </Button>
+            )}
+            <Button
+              variant="success"
+              iconLeft={<ArrowUpRight size={16} strokeWidth={2.4} />}
+              onClick={() => setForm("income")}
+              disabled={!isOpen}
+              title={!isOpen ? "Abrí la caja para registrar movimientos" : undefined}
+            >
               Ingreso
             </Button>
-            <Button variant="danger" iconLeft={<ArrowDownRight size={16} strokeWidth={2.4} />} onClick={() => setForm("expense")}>
+            <Button
+              variant="danger"
+              iconLeft={<ArrowDownRight size={16} strokeWidth={2.4} />}
+              onClick={() => setForm("expense")}
+              disabled={!isOpen}
+              title={!isOpen ? "Abrí la caja para registrar movimientos" : undefined}
+            >
               Egreso
             </Button>
+            {isOpen && (
+              <Button variant="secondary" iconLeft={<Lock size={15} />} onClick={() => setCloseOpen(true)}>
+                Cerrar caja
+              </Button>
+            )}
           </>
         }
       />
@@ -225,6 +309,16 @@ export function Caja() {
           setForm(null);
           load();
         }}
+      />
+
+      <OpenCashModal open={openOpen} onClose={() => setOpenOpen(false)} onConfirm={handleOpenSession} />
+
+      <CloseCashModal
+        open={closeOpen}
+        onClose={() => setCloseOpen(false)}
+        expectedArs={expected.ars}
+        expectedUsd={expected.usd}
+        onConfirm={handleCloseSession}
       />
     </div>
   );
