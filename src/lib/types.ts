@@ -21,6 +21,25 @@ export interface Workspace {
   name: string;
   role: string;
   status: string;
+  /** Objetivo diario (monto). 0 / undefined = sin objetivo seteado. */
+  dailyGoal?: number;
+  dailyGoalCurrency?: string;
+  /** Objetivo de cantidad de ventas del día. */
+  dailyGoalCount?: number;
+}
+
+/** Seguimiento pendiente (tabla followups). */
+export interface Followup {
+  id: string;
+  customerId?: string | null;
+  customerName?: string | null;
+  reason?: string | null;
+  text: string;
+  dueAt: string;
+  daysSinceContact?: number | null;
+  amount?: number | null;
+  notes?: string | null;
+  completedAt?: string | null;
 }
 
 export interface Task {

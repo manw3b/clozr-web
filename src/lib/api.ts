@@ -23,6 +23,7 @@ import type {
   SaleItemReport,
   SaleItem,
   SalePayment,
+  Followup,
   Task,
   TaskType,
   User,
@@ -97,7 +98,15 @@ export async function verifyCode(email: string, code: string): Promise<string> {
 /* ---------- me / workspaces ---------- */
 interface MeRaw {
   user: { id: string; email: string; name: string | null; plan: string };
-  workspaces: Array<{ id: string; name: string; role: string; status: string }>;
+  workspaces: Array<{
+    id: string;
+    name: string;
+    role: string;
+    status: string;
+    daily_goal?: number | null;
+    daily_goal_currency?: string | null;
+    daily_goal_count?: number | null;
+  }>;
 }
 export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }> {
   const r = await req<MeRaw>("/me");
@@ -108,6 +117,9 @@ export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }
       name: w.name,
       role: w.role,
       status: w.status,
+      dailyGoal: Number(w.daily_goal ?? 0),
+      dailyGoalCurrency: w.daily_goal_currency ?? "ARS",
+      dailyGoalCount: Number(w.daily_goal_count ?? 0),
     })),
   };
 }
@@ -687,8 +699,81 @@ export async function deleteProduct(id: string): Promise<void> {
 }
 
 /* ---------- workspace settings ---------- */
-export async function updateWorkspace(patch: { name?: string; industry?: string }): Promise<void> {
-  await req(`/workspaces/${ws()}`, { method: "PATCH", body: JSON.stringify(patch) });
+export async function updateWorkspace(patch: {
+  name?: string;
+  industry?: string;
+  dailyGoal?: number;
+  dailyGoalCurrency?: string;
+  dailyGoalCount?: number;
+}): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (patch.name !== undefined) body.name = patch.name;
+  if (patch.industry !== undefined) body.industry = patch.industry;
+  if (patch.dailyGoal !== undefined) body.daily_goal = patch.dailyGoal;
+  if (patch.dailyGoalCurrency !== undefined) body.daily_goal_currency = patch.dailyGoalCurrency;
+  if (patch.dailyGoalCount !== undefined) body.daily_goal_count = patch.dailyGoalCount;
+  await req(`/workspaces/${ws()}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+/* ---------- followups (seguimientos) + last contact (Mi Día) ---------- */
+interface FollowupRaw {
+  id: string;
+  customer_id?: string | null;
+  customer_name?: string | null;
+  reason?: string | null;
+  text?: string | null;
+  due_at?: string | null;
+  days_since_contact?: number | null;
+  amount?: number | null;
+  notes?: string | null;
+  completed_at?: string | null;
+}
+function mapFollowup(r: FollowupRaw): Followup {
+  return {
+    id: r.id,
+    customerId: r.customer_id ?? null,
+    customerName: r.customer_name ?? null,
+    reason: r.reason ?? null,
+    text: r.text ?? "",
+    dueAt: toIsoUtc(r.due_at) || (r.due_at ?? ""),
+    daysSinceContact: r.days_since_contact != null ? Number(r.days_since_contact) : null,
+    amount: r.amount != null ? Number(r.amount) : null,
+    notes: r.notes ?? null,
+    completedAt: r.completed_at ? toIsoUtc(r.completed_at) : null,
+  };
+}
+export async function listFollowups(): Promise<Followup[]> {
+  const data = await req<{ items: FollowupRaw[] }>(`/workspaces/${ws()}/followups`);
+  return (data.items ?? []).map(mapFollowup);
+}
+export async function completeFollowup(id: string, completed: boolean): Promise<void> {
+  await req(`/workspaces/${ws()}/followups/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ completed_at: completed ? new Date().toISOString() : null }),
+  });
+}
+export async function deleteFollowup(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/followups/${id}`, { method: "DELETE" });
+}
+
+/** Registra un contacto con un cliente (WhatsApp/llamada/etc.) — actualiza su
+ *  "último contacto" para el cálculo de inactivos. */
+export async function recordContact(customerId: string, kind: string): Promise<void> {
+  await req(`/workspaces/${ws()}/customers/${customerId}/contacts`, {
+    method: "POST",
+    body: JSON.stringify({ kind }),
+  });
+}
+
+/** Mapa { customerId → fecha del último contacto (ISO-UTC) }. Un round-trip. */
+export async function getLastContactByCustomer(): Promise<Record<string, string>> {
+  const data = await req<{ lastByCustomer: Record<string, string> }>(
+    `/workspaces/${ws()}/customer-contacts/last-by-customer`,
+  );
+  const raw = data.lastByCustomer ?? {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) out[k] = toIsoUtc(v) || v;
+  return out;
 }
 
 /* ---------- payment methods (config) ---------- */
@@ -744,7 +829,7 @@ function mapCashMovement(r: CashMovementRaw): CashMovement {
     paymentMethod: r.payment_method ?? undefined,
     customerName: r.customer_name ?? undefined,
     saleId: r.sale_id ?? undefined,
-    movedAt: r.moved_at ?? r.created_at ?? undefined,
+    movedAt: toIsoUtc(r.moved_at ?? r.created_at) || undefined,
   };
 }
 
