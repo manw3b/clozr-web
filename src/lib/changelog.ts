@@ -17,6 +17,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-06-17",
+    date: "17 de junio de 2026",
+    bullets: [
+      { tone: "feat", text: "Al cargar una venta ahora elegís el producto del catálogo desde un buscador con foto, precio y costo — el ítem queda linkeado y el precio se autocompleta." },
+      { tone: "feat", text: "Cada ítem muestra si está linkeado (con su margen %) o si quedó como texto libre, y el total te avisa cuánto facturás sin costo asignado antes de guardar." },
+      { tone: "ux", text: "Al convertir una oportunidad en venta, los productos se linkean solos si coinciden con el catálogo. Así el margen de Reportes sale exacto." },
+    ],
+  },
+  {
     version: "2026-06-16",
     date: "16 de junio de 2026",
     bullets: [

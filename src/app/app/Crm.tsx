@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as api from "@/lib/api";
+import { color, radius, shadow } from "@/tokens";
 import {
   CLIENT_TYPE_LABELS,
   CLIENT_TYPES,
@@ -374,7 +376,11 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 z-50 grid place-items-center bg-[rgba(2,6,23,0.7)] p-5 backdrop-blur-sm"
     >
-      <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-xl border border-border-strong bg-surface shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="max-h-[90vh] w-full max-w-md overflow-auto rounded-xl border border-border-strong bg-surface shadow-2xl"
+      >
         <div className="flex items-center border-b border-border px-5 py-4">
           <h3 className="text-base font-bold">{title}</h3>
           <button onClick={onClose} className="ml-auto text-xl text-text-dim hover:text-text">
@@ -665,6 +671,282 @@ function fmtDate(s?: string) {
 /* ───────── Sale modal (crear) ───────── */
 type SaleLine = { description: string; quantity: string; unitPrice: string; catalogItemId?: string };
 
+/** Normaliza un nombre para matchear contra el catálogo: minúsculas, sin
+ *  acentos, espacios colapsados. Así "iPhone 15" y "iphone  15" linkean igual. */
+function normName(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+/** Miniatura del producto en el dropdown (imagen del catálogo o 📦). */
+function ThumbMini({ src }: { src?: string | null }) {
+  const [err, setErr] = useState(false);
+  useEffect(() => setErr(false), [src]);
+  const show = !!src && !err;
+  return (
+    <div
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: radius.sm,
+        background: color.surface2,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        overflow: "hidden",
+        fontSize: 15,
+        lineHeight: 1,
+      }}
+    >
+      {show ? (
+        <img src={src!} alt="" onError={() => setErr(true)} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+      ) : (
+        <span aria-hidden>📦</span>
+      )}
+    </div>
+  );
+}
+
+/** Combobox de catálogo por ítem: input + dropdown filtrable. Elegir una
+ *  opción setea descripción + precio + linkea el producto (catalogItemId). */
+function CatalogLineInput({
+  value,
+  catalog,
+  onChangeText,
+  onPick,
+}: {
+  value: string;
+  catalog: Product[];
+  onChangeText: (v: string) => void;
+  onPick: (p: Product) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const [rect, setRect] = useState<{
+    left: number;
+    width: number;
+    openUp: boolean;
+    maxH: number;
+    top?: number;
+    bottom?: number;
+  } | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+
+  const matches = useMemo(() => {
+    const q = normName(value);
+    const active = catalog.filter((p) => p.active !== false);
+    const list = q
+      ? active.filter((p) => normName(p.name).includes(q) || (p.sku ? normName(p.sku).includes(q) : false))
+      : active;
+    return list.slice(0, 7);
+  }, [value, catalog]);
+
+  // Cerrar al click afuera (input o popover, que vive en un portal aparte).
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Node;
+      if (boxRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  // El dropdown se renderiza con position:fixed en un portal (para no recortarse
+  // dentro del overflow del modal). Medimos el input y reposicionamos al
+  // scrollear/redimensionar; si no hay lugar abajo, abrimos hacia arriba.
+  useEffect(() => {
+    if (!open) {
+      setRect(null);
+      return;
+    }
+    const measure = () => {
+      const el = inputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom;
+      const above = r.top;
+      const openUp = below < 260 && above > below;
+      const maxH = Math.max(120, Math.min(256, (openUp ? above : below) - 12));
+      setRect({
+        left: r.left,
+        width: r.width,
+        openUp,
+        maxH,
+        top: openUp ? undefined : r.bottom + 4,
+        bottom: openUp ? window.innerHeight - r.top + 4 : undefined,
+      });
+    };
+    measure();
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+    };
+  }, [open]);
+
+  // Mantener el highlight dentro de rango cuando cambia la lista filtrada.
+  useEffect(() => {
+    setHi((h) => (h >= matches.length ? 0 : h));
+  }, [matches.length]);
+
+  function choose(p: Product) {
+    onPick(p);
+    setOpen(false);
+  }
+
+  return (
+    <div ref={boxRef} className="relative flex-1">
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => {
+          onChangeText(e.target.value);
+          setOpen(true);
+          setHi(0);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setOpen(true);
+            setHi((h) => Math.min(h + 1, matches.length - 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHi((h) => Math.max(h - 1, 0));
+          } else if (e.key === "Enter" && open && matches[hi]) {
+            e.preventDefault();
+            choose(matches[hi]);
+          } else if (e.key === "Escape") {
+            // Solo cerrar el dropdown; si ya está cerrado, dejar burbujear (Esc
+            // del modal). stopPropagation evita cerrar el modal de un saque.
+            if (open) {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(false);
+            }
+          }
+        }}
+        placeholder="Producto del catálogo o texto libre"
+        autoComplete="off"
+        className={`${fieldCls} w-full`}
+      />
+      {open && rect && matches.length > 0 &&
+        createPortal(
+        <div
+          ref={popRef}
+          role="listbox"
+          style={{
+            position: "fixed",
+            left: rect.left,
+            width: rect.width,
+            ...(rect.openUp ? { bottom: rect.bottom } : { top: rect.top }),
+            zIndex: 9999,
+            maxHeight: rect.maxH,
+            overflowY: "auto",
+            background: color.surface,
+            border: `1px solid ${color.border}`,
+            borderRadius: radius.lg,
+            boxShadow: shadow.lg,
+          }}
+        >
+          {matches.map((p, idx) => {
+            const c = p.cost;
+            const costed = c != null && c > 0;
+            const pct = costed && p.price > 0 ? Math.round(((p.price - c!) / p.price) * 100) : null;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                role="option"
+                aria-selected={idx === hi}
+                onMouseEnter={() => setHi(idx)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  choose(p);
+                }}
+                style={{
+                  display: "flex",
+                  width: "100%",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 10px",
+                  textAlign: "left",
+                  background: idx === hi ? color.surface2 : "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                <ThumbMini src={p.imagePath} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: color.textMuted }}>
+                    {money(p.price, "ARS")}
+                    {costed ? ` · costo ${money(c, "ARS")}` : " · sin costo"}
+                  </div>
+                </div>
+                {pct != null && (
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: "2px 6px",
+                      borderRadius: radius.sm,
+                      background: color.successBg,
+                      color: color.success,
+                    }}
+                  >
+                    +{pct}%
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+/** Chip de estado de linkeo por línea (debajo de cada ítem). */
+function LineStatusChip({ status }: { status: { kind: "linked" | "nocost" | "free"; marginPct: number | null } }) {
+  let fg: string;
+  let label: string;
+  if (status.kind === "linked") {
+    const neg = status.marginPct != null && status.marginPct < 0;
+    fg = neg ? color.danger : color.success;
+    label =
+      status.marginPct != null
+        ? `Linkeado · margen ${Math.round(status.marginPct)}%${neg ? " (bajo costo)" : ""}`
+        : "Linkeado al catálogo";
+  } else if (status.kind === "nocost") {
+    fg = color.warning;
+    label = "Sin costo en Inventario — no entra en el margen";
+  } else {
+    fg = color.textDim;
+    label = "Texto libre — no entra en el margen";
+  }
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: fg, paddingLeft: 2 }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: fg, flexShrink: 0 }} />
+      {label}
+    </span>
+  );
+}
+
 function SaleModal({
   customers,
   catalog,
@@ -683,11 +965,24 @@ function SaleModal({
   onSaved: (msg: string) => void;
 }) {
   const [customerId, setCustomerId] = useState(preset?.customerId ?? ""); // "" = consumidor final
-  const [lines, setLines] = useState<SaleLine[]>(
-    preset?.lines && preset.lines.length
-      ? preset.lines
-      : [{ description: "", quantity: "1", unitPrice: "" }],
-  );
+  const [lines, setLines] = useState<SaleLine[]>(() => {
+    const base: SaleLine[] =
+      preset?.lines && preset.lines.length
+        ? preset.lines.map((l) => ({ ...l }))
+        : [{ description: "", quantity: "1", unitPrice: "" }];
+    // Linkear automáticamente las líneas del preset (convertir oportunidad →
+    // venta) si su descripción coincide con un producto del catálogo (first-wins).
+    const byName = new Map<string, Product>();
+    for (const p of catalog) {
+      if (p.active === false) continue;
+      const k = normName(p.name);
+      if (!byName.has(k)) byName.set(k, p);
+    }
+    return base.map((l) => {
+      const m = byName.get(normName(l.description));
+      return m ? { ...l, catalogItemId: m.id } : l;
+    });
+  });
   const [method, setMethod] = useState<string>("efectivo");
   const [paidFull, setPaidFull] = useState(true);
   const [partial, setPartial] = useState("");
@@ -702,23 +997,59 @@ function SaleModal({
   // ítem al catálogo (y heredar su costo → margen exacto en Reportes).
   const productByName = useMemo(() => {
     const m = new Map<string, Product>();
-    for (const p of catalog) m.set(p.name.trim().toLowerCase(), p);
+    // first-wins: ante nombres duplicados queda el primero del catálogo (estable).
+    for (const p of catalog) {
+      if (p.active === false) continue;
+      const k = normName(p.name);
+      if (!m.has(k)) m.set(k, p);
+    }
+    return m;
+  }, [catalog]);
+  // Por id, para resolver el costo del producto linkeado (status + cobertura).
+  const productById = useMemo(() => {
+    const m = new Map<string, Product>();
+    for (const p of catalog) m.set(p.id, p);
     return m;
   }, [catalog]);
 
   function setLine(i: number, patch: Partial<SaleLine>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   }
-  // Al escribir/elegir la descripción: si coincide con un producto del
-  // catálogo, linkeamos su id y autocompletamos el precio si está vacío.
+  // Al escribir la descripción a mano:
+  //  - coincidencia exacta con un producto → (re)linkea ese producto;
+  //  - si no, mantenemos el link existente mientras la descripción siga
+  //    conteniendo el nombre del producto (permite anotar "… (sello)" sin
+  //    perder el costo); si ya no lo contiene, queda como texto libre.
   function setDescription(i: number, value: string) {
     setLines((prev) =>
       prev.map((l, idx) => {
         if (idx !== i) return l;
-        const match = productByName.get(value.trim().toLowerCase());
-        const next: SaleLine = { ...l, description: value, catalogItemId: match?.id };
-        if (match && (!l.unitPrice || l.unitPrice.trim() === "") && match.price != null) {
-          next.unitPrice = String(match.price);
+        const norm = normName(value);
+        const exact = productByName.get(norm);
+        let catalogItemId = l.catalogItemId;
+        if (exact) {
+          catalogItemId = exact.id;
+        } else if (l.catalogItemId) {
+          const linked = productById.get(l.catalogItemId);
+          if (!linked || !norm.includes(normName(linked.name))) catalogItemId = undefined;
+        }
+        const next: SaleLine = { ...l, description: value, catalogItemId };
+        if (exact && (!l.unitPrice || l.unitPrice.trim() === "") && exact.price != null) {
+          next.unitPrice = String(exact.price);
+        }
+        return next;
+      }),
+    );
+  }
+  // Al elegir un producto del dropdown: linkeo determinístico por id (a prueba
+  // de nombres duplicados) + autocompleto precio si está vacío.
+  function pickProduct(i: number, p: Product) {
+    setLines((prev) =>
+      prev.map((l, idx) => {
+        if (idx !== i) return l;
+        const next: SaleLine = { ...l, description: p.name, catalogItemId: p.id };
+        if ((!l.unitPrice || l.unitPrice.trim() === "") && p.price != null) {
+          next.unitPrice = String(p.price);
         }
         return next;
       }),
@@ -730,6 +1061,49 @@ function SaleModal({
   function removeLine(i: number) {
     setLines((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
+
+  // Estado de linkeo de una línea: linkeada con costo (→ margen), linkeada sin
+  // costo cargado, o texto libre. Define el chip y la cobertura del margen.
+  function lineStatus(l: SaleLine): { kind: "linked" | "nocost" | "free"; marginPct: number | null } {
+    const p = l.catalogItemId ? productById.get(l.catalogItemId) : undefined;
+    if (!p) return { kind: "free", marginPct: null };
+    const c = p.cost;
+    if (c == null || c <= 0) return { kind: "nocost", marginPct: null };
+    const price = Number(l.unitPrice) || 0;
+    return { kind: "linked", marginPct: price > 0 ? ((price - c) / price) * 100 : null };
+  }
+
+  // Cobertura del margen sobre el total de la venta: cuánto factura con costo
+  // asignado (→ margen estimado) vs cuánto queda sin costo (no entra al margen).
+  const coverage = useMemo(() => {
+    let costedRev = 0,
+      cost = 0,
+      uncostedRev = 0;
+    for (const l of lines) {
+      // Solo las líneas que realmente se guardan (mismo criterio que validLines):
+      // así la cobertura mostrada coincide con lo que Reportes leerá.
+      if (!l.description.trim()) continue;
+      const qty = Number(l.quantity) || 0;
+      const price = Number(l.unitPrice) || 0;
+      const rev = qty * price;
+      if (rev <= 0) continue;
+      const p = l.catalogItemId ? productById.get(l.catalogItemId) : undefined;
+      const c = p?.cost;
+      if (p && c != null && c > 0) {
+        costedRev += rev;
+        cost += c * qty;
+      } else {
+        uncostedRev += rev;
+      }
+    }
+    const marginEst = costedRev - cost;
+    return {
+      marginEst,
+      marginPct: costedRev > 0 ? (marginEst / costedRev) * 100 : null,
+      uncostedRev,
+      hasCosted: costedRev > 0,
+    };
+  }, [lines, productById]);
 
   const validLines = lines.filter(
     (l) => l.description.trim() && Number(l.unitPrice) > 0 && Number(l.quantity) > 0,
@@ -789,45 +1163,43 @@ function SaleModal({
 
         <div className="flex flex-col gap-2">
           <span className={labelCls}>Productos / ítems</span>
-          {catalog.length > 0 && (
-            <datalist id="clozr-catalog-products">
-              {catalog.map((p) => (
-                <option key={p.id} value={p.name} />
-              ))}
-            </datalist>
-          )}
-          {lines.map((l, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                value={l.description}
-                onChange={(e) => setDescription(i, e.target.value)}
-                placeholder="Descripción"
-                list={catalog.length > 0 ? "clozr-catalog-products" : undefined}
-                className={`${fieldCls} flex-1`}
-              />
-              <input
-                type="number"
-                min="1"
-                value={l.quantity}
-                onChange={(e) => setLine(i, { quantity: e.target.value })}
-                className={`${fieldCls} w-14`}
-              />
-              <input
-                type="number"
-                value={l.unitPrice}
-                onChange={(e) => setLine(i, { unitPrice: e.target.value })}
-                placeholder="Precio"
-                className={`${fieldCls} w-24`}
-              />
-              <button
-                onClick={() => removeLine(i)}
-                disabled={lines.length === 1}
-                className="text-lg text-text-dim hover:text-danger disabled:opacity-30"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+          {lines.map((l, i) => {
+            const st = lineStatus(l);
+            return (
+              <div key={i} className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <CatalogLineInput
+                    value={l.description}
+                    catalog={catalog}
+                    onChangeText={(v) => setDescription(i, v)}
+                    onPick={(p) => pickProduct(i, p)}
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    value={l.quantity}
+                    onChange={(e) => setLine(i, { quantity: e.target.value })}
+                    className={`${fieldCls} w-14`}
+                  />
+                  <input
+                    type="number"
+                    value={l.unitPrice}
+                    onChange={(e) => setLine(i, { unitPrice: e.target.value })}
+                    placeholder="Precio"
+                    className={`${fieldCls} w-24`}
+                  />
+                  <button
+                    onClick={() => removeLine(i)}
+                    disabled={lines.length === 1}
+                    className="text-lg text-text-dim hover:text-danger disabled:opacity-30"
+                  >
+                    ×
+                  </button>
+                </div>
+                {l.description.trim() !== "" && <LineStatusChip status={st} />}
+              </div>
+            );
+          })}
           <button onClick={addLine} className="self-start text-xs font-semibold text-primary-hover hover:underline">
             + Agregar ítem
           </button>
@@ -838,6 +1210,21 @@ function SaleModal({
             <span className="text-text-muted">Total</span>
             <span className="font-bold">{money(total, "ARS")}</span>
           </div>
+          {coverage.hasCosted && (
+            <div
+              className="mt-1.5 flex justify-between"
+              style={{ color: coverage.marginEst < 0 ? color.danger : color.success }}
+            >
+              <span>Margen estimado{coverage.marginPct != null ? ` · ${Math.round(coverage.marginPct)}%` : ""}</span>
+              <span className="font-semibold">{money(coverage.marginEst, "ARS")}</span>
+            </div>
+          )}
+          {coverage.uncostedRev > 0 && (
+            <div className="mt-1 flex items-center gap-1.5" style={{ color: color.warning, fontSize: 11 }}>
+              <span aria-hidden>⚠</span>
+              {money(coverage.uncostedRev, "ARS")} sin costo asignado — no entra en el margen
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
