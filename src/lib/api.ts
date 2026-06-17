@@ -663,6 +663,7 @@ export interface ProductInput {
   stockMin?: number | null;
   active?: boolean;
   condition?: string | null;
+  imagePath?: string | null;
 }
 function productBody(p: ProductInput): Record<string, unknown> {
   const b: Record<string, unknown> = {};
@@ -677,6 +678,7 @@ function productBody(p: ProductInput): Record<string, unknown> {
   if (p.stockMin !== undefined) b.stock_min = p.stockMin;
   if (p.active !== undefined) b.active = p.active ? 1 : 0;
   if (p.condition !== undefined) b.condition = p.condition;
+  if (p.imagePath !== undefined) b.image_path = p.imagePath;
   return b;
 }
 

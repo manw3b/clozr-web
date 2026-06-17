@@ -3,7 +3,7 @@
 Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a la app desktop**, y de ahí en más sumar lo que aporte valor real al vendedor PyME.
 
 > Este archivo es la fuente de verdad del plan. Se actualiza a medida que avanzamos.
-> **Última actualización:** 2026-06-16 (post Mi Día v2)
+> **Última actualización:** 2026-06-16 (post Inventario picker visual)
 
 ---
 
@@ -15,15 +15,16 @@ Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a 
 - **Caja con sesión** — abrir/cerrar caja diaria + arqueo (esperado vs contado, por moneda). *Incluyó el primer cambio de backend (Worker + tabla `cash_sessions`).*
 - **Reportes v2** — margen (facturación/costo/ganancia/% + facturación sin costo asignado) + productos más vendidos. Las ventas ahora se pueden **linkear a un producto del catálogo** desde el modal de venta (selector), así el ítem hereda el costo y el margen sale del costo real. Endpoint read-only nuevo `GET /sale-items` (bulk). *También arregló un bug del flujo de ventas: la cantidad vacía/0 ya no diverge el total mostrado del persistido.*
 - **Mi Día v2** — objetivo del día con barra de progreso editable + anillo de score (4 criterios), bloque de **seguimientos** (followups, con completar) y **clientes en riesgo** (sin contacto hace 60+ días, con WhatsApp/llamar que registra el contacto). 100% frontend sobre endpoints que ya existían.
+- **Inventario — picker visual** — wizard con **fotos** (categoría→familia→modelo→color→storage→precio) sobre el catálogo Apple completo (5 categorías · 39 iPhone · 39 iPad · 19 Watch · 12 Mac · 6 AirPods). El catálogo se portó con un parser determinístico desde el seed del desktop; 445 fotos en `public/products`. Las cards de Inventario muestran la foto. Diferido (necesita backend): IMEIs y precios por tipo de cliente.
 - **Seguridad** — credenciales rotadas (Anthropic + Google); el secret filtrado quedó invalidado.
 
 ---
 
 ## 🔜 Próximo (en orden)
 
-1. **Inventario — picker visual** — wizard para cargar productos (iPhone/categorías) más rápido.
-2. **Pulido global** — tips, undo toasts (deshacer), atajos de teclado, "¿qué hay de nuevo?".
-3. **Linkeo total ventas↔catálogo** — que el margen de Reportes sea 100% exacto (hoy el selector ya linkea, falta reforzarlo).
+1. **Pulido global** — tips, undo toasts (deshacer), atajos de teclado, "¿qué hay de nuevo?".
+2. **Linkeo total ventas↔catálogo** — que el margen de Reportes sea 100% exacto (hoy el selector ya linkea, falta reforzarlo).
+3. **IMEIs + precios por tipo de cliente** — tracking unidad-por-unidad y pricing segmentado (necesita backend/tablas nuevas).
 
 ---
 

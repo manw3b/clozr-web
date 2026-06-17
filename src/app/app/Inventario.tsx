@@ -21,6 +21,7 @@ import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { Product } from "@/lib/types";
+import { VisualProductPicker } from "./VisualProductPicker";
 
 type FilterTab = "todos" | "disponibles" | "agotados";
 
@@ -43,6 +44,7 @@ export function Inventario() {
   const [tab, setTab] = useState<FilterTab>("todos");
   const [editing, setEditing] = useState<Product | null>(null);
   const [adding, setAdding] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const ctxMenu = useContextMenu();
   const [ctxProduct, setCtxProduct] = useState<Product | null>(null);
 
@@ -103,7 +105,7 @@ export function Inventario() {
         title="Inventario"
         subtitle={loading ? "Cargando…" : `${summary.total} producto${summary.total === 1 ? "" : "s"} en el catálogo`}
         actions={
-          <Button variant="primary" iconLeft={<Plus size={16} />} onClick={() => setAdding(true)}>
+          <Button variant="primary" iconLeft={<Plus size={16} />} onClick={() => setPickerOpen(true)}>
             Agregar producto
           </Button>
         }
@@ -149,7 +151,7 @@ export function Inventario() {
             }
             action={
               products.length === 0
-                ? { label: "Agregar producto", iconLeft: <Plus size={14} />, onClick: () => setAdding(true) }
+                ? { label: "Agregar producto", iconLeft: <Plus size={14} />, onClick: () => setPickerOpen(true) }
                 : undefined
             }
           />
@@ -174,21 +176,7 @@ export function Inventario() {
                 }}
               >
                 <div style={{ display: "flex", gap: space[3], alignItems: "flex-start" }}>
-                  <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: radius.md,
-                      background: color.surface2,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      color: color.textDim,
-                    }}
-                  >
-                    <Package size={20} />
-                  </div>
+                  <CardThumb src={p.imagePath} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div
                       style={{
@@ -231,6 +219,16 @@ export function Inventario() {
         )}
       </div>
 
+      <VisualProductPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onCreated={load}
+        onSwitchToManual={() => {
+          setPickerOpen(false);
+          setAdding(true);
+        }}
+      />
+
       <ProductModal
         open={adding || editing !== null}
         product={editing}
@@ -270,6 +268,36 @@ export function Inventario() {
             Eliminar
           </ContextMenuItem>
         </ContextMenu>
+      )}
+    </div>
+  );
+}
+
+/* ───────── Thumbnail de producto (foto con fallback al ícono) ───────── */
+
+function CardThumb({ src }: { src?: string | null }) {
+  const [err, setErr] = useState(false);
+  useEffect(() => setErr(false), [src]);
+  const show = !!src && !err;
+  return (
+    <div
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: radius.md,
+        background: color.surface2,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        color: color.textDim,
+        overflow: "hidden",
+      }}
+    >
+      {show ? (
+        <img src={src!} alt="" onError={() => setErr(true)} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+      ) : (
+        <Package size={20} />
       )}
     </div>
   );
