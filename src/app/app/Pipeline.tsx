@@ -42,6 +42,7 @@ import {
   useContextMenu,
 } from "@/components/ContextMenu";
 import { confirmAsync } from "@/lib/confirmAsync";
+import { useUndoableActions } from "@/store/useUndoableActions";
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
@@ -223,24 +224,21 @@ export function Pipeline({
     [showToast],
   );
 
-  async function deleteItemLocal(item: PipelineItem) {
-    const ok = await confirmAsync({
-      title: "Eliminar oportunidad",
-      message: `¿Eliminar la oportunidad de ${item.customerName}? No se puede deshacer.`,
-      confirmText: "Eliminar",
-      tone: "danger",
-    });
-    if (!ok) return;
+  function deleteItemLocal(item: PipelineItem) {
     setItems((p) => p.filter((i) => i.id !== item.id)); // optimista
-    try {
-      await api.deleteItem(item.id);
-      showToast("Oportunidad eliminada", "success");
-      window.dispatchEvent(new Event("clozr:item-changed"));
-    } catch {
-      showToast("No se pudo eliminar", "error");
-      // El refetch reconcilia desde el server (restaura el item si seguía vivo).
-      window.dispatchEvent(new Event("clozr:item-changed"));
-    }
+    useUndoableActions.getState().register({
+      label: "Oportunidad eliminada",
+      sublabel: item.customerName,
+      onUndo: () => setItems((p) => (p.some((i) => i.id === item.id) ? p : [...p, item])),
+      commit: async () => {
+        // finally: dispatch siempre → si el delete falla, el refetch reconcilia.
+        try {
+          await api.deleteItem(item.id);
+        } finally {
+          window.dispatchEvent(new Event("clozr:item-changed"));
+        }
+      },
+    });
   }
 
   async function markLost(item: PipelineItem) {

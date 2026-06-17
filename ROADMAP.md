@@ -3,7 +3,7 @@
 Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a la app desktop**, y de ahí en más sumar lo que aporte valor real al vendedor PyME.
 
 > Este archivo es la fuente de verdad del plan. Se actualiza a medida que avanzamos.
-> **Última actualización:** 2026-06-16 (post Inventario picker visual)
+> **Última actualización:** 2026-06-17 (post Pulido global)
 
 ---
 
@@ -17,14 +17,14 @@ Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a 
 - **Mi Día v2** — objetivo del día con barra de progreso editable + anillo de score (4 criterios), bloque de **seguimientos** (followups, con completar) y **clientes en riesgo** (sin contacto hace 60+ días, con WhatsApp/llamar que registra el contacto). 100% frontend sobre endpoints que ya existían.
 - **Inventario — picker visual** — wizard con **fotos** (categoría→familia→modelo→color→storage→precio) sobre el catálogo Apple completo (5 categorías · 39 iPhone · 39 iPad · 19 Watch · 12 Mac · 6 AirPods). El catálogo se portó con un parser determinístico desde el seed del desktop; 445 fotos en `public/products`. Las cards de Inventario muestran la foto. Diferido (necesita backend): IMEIs y precios por tipo de cliente.
 - **Seguridad** — credenciales rotadas (Anthropic + Google); el secret filtrado quedó invalidado.
+- **Pulido global** — *undo toasts* (deshacer borrados en Pipeline/Caja/Inventario, estilo Gmail, 6s), *atajos de teclado* globales (1-9 navegación + V/C/M/T/L para acciones, con ayuda `?`), *tips* "¿Sabías que…?" (máx 1/semana + 1ª llegada del día) y modal **"¿Qué hay de nuevo?"** (changelog por versión). Accesibilidad: modales/drawers marcan `aria-modal` para que los atajos no se disparen detrás. 100% frontend.
 
 ---
 
 ## 🔜 Próximo (en orden)
 
-1. **Pulido global** — tips, undo toasts (deshacer), atajos de teclado, "¿qué hay de nuevo?".
-2. **Linkeo total ventas↔catálogo** — que el margen de Reportes sea 100% exacto (hoy el selector ya linkea, falta reforzarlo).
-3. **IMEIs + precios por tipo de cliente** — tracking unidad-por-unidad y pricing segmentado (necesita backend/tablas nuevas).
+1. **Linkeo total ventas↔catálogo** — que el margen de Reportes sea 100% exacto (hoy el selector ya linkea, falta reforzarlo).
+2. **IMEIs + precios por tipo de cliente** — tracking unidad-por-unidad y pricing segmentado (necesita backend/tablas nuevas).
 
 ---
 

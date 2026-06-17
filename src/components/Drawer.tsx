@@ -73,6 +73,8 @@ export function Drawer({
 
       {/* Panel */}
       <aside
+        role="dialog"
+        aria-modal="true"
         style={{
           position: 'fixed',
           top: 0,

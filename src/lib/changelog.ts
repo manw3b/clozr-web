@@ -1,0 +1,34 @@
+/**
+ * Changelog de la webapp para el modal "¿Qué hay de nuevo?".
+ * El desktop lo trae de los releases de GitHub; en la web lo mantenemos
+ * estático acá (se actualiza al shippear features). El modal muestra la
+ * entrada más reciente una vez por `version` (localStorage).
+ */
+
+export type ChangeTone = "feat" | "ux" | "fix" | "perf";
+
+export interface ChangelogEntry {
+  /** Id estable de la entrega (no es semver; un id por release). */
+  version: string;
+  /** Fecha legible (ISO o texto). */
+  date: string;
+  bullets: { tone: ChangeTone; text: string }[];
+}
+
+export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2026-06-16",
+    date: "16 de junio de 2026",
+    bullets: [
+      { tone: "feat", text: "Caja con sesión: abrí y cerrá la caja del día con arqueo — contás la plata física y ves la diferencia con el sistema, por moneda." },
+      { tone: "feat", text: "Reportes v2: margen (ganancia) y productos más vendidos. Linkeá la venta a un producto del catálogo y el margen sale exacto." },
+      { tone: "feat", text: "Mi Día más completo: objetivo del día con barra de progreso, score, seguimientos pendientes y clientes en riesgo." },
+      { tone: "feat", text: "Inventario con picker visual: cargá productos eligiendo modelo, color y almacenamiento — con las fotos reales." },
+      { tone: "feat", text: "Importá clientes desde CSV/Excel o desde los contactos del celular (vCard)." },
+      { tone: "ux", text: "Pipeline a fondo: convertí una oportunidad en venta, acciones rápidas (WhatsApp/llamar) y menú con click derecho." },
+      { tone: "ux", text: "Atajos de teclado (apretá ?), deshacer en los borrados, y este mismo aviso de novedades." },
+    ],
+  },
+];
+
+export const LATEST_VERSION = CHANGELOG[0]?.version ?? "";

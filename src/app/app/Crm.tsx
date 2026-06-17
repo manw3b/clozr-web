@@ -44,6 +44,10 @@ import { CommandPalette } from "./CommandPalette";
 import { Clientes as ClientesView } from "./Clientes";
 import { Ventas as VentasView } from "./Ventas";
 import { Pipeline as PipelineView } from "./Pipeline";
+import { UndoToastHost } from "@/components/UndoToastHost";
+import { ShortcutsHelp } from "@/components/ShortcutsHelp";
+import { WhatsNewModal } from "./WhatsNewModal";
+import { TipsModal } from "./TipsModal";
 
 /* ───────── helpers ───────── */
 function money(n: number | null | undefined, cur: Currency) {
@@ -173,6 +177,34 @@ export default function Crm({
     const onItemChanged = () => { api.listItems().then(setItems); };
     window.addEventListener("clozr:item-changed", onItemChanged);
     return () => window.removeEventListener("clozr:item-changed", onItemChanged);
+  }, []);
+
+  // Atajos de teclado globales (solo cuando no estás escribiendo). El "?"
+  // (ayuda) lo maneja ShortcutsHelp; ⌘K el SearchTrigger del topbar.
+  useEffect(() => {
+    const NAV: Record<string, View> = {
+      "1": "home", "2": "pipeline", "3": "customers", "4": "sales",
+      "5": "cash", "6": "deudas", "7": "inventory", "8": "tasks", "9": "reportes",
+    };
+    const editable = (t: EventTarget | null) =>
+      t instanceof HTMLElement &&
+      (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+    function onKey(e: KeyboardEvent) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (editable(e.target)) return;
+      // No disparar atajos con un modal/drawer abierto (sino navega/cambia
+      // lo de atrás). Todos los overlays llevan aria-modal.
+      if (document.querySelector('[aria-modal="true"]')) return;
+      const k = e.key.toLowerCase();
+      if (NAV[k]) { e.preventDefault(); setView(NAV[k]); return; }
+      if (k === "l") { e.preventDefault(); setView("pipeline"); return; }
+      if (k === "v") { e.preventDefault(); setModal({ kind: "sale" }); return; }
+      if (k === "c") { e.preventDefault(); setModal({ kind: "customer" }); return; }
+      if (k === "m") { e.preventDefault(); setView("cash"); return; }
+      if (k === "t") { e.preventDefault(); setView("tasks"); return; }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   return (
@@ -319,6 +351,10 @@ export default function Crm({
 
       <Toaster />
       <ConfirmHost />
+      <UndoToastHost />
+      <ShortcutsHelp />
+      <WhatsNewModal />
+      <TipsModal enabled={!loading} onNavigate={(s) => setView(s as View)} />
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}

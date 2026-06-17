@@ -15,8 +15,8 @@ import {
   ContextMenuLabel,
   useContextMenu,
 } from "@/components/ContextMenu";
-import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
+import { useUndoableActions } from "@/store/useUndoableActions";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
@@ -80,23 +80,14 @@ export function Inventario() {
     });
   }, [products, tab, search]);
 
-  async function remove(p: Product) {
-    const ok = await confirmAsync({
-      title: "Eliminar producto",
-      message: `¿Eliminar "${p.name}" del catálogo?`,
-      confirmText: "Eliminar",
-      tone: "danger",
-    });
-    if (!ok) return;
-    const snapshot = products;
+  function remove(p: Product) {
     setProducts((prev) => prev.filter((x) => x.id !== p.id));
-    try {
-      await api.deleteProduct(p.id);
-      showToast("Producto eliminado", "success");
-    } catch {
-      setProducts(snapshot);
-      showToast("No se pudo eliminar", "error");
-    }
+    useUndoableActions.getState().register({
+      label: "Producto eliminado",
+      sublabel: p.name,
+      onUndo: () => setProducts((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p])),
+      commit: () => api.deleteProduct(p.id),
+    });
   }
 
   return (

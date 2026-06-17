@@ -150,6 +150,8 @@ export function Modal({
       >
         <div
           ref={panelRef}
+          role="dialog"
+          aria-modal="true"
           onClick={(e) => e.stopPropagation()}
           style={{
             background: color.surface,

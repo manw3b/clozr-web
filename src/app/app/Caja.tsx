@@ -10,8 +10,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { CashSessionChip } from "@/components/CashSessionChip";
 import { CloseCashModal } from "./CloseCashModal";
 import { OpenCashModal } from "./OpenCashModal";
-import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
+import { useUndoableActions } from "@/store/useUndoableActions";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, toLocalISODate } from "@/lib/format";
 import * as api from "@/lib/api";
@@ -150,22 +150,15 @@ export function Caja() {
     );
   }, [periodMovements, search]);
 
-  async function remove(m: CashMovement) {
-    const ok = await confirmAsync({
-      message: `¿Eliminar este movimiento de ${formatMoney(m.amount, m.currency)}?`,
-      tone: "danger",
-      confirmText: "Eliminar",
-    });
-    if (!ok) return;
-    const snapshot = movements;
+  function remove(m: CashMovement) {
+    // Optimista + undo: el delete real se confirma a los 6s salvo "Deshacer".
     setMovements((prev) => prev.filter((x) => x.id !== m.id));
-    try {
-      await api.deleteCashMovement(m.id);
-      showToast("Movimiento eliminado", "success");
-    } catch {
-      setMovements(snapshot);
-      showToast("No se pudo eliminar", "error");
-    }
+    useUndoableActions.getState().register({
+      label: "Movimiento eliminado",
+      sublabel: `${m.kind === "income" ? "Ingreso" : "Egreso"} · ${formatMoney(m.amount, m.currency)}`,
+      onUndo: () => setMovements((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m])),
+      commit: () => api.deleteCashMovement(m.id),
+    });
   }
 
   return (
