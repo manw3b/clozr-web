@@ -233,3 +233,17 @@ export interface SaleDetail extends Sale {
   items: SaleItem[];
   payments: SalePayment[];
 }
+
+/** Ítem de venta "plano" del endpoint bulk /sale-items (para Reportes v2).
+ *  Trae la fecha de la venta + el catalog_item_id para cruzar con el costo. */
+export interface SaleItemReport {
+  id: string;
+  saleId: string;
+  catalogItemId?: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  saleDate?: string | null;
+  sellerName?: string | null;
+}

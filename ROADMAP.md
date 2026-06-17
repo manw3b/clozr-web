@@ -1,0 +1,49 @@
+# Clozr Web — Roadmap
+
+Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a la app desktop**, y de ahí en más sumar lo que aporte valor real al vendedor PyME.
+
+> Este archivo es la fuente de verdad del plan. Se actualiza a medida que avanzamos.
+> **Última actualización:** 2026-06-16 (post Reportes v2)
+
+---
+
+## ✅ Hecho y LIVE (www.clozr.online)
+
+- **Paridad base** — 11 vistas (Mi Día, Pipeline, Clientes, Ventas, Caja, Deudas, Inventario, Tareas, Reportes, Equipo, Ajustes) + shell completo (sidebar 3 secciones + topbar: switcher de workspace, chip de dólar, búsqueda ⌘K, notificaciones reales, menú "Nuevo").
+- **Pipeline a fondo** — kanban drag&drop, convertir oportunidad → venta, acciones en la card (WhatsApp/llamar), menú contextual (mover/ganar/perder/eliminar), filtro por prioridad.
+- **Import de clientes** — CSV / TSV / vCard (.vcf, contactos del celular), mapeo de columnas, dedupe por teléfono, alta en lote.
+- **Caja con sesión** — abrir/cerrar caja diaria + arqueo (esperado vs contado, por moneda). *Incluyó el primer cambio de backend (Worker + tabla `cash_sessions`).*
+- **Reportes v2** — margen (facturación/costo/ganancia/% + facturación sin costo asignado) + productos más vendidos. Las ventas ahora se pueden **linkear a un producto del catálogo** desde el modal de venta (selector), así el ítem hereda el costo y el margen sale del costo real. Endpoint read-only nuevo `GET /sale-items` (bulk). *También arregló un bug del flujo de ventas: la cantidad vacía/0 ya no diverge el total mostrado del persistido.*
+- **Seguridad** — credenciales rotadas (Anthropic + Google); el secret filtrado quedó invalidado.
+
+---
+
+## 🔜 Próximo (en orden)
+
+1. **Mi Día más completo** — objetivo/score del día, seguimientos pendientes, clientes inactivos.
+2. **Inventario — picker visual** — wizard para cargar productos (iPhone/categorías) más rápido.
+3. **Pulido global** — tips, undo toasts (deshacer), atajos de teclado, "¿qué hay de nuevo?".
+
+---
+
+## 🧹 Deuda técnica
+
+- Sacar el estado `sales` huérfano de `app/app/Crm.tsx` (se fetchea pero ya no se renderiza).
+
+---
+
+## 📋 Diferido por vista (se hace cuando haga falta)
+
+- **Clientes:** etiquetas/tags, historial/timeline de interacciones, último-contacto/estado, deuda manual, acciones masivas.
+- **Ventas:** spark chart lateral, export CSV, mensaje/comprobante por WhatsApp, banner de regularización.
+- **Pipeline:** reorder/resize de columnas, sort dentro de columna, filtros avanzados, acciones masivas, agendar visita, snooze, notas inline, plantillas de WhatsApp.
+- **Inventario:** tracking por IMEI, precios por tipo de cliente, venta rápida.
+- **Caja:** categorías de gasto sugeridas, top categorías.
+
+---
+
+## 🛠️ Notas de trabajo
+
+- **Repos:** `clozr-web` (frontend, deploy a Vercel en push a `main`) · `clozr/cf-worker` (backend Cloudflare Worker, deploy con `wrangler deploy`).
+- **Gate de calidad:** `npm run build` (web) / `npm run typecheck` (worker) + revisión adversarial antes de cada deploy a producción.
+- **Deploy de backend:** Worker primero (`wrangler deploy` + verificar migración), después el frontend.

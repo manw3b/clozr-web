@@ -20,6 +20,7 @@ import type {
   Product,
   Sale,
   SaleDetail,
+  SaleItemReport,
   SaleItem,
   SalePayment,
   Task,
@@ -399,7 +400,7 @@ export interface NewSaleInput {
   customerName: string;
   sellerName?: string;
   notes?: string;
-  items: Array<{ description: string; quantity: number; unitPrice: number }>;
+  items: Array<{ description: string; quantity: number; unitPrice: number; catalogItemId?: string | null }>;
   payments: Array<{ method: string; amount: number; currency: Currency }>;
 }
 
@@ -412,6 +413,7 @@ export async function createSale(input: NewSaleInput): Promise<string> {
     quantity: i.quantity,
     unit_price: i.unitPrice,
     subtotal: i.quantity * i.unitPrice,
+    catalog_item_id: i.catalogItemId ?? null,
   }));
   const subtotal = items.reduce((a, i) => a + i.subtotal, 0);
   const total = subtotal;
@@ -458,6 +460,37 @@ export async function addPayment(
     method: "POST",
     body: JSON.stringify({ method: p.method, amount: p.amount, currency: p.currency }),
   });
+}
+
+/* ---------- sale items (bulk, para Reportes v2) ---------- */
+interface SaleItemReportRaw {
+  id: string;
+  sale_id: string;
+  catalog_item_id?: string | null;
+  description?: string | null;
+  quantity?: number | null;
+  unit_price?: number | null;
+  subtotal?: number | null;
+  sale_date?: string | null;
+  sale_created_at?: string | null;
+  seller_name?: string | null;
+}
+function mapSaleItemReport(r: SaleItemReportRaw): SaleItemReport {
+  return {
+    id: r.id,
+    saleId: r.sale_id,
+    catalogItemId: r.catalog_item_id ?? null,
+    description: r.description ?? "",
+    quantity: Number(r.quantity ?? 0),
+    unitPrice: Number(r.unit_price ?? 0),
+    subtotal: Number(r.subtotal ?? 0),
+    saleDate: toIsoUtc(r.sale_date ?? r.sale_created_at) || null,
+    sellerName: r.seller_name ?? null,
+  };
+}
+export async function listSaleItems(): Promise<SaleItemReport[]> {
+  const data = await req<{ items: SaleItemReportRaw[] }>(`/workspaces/${ws()}/sale-items`);
+  return (data.items ?? []).map(mapSaleItemReport);
 }
 
 export async function deleteSale(id: string): Promise<void> {

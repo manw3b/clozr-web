@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as api from "@/lib/api";
 import {
   CLIENT_TYPE_LABELS,
@@ -20,6 +20,7 @@ import type {
   LeadSource,
   PipelineItem,
   PipelineStage,
+  Product,
   Sale,
   SaleDetail,
   User,
@@ -100,6 +101,7 @@ export default function Crm({
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [catalog, setCatalog] = useState<Product[]>([]);
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -133,15 +135,17 @@ export default function Crm({
         await api.seedDefaultStages();
         st = await api.listStages();
       }
-      const [cs, it, sl] = await Promise.all([
+      const [cs, it, sl, ct] = await Promise.all([
         api.listCustomers(),
         api.listItems(),
         api.listSales(),
+        api.listCatalog().catch(() => [] as Product[]),
       ]);
       setStages(st);
       setCustomers(cs);
       setItems(it);
       setSales(sl);
+      setCatalog(ct);
     } catch (e) {
       setError(
         e instanceof api.ApiError && e.status === 403
@@ -270,6 +274,7 @@ export default function Crm({
       {modal?.kind === "sale" && (
         <SaleModal
           customers={customers}
+          catalog={catalog}
           sellerName={user.name ?? user.email}
           preset={modal.preset}
           title={modal.fromItemId ? "Convertir en venta" : "Nueva venta"}
@@ -622,10 +627,11 @@ function fmtDate(s?: string) {
 }
 
 /* ───────── Sale modal (crear) ───────── */
-type SaleLine = { description: string; quantity: string; unitPrice: string };
+type SaleLine = { description: string; quantity: string; unitPrice: string; catalogItemId?: string };
 
 function SaleModal({
   customers,
+  catalog,
   sellerName,
   preset,
   title = "Nueva venta",
@@ -633,6 +639,7 @@ function SaleModal({
   onSaved,
 }: {
   customers: Customer[];
+  catalog: Product[];
   sellerName: string;
   preset?: SalePreset;
   title?: string;
@@ -655,8 +662,31 @@ function SaleModal({
   const paidAmount = paidFull ? total : Number(partial) || 0;
   const balance = total - paidAmount;
 
+  // Índice de productos del catálogo por nombre normalizado, para linkear el
+  // ítem al catálogo (y heredar su costo → margen exacto en Reportes).
+  const productByName = useMemo(() => {
+    const m = new Map<string, Product>();
+    for (const p of catalog) m.set(p.name.trim().toLowerCase(), p);
+    return m;
+  }, [catalog]);
+
   function setLine(i: number, patch: Partial<SaleLine>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }
+  // Al escribir/elegir la descripción: si coincide con un producto del
+  // catálogo, linkeamos su id y autocompletamos el precio si está vacío.
+  function setDescription(i: number, value: string) {
+    setLines((prev) =>
+      prev.map((l, idx) => {
+        if (idx !== i) return l;
+        const match = productByName.get(value.trim().toLowerCase());
+        const next: SaleLine = { ...l, description: value, catalogItemId: match?.id };
+        if (match && (!l.unitPrice || l.unitPrice.trim() === "") && match.price != null) {
+          next.unitPrice = String(match.price);
+        }
+        return next;
+      }),
+    );
   }
   function addLine() {
     setLines((prev) => [...prev, { description: "", quantity: "1", unitPrice: "" }]);
@@ -665,7 +695,9 @@ function SaleModal({
     setLines((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
 
-  const validLines = lines.filter((l) => l.description.trim() && Number(l.unitPrice) > 0);
+  const validLines = lines.filter(
+    (l) => l.description.trim() && Number(l.unitPrice) > 0 && Number(l.quantity) > 0,
+  );
   const canSave = validLines.length > 0 && total > 0 && !busy;
 
   async function save() {
@@ -687,8 +719,11 @@ function SaleModal({
         notes: notes.trim() || undefined,
         items: validLines.map((l) => ({
           description: l.description.trim(),
-          quantity: Number(l.quantity) || 1,
+          // validLines garantiza quantity > 0 — sin el ||1 que coerce vacío→1
+          // (eso divergía el total mostrado del persistido).
+          quantity: Number(l.quantity),
           unitPrice: Number(l.unitPrice) || 0,
+          catalogItemId: l.catalogItemId ?? null,
         })),
         payments,
       });
@@ -718,16 +753,25 @@ function SaleModal({
 
         <div className="flex flex-col gap-2">
           <span className={labelCls}>Productos / ítems</span>
+          {catalog.length > 0 && (
+            <datalist id="clozr-catalog-products">
+              {catalog.map((p) => (
+                <option key={p.id} value={p.name} />
+              ))}
+            </datalist>
+          )}
           {lines.map((l, i) => (
             <div key={i} className="flex items-center gap-2">
               <input
                 value={l.description}
-                onChange={(e) => setLine(i, { description: e.target.value })}
+                onChange={(e) => setDescription(i, e.target.value)}
                 placeholder="Descripción"
+                list={catalog.length > 0 ? "clozr-catalog-products" : undefined}
                 className={`${fieldCls} flex-1`}
               />
               <input
                 type="number"
+                min="1"
                 value={l.quantity}
                 onChange={(e) => setLine(i, { quantity: e.target.value })}
                 className={`${fieldCls} w-14`}
