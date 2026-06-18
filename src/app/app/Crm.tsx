@@ -669,7 +669,7 @@ function fmtDate(s?: string) {
 }
 
 /* ───────── Sale modal (crear) ───────── */
-type SaleLine = { description: string; quantity: string; unitPrice: string; catalogItemId?: string };
+type SaleLine = { description: string; quantity: string; unitPrice: string; catalogItemId?: string; imei?: string };
 
 /** Normaliza un nombre para matchear contra el catálogo: minúsculas, sin
  *  acentos, espacios colapsados. Así "iPhone 15" y "iphone  15" linkean igual. */
@@ -1134,6 +1134,7 @@ function SaleModal({
           quantity: Number(l.quantity),
           unitPrice: Number(l.unitPrice) || 0,
           catalogItemId: l.catalogItemId ?? null,
+          imei: l.imei?.trim() || null,
         })),
         payments,
       });
@@ -1196,7 +1197,20 @@ function SaleModal({
                     ×
                   </button>
                 </div>
-                {l.description.trim() !== "" && <LineStatusChip status={st} />}
+                {l.description.trim() !== "" && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <LineStatusChip status={st} />
+                    <span className="flex-1" />
+                    <input
+                      value={l.imei ?? ""}
+                      onChange={(e) => setLine(i, { imei: e.target.value })}
+                      placeholder="IMEI / N° de serie (opcional)"
+                      autoComplete="off"
+                      className={`${fieldCls} w-56`}
+                      style={{ fontSize: 12, padding: "6px 10px" }}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1367,6 +1381,9 @@ function SaleDetailModal({
                     >
                       <span>
                         {it.quantity}× {it.description}
+                        {it.imei && (
+                          <span className="ml-1 text-xs text-text-dim">· IMEI {it.imei}</span>
+                        )}
                       </span>
                       <span className="font-semibold">{money(it.subtotal, "ARS")}</span>
                     </div>

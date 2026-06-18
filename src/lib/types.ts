@@ -220,6 +220,7 @@ export interface SaleItem {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  imei?: string | null;
 }
 
 export interface SalePayment {

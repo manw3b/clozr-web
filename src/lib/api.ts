@@ -363,6 +363,7 @@ interface SaleItemRaw {
   quantity?: number | null;
   unit_price?: number | null;
   subtotal?: number | null;
+  imei?: string | null;
 }
 function mapSaleItem(r: SaleItemRaw): SaleItem {
   return {
@@ -371,6 +372,7 @@ function mapSaleItem(r: SaleItemRaw): SaleItem {
     quantity: Number(r.quantity ?? 1),
     unitPrice: Number(r.unit_price ?? 0),
     subtotal: Number(r.subtotal ?? 0),
+    imei: r.imei ?? null,
   };
 }
 
@@ -412,7 +414,7 @@ export interface NewSaleInput {
   customerName: string;
   sellerName?: string;
   notes?: string;
-  items: Array<{ description: string; quantity: number; unitPrice: number; catalogItemId?: string | null }>;
+  items: Array<{ description: string; quantity: number; unitPrice: number; catalogItemId?: string | null; imei?: string | null }>;
   payments: Array<{ method: string; amount: number; currency: Currency }>;
 }
 
@@ -426,6 +428,7 @@ export async function createSale(input: NewSaleInput): Promise<string> {
     unit_price: i.unitPrice,
     subtotal: i.quantity * i.unitPrice,
     catalog_item_id: i.catalogItemId ?? null,
+    imei: i.imei ?? null,
   }));
   const subtotal = items.reduce((a, i) => a + i.subtotal, 0);
   const total = subtotal;
