@@ -17,6 +17,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-06-18",
+    date: "18 de junio de 2026",
+    bullets: [
+      { tone: "feat", text: "Precios por tipo de cliente: cargá en cada producto un precio para final, revendedor, mayorista y empresa. Al vender, el precio se sugiere solo según el tipo del cliente elegido." },
+      { tone: "feat", text: "IMEI / N° de serie por ítem en la venta — queda guardado y se ve en el detalle de la venta." },
+      { tone: "ux", text: "El margen de Reportes ahora congela el costo al momento de cada venta: editar el costo de un producto ya no cambia el margen de las ventas pasadas." },
+    ],
+  },
+  {
     version: "2026-06-17",
     date: "17 de junio de 2026",
     bullets: [

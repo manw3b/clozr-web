@@ -254,6 +254,13 @@ export interface SaleDetail extends Sale {
   payments: SalePayment[];
 }
 
+/** Precio de un producto para un tipo de cliente (precios por tipo). */
+export interface CatalogPrice {
+  catalogItemId: string;
+  customerType: ClientType;
+  price: number;
+}
+
 /** Ítem de venta "plano" del endpoint bulk /sale-items (para Reportes v2).
  *  Trae la fecha de la venta + el catalog_item_id para cruzar con el costo. */
 export interface SaleItemReport {

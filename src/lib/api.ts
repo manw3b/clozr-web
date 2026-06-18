@@ -6,6 +6,8 @@
  * El mapeo snake_case (DB/Worker) ↔ camelCase (UI) se hace acá.
  */
 import type {
+  CatalogPrice,
+  ClientType,
   Currency,
   CashKind,
   CashMovement,
@@ -511,6 +513,34 @@ function mapSaleItemReport(r: SaleItemReportRaw): SaleItemReport {
 export async function listSaleItems(): Promise<SaleItemReport[]> {
   const data = await req<{ items: SaleItemReportRaw[] }>(`/workspaces/${ws()}/sale-items`);
   return (data.items ?? []).map(mapSaleItemReport);
+}
+
+/* ---------- catalog prices (precios por tipo de cliente) ---------- */
+interface CatalogPriceRaw {
+  catalog_item_id: string;
+  customer_type: string;
+  price?: number | null;
+}
+export async function listCatalogPrices(): Promise<CatalogPrice[]> {
+  const data = await req<{ prices: CatalogPriceRaw[] }>(`/workspaces/${ws()}/catalog-prices`);
+  return (data.prices ?? [])
+    .filter((p) => p.price != null)
+    .map((p) => ({
+      catalogItemId: p.catalog_item_id,
+      customerType: p.customer_type as ClientType,
+      price: Number(p.price),
+    }));
+}
+/** Upsert del precio de un producto para un tipo. price null/<=0 = borrar. */
+export async function setCatalogPrice(
+  catalogItemId: string,
+  customerType: ClientType,
+  price: number | null,
+): Promise<void> {
+  await req(`/workspaces/${ws()}/catalog-prices`, {
+    method: "PUT",
+    body: JSON.stringify({ catalog_item_id: catalogItemId, customer_type: customerType, price }),
+  });
 }
 
 export async function deleteSale(id: string): Promise<void> {

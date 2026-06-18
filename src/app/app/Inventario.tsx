@@ -20,7 +20,8 @@ import { useUndoableActions } from "@/store/useUndoableActions";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
-import type { Product } from "@/lib/types";
+import type { ClientType, Product } from "@/lib/types";
+import { CLIENT_TYPE_LABELS, CLIENT_TYPES } from "@/lib/types";
 import { VisualProductPicker } from "./VisualProductPicker";
 
 type FilterTab = "todos" | "disponibles" | "agotados";
@@ -316,6 +317,13 @@ function ProductModal({
   const [trackStock, setTrackStock] = useState(true);
   const [stock, setStock] = useState("");
   const [saving, setSaving] = useState(false);
+  // Precios por tipo de cliente (vacío = usa el precio base).
+  const [typePrices, setTypePrices] = useState<Record<ClientType, string>>({
+    final: "", revendedor: "", mayorista: "", empresa: "",
+  });
+  const [origPrices, setOrigPrices] = useState<Record<ClientType, number | null>>({
+    final: null, revendedor: null, mayorista: null, empresa: null,
+  });
 
   // Sincronizar campos al abrir (edición precarga, alta limpia).
   useEffect(() => {
@@ -327,6 +335,25 @@ function ProductModal({
     setSku(product?.sku ?? "");
     setTrackStock(product ? product.trackStock : true);
     setStock(product ? String(product.stock) : "");
+    // Precios por tipo: limpiar y, si es edición, cargar los existentes.
+    setTypePrices({ final: "", revendedor: "", mayorista: "", empresa: "" });
+    setOrigPrices({ final: null, revendedor: null, mayorista: null, empresa: null });
+    if (product) {
+      api.listCatalogPrices()
+        .then((all) => {
+          const tp: Record<ClientType, string> = { final: "", revendedor: "", mayorista: "", empresa: "" };
+          const op: Record<ClientType, number | null> = { final: null, revendedor: null, mayorista: null, empresa: null };
+          for (const p of all) {
+            if (p.catalogItemId === product.id) {
+              tp[p.customerType] = String(p.price);
+              op[p.customerType] = p.price;
+            }
+          }
+          setTypePrices(tp);
+          setOrigPrices(op);
+        })
+        .catch(() => {});
+    }
   }, [open, product]);
 
   const canSubmit = name.trim().length >= 1;
@@ -344,13 +371,18 @@ function ProductModal({
       stock: trackStock ? (stock ? Number(stock) : 0) : 0,
     };
     try {
-      if (product) {
-        await api.updateProduct(product.id, input);
-        showToast("Producto actualizado", "success");
-      } else {
-        await api.createProduct(input);
-        showToast("Producto creado", "success");
-      }
+      const id = product ? (await api.updateProduct(product.id, input), product.id) : await api.createProduct(input);
+      // Upsert de precios por tipo (sólo los que cambiaron). Vacío/0 = borrar.
+      await Promise.all(
+        CLIENT_TYPES.map((t) => {
+          const raw = typePrices[t].trim();
+          const n = raw ? Number(raw) : NaN;
+          const norm = isFinite(n) && n > 0 ? n : null;
+          if (norm === origPrices[t]) return Promise.resolve();
+          return api.setCatalogPrice(id, t, norm);
+        }),
+      );
+      showToast(product ? "Producto actualizado" : "Producto creado", "success");
       onSaved();
     } catch {
       showToast("No se pudo guardar", "error");
@@ -395,6 +427,29 @@ function ProductModal({
       <ModalField label="SKU / código" hint="Opcional">
         <Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Ej: FND-15-NEG" />
       </ModalField>
+      <div style={{ marginBottom: space[5] }}>
+        <div style={{ fontSize: text.sm, fontWeight: weight.medium, color: color.textMuted, marginBottom: 4 }}>
+          Precios por tipo de cliente <span style={{ color: color.textDim, fontWeight: 400 }}>· opcional</span>
+        </div>
+        <div style={{ fontSize: text.xs, color: color.textDim, marginBottom: 8 }}>
+          Dejá vacío para usar el precio base. Al cargar una venta se sugiere según el tipo del cliente.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+          {CLIENT_TYPES.map((t) => (
+            <div key={t}>
+              <label style={{ display: "block", fontSize: text.xs, color: color.textMuted, marginBottom: 4 }}>
+                {CLIENT_TYPE_LABELS[t]}
+              </label>
+              <Input
+                type="number"
+                value={typePrices[t]}
+                onChange={(e) => setTypePrices((p) => ({ ...p, [t]: e.target.value }))}
+                placeholder={price || "0"}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
       <label style={{ display: "flex", alignItems: "center", gap: space[2], cursor: "pointer", marginTop: space[1] }}>
         <input type="checkbox" checked={trackStock} onChange={(e) => setTrackStock(e.target.checked)} />
         <span style={{ fontSize: text.sm, color: color.text }}>Llevar control de stock</span>

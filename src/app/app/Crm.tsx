@@ -15,6 +15,7 @@ import {
   SOURCES,
 } from "@/lib/types";
 import type {
+  CatalogPrice,
   ClientType,
   Currency,
   Customer,
@@ -669,7 +670,7 @@ function fmtDate(s?: string) {
 }
 
 /* ───────── Sale modal (crear) ───────── */
-type SaleLine = { description: string; quantity: string; unitPrice: string; catalogItemId?: string; imei?: string };
+type SaleLine = { description: string; quantity: string; unitPrice: string; catalogItemId?: string; imei?: string; priceAuto?: boolean };
 
 /** Normaliza un nombre para matchear contra el catálogo: minúsculas, sin
  *  acentos, espacios colapsados. Así "iPhone 15" y "iphone  15" linkean igual. */
@@ -1012,6 +1013,43 @@ function SaleModal({
     return m;
   }, [catalog]);
 
+  // Precios por tipo de cliente (precios por tipo). Se cargan una vez; el
+  // precio sugerido de cada ítem depende del tipo del cliente seleccionado.
+  const [catalogPrices, setCatalogPrices] = useState<CatalogPrice[]>([]);
+  useEffect(() => {
+    api.listCatalogPrices().then(setCatalogPrices).catch(() => {});
+  }, []);
+  const priceByKey = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of catalogPrices) m.set(`${p.catalogItemId}|${p.customerType}`, p.price);
+    return m;
+  }, [catalogPrices]);
+  // Tipo del cliente elegido (consumidor final / sin cliente → "final").
+  const custType: ClientType = useMemo(() => {
+    const c = customers.find((x) => x.id === customerId);
+    return c?.type ?? "final";
+  }, [customers, customerId]);
+  // Precio sugerido de un producto para el tipo actual; si no hay precio
+  // especial para ese tipo, cae al precio base del catálogo.
+  function suggestedPrice(p: Product, type: ClientType = custType): number {
+    return priceByKey.get(`${p.id}|${type}`) ?? p.price;
+  }
+  // Cambiar de cliente re-sugiere el precio de las líneas linkeadas que fueron
+  // autocompletadas (priceAuto), respetando precios editados a mano o del preset.
+  function changeCustomer(newId: string) {
+    setCustomerId(newId);
+    const c = customers.find((x) => x.id === newId);
+    const newType: ClientType = c?.type ?? "final";
+    setLines((prev) =>
+      prev.map((l) => {
+        if (!l.catalogItemId || !l.priceAuto) return l;
+        const p = productById.get(l.catalogItemId);
+        if (!p) return l;
+        return { ...l, unitPrice: String(suggestedPrice(p, newType)) };
+      }),
+    );
+  }
+
   function setLine(i: number, patch: Partial<SaleLine>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   }
@@ -1034,8 +1072,9 @@ function SaleModal({
           if (!linked || !norm.includes(normName(linked.name))) catalogItemId = undefined;
         }
         const next: SaleLine = { ...l, description: value, catalogItemId };
-        if (exact && (!l.unitPrice || l.unitPrice.trim() === "") && exact.price != null) {
-          next.unitPrice = String(exact.price);
+        if (exact && (!l.unitPrice || l.unitPrice.trim() === "")) {
+          next.unitPrice = String(suggestedPrice(exact));
+          next.priceAuto = true;
         }
         return next;
       }),
@@ -1048,8 +1087,9 @@ function SaleModal({
       prev.map((l, idx) => {
         if (idx !== i) return l;
         const next: SaleLine = { ...l, description: p.name, catalogItemId: p.id };
-        if ((!l.unitPrice || l.unitPrice.trim() === "") && p.price != null) {
-          next.unitPrice = String(p.price);
+        if (!l.unitPrice || l.unitPrice.trim() === "") {
+          next.unitPrice = String(suggestedPrice(p));
+          next.priceAuto = true;
         }
         return next;
       }),
@@ -1152,7 +1192,7 @@ function SaleModal({
       <div className="flex flex-col gap-3.5 p-5">
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Cliente</span>
-          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={fieldCls}>
+          <select value={customerId} onChange={(e) => changeCustomer(e.target.value)} className={fieldCls}>
             <option value="">Consumidor final</option>
             {preset?.customerId && !customers.some((c) => c.id === preset.customerId) && (
               <option value={preset.customerId}>{preset.customerName ?? "Cliente de la oportunidad"}</option>
@@ -1188,7 +1228,7 @@ function SaleModal({
                   <input
                     type="number"
                     value={l.unitPrice}
-                    onChange={(e) => setLine(i, { unitPrice: e.target.value })}
+                    onChange={(e) => setLine(i, { unitPrice: e.target.value, priceAuto: false })}
                     placeholder="Precio"
                     className={`${fieldCls} w-24`}
                   />
