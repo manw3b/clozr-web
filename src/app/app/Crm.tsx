@@ -1135,6 +1135,9 @@ function SaleModal({
           unitPrice: Number(l.unitPrice) || 0,
           catalogItemId: l.catalogItemId ?? null,
           imei: l.imei?.trim() || null,
+          // Snapshot del costo del catálogo al momento de la venta → margen
+          // histórico exacto aunque después se edite el costo del producto.
+          unitCost: l.catalogItemId ? productById.get(l.catalogItemId)?.cost ?? null : null,
         })),
         payments,
       });

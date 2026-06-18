@@ -264,6 +264,9 @@ export interface SaleItemReport {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  /** Costo unitario congelado en la venta (snapshot). null/0 = sin snapshot
+   *  (venta vieja) → el consumidor usa el costo actual del catálogo. */
+  unitCost?: number | null;
   saleDate?: string | null;
   sellerName?: string | null;
 }

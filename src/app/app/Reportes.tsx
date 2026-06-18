@@ -111,6 +111,17 @@ export function Reportes() {
     return m;
   }, [catalog]);
 
+  // Costo unitario de un ítem: preferimos el snapshot congelado en la venta;
+  // si no hay (venta vieja, unitCost null/0), caemos al costo ACTUAL del
+  // catálogo. Así el margen histórico no se reescribe al editar un costo.
+  const unitCostOf = useCallback(
+    (it: SaleItemReport): number | undefined => {
+      if (it.unitCost != null && it.unitCost > 0) return it.unitCost;
+      return it.catalogItemId ? costById.get(it.catalogItemId) : undefined;
+    },
+    [costById],
+  );
+
   // Margen del mes vs mes anterior. El margen se calcula SOLO sobre ítems que
   // tienen costo asignado (linkeados al catálogo); la facturación sin costo se
   // reporta aparte para que el % no quede inflado.
@@ -125,7 +136,7 @@ export function Reportes() {
       const k = monthKey(new Date(it.saleDate));
       if (k !== thisK && k !== lastK) continue;
       const rev = it.subtotal || it.unitPrice * it.quantity;
-      const unitCost = it.catalogItemId ? costById.get(it.catalogItemId) : undefined;
+      const unitCost = unitCostOf(it);
       const hasCost = unitCost != null;
       const cost = hasCost ? unitCost * it.quantity : 0;
       if (k === thisK) {
@@ -139,7 +150,7 @@ export function Reportes() {
     const marLast = costedRevLast - costLast;
     const pctThis = costedRevThis > 0 ? (marThis / costedRevThis) * 100 : 0;
     return { revThis, marThis, pctThis, uncostedThis, marLast, hasCosted: costedRevThis > 0 };
-  }, [items, costById]);
+  }, [items, unitCostOf]);
 
   // Productos más vendidos (histórico). Agrupa por producto del catálogo, o por
   // descripción si el ítem es de texto libre.
@@ -153,7 +164,7 @@ export function Reportes() {
       e.name = name;
       e.units += it.quantity;
       e.revenue += it.subtotal || it.unitPrice * it.quantity;
-      const unitCost = it.catalogItemId ? costById.get(it.catalogItemId) : undefined;
+      const unitCost = unitCostOf(it);
       if (unitCost != null) { e.cost += unitCost * it.quantity; e.costed = true; }
       map.set(key, e);
     }
@@ -165,7 +176,7 @@ export function Reportes() {
       }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10);
-  }, [items, costById, catalogById]);
+  }, [items, unitCostOf, catalogById]);
 
   const hasData = !loading && sales.length > 0;
   const hasItems = !loading && items.length > 0;

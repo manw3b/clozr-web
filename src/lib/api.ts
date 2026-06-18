@@ -414,7 +414,7 @@ export interface NewSaleInput {
   customerName: string;
   sellerName?: string;
   notes?: string;
-  items: Array<{ description: string; quantity: number; unitPrice: number; catalogItemId?: string | null; imei?: string | null }>;
+  items: Array<{ description: string; quantity: number; unitPrice: number; catalogItemId?: string | null; imei?: string | null; unitCost?: number | null }>;
   payments: Array<{ method: string; amount: number; currency: Currency }>;
 }
 
@@ -429,6 +429,7 @@ export async function createSale(input: NewSaleInput): Promise<string> {
     subtotal: i.quantity * i.unitPrice,
     catalog_item_id: i.catalogItemId ?? null,
     imei: i.imei ?? null,
+    unit_cost: i.unitCost ?? null,
   }));
   const subtotal = items.reduce((a, i) => a + i.subtotal, 0);
   const total = subtotal;
@@ -486,6 +487,7 @@ interface SaleItemReportRaw {
   quantity?: number | null;
   unit_price?: number | null;
   subtotal?: number | null;
+  unit_cost?: number | null;
   sale_date?: string | null;
   sale_created_at?: string | null;
   seller_name?: string | null;
@@ -499,6 +501,9 @@ function mapSaleItemReport(r: SaleItemReportRaw): SaleItemReport {
     quantity: Number(r.quantity ?? 0),
     unitPrice: Number(r.unit_price ?? 0),
     subtotal: Number(r.subtotal ?? 0),
+    // Snapshot del costo al momento de la venta (0 en ventas viejas → el
+    // consumidor cae al costo actual del catálogo como fallback).
+    unitCost: r.unit_cost != null ? Number(r.unit_cost) : null,
     saleDate: toIsoUtc(r.sale_date ?? r.sale_created_at) || null,
     sellerName: r.seller_name ?? null,
   };
