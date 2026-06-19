@@ -26,6 +26,25 @@ export interface Workspace {
   dailyGoalCurrency?: string;
   /** Objetivo de cantidad de ventas del día. */
   dailyGoalCount?: number;
+  /** Keys de R2 (relativas) del logo/banner del negocio. El cliente arma /assets/{key}. */
+  logoKey?: string | null;
+  bannerKey?: string | null;
+}
+
+/** Tipo de cliente configurable (customer_types). */
+export interface CustomerType {
+  id: string;
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  sortOrder?: number | null;
+}
+
+/** Etiqueta de cliente (customer_tags). */
+export interface CustomerTag {
+  id: string;
+  name: string;
+  color?: string | null;
 }
 
 /** Seguimiento pendiente (tabla followups). */

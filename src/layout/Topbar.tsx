@@ -428,9 +428,15 @@ function WorkspaceSwitcher() {
               justifyContent: 'center',
               fontSize: 15,
               flexShrink: 0,
+              overflow: 'hidden',
             }}
           >
-            🏪
+            {activeWorkspace?.logoKey ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={api.assetUrl(activeWorkspace.logoKey)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            ) : (
+              '🏪'
+            )}
           </span>
           <span
             style={{
@@ -485,6 +491,7 @@ function WorkspaceSwitcher() {
                 <WorkspaceRow
                   key={w.id}
                   name={w.name}
+                  logoKey={w.logoKey}
                   active={activeWorkspace?.id === w.id}
                   onClick={() => {
                     setActiveWorkspace(w);
@@ -528,10 +535,12 @@ function WorkspaceSwitcher() {
 
 function WorkspaceRow({
   name,
+  logoKey,
   active,
   onClick,
 }: {
   name: string;
+  logoKey?: string | null;
   active: boolean;
   onClick: () => void;
 }) {
@@ -579,9 +588,15 @@ function WorkspaceRow({
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: 16,
+          overflow: 'hidden',
         }}
       >
-        🏪
+        {logoKey ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={api.assetUrl(logoKey)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        ) : (
+          '🏪'
+        )}
       </span>
       <span
         style={{

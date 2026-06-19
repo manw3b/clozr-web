@@ -8,6 +8,8 @@
 import type {
   CatalogPrice,
   ClientType,
+  CustomerType,
+  CustomerTag,
   Currency,
   CashKind,
   CashMovement,
@@ -108,6 +110,8 @@ interface MeRaw {
     daily_goal?: number | null;
     daily_goal_currency?: string | null;
     daily_goal_count?: number | null;
+    logo_key?: string | null;
+    banner_key?: string | null;
   }>;
 }
 export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }> {
@@ -122,8 +126,15 @@ export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }
       dailyGoal: Number(w.daily_goal ?? 0),
       dailyGoalCurrency: w.daily_goal_currency ?? "ARS",
       dailyGoalCount: Number(w.daily_goal_count ?? 0),
+      logoKey: w.logo_key ?? null,
+      bannerKey: w.banner_key ?? null,
     })),
   };
+}
+
+/** PATCH /me — editar el nombre del usuario logueado. */
+export async function updateMyName(name: string): Promise<void> {
+  await req("/me", { method: "PATCH", body: JSON.stringify({ name }) });
 }
 export async function createWorkspace(name: string): Promise<Workspace> {
   return req<Workspace>("/workspaces", { method: "POST", body: JSON.stringify({ name }) });
@@ -238,6 +249,21 @@ export async function seedDefaultStages(): Promise<void> {
   for (const s of SEED_STAGES) {
     await createStage(s);
   }
+}
+export async function updateStage(
+  id: string,
+  patch: { name?: string; color?: string; order?: number; isWon?: boolean; isLost?: boolean },
+): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (patch.name !== undefined) body.name = patch.name;
+  if (patch.color !== undefined) body.color = patch.color;
+  if (patch.order !== undefined) body.stage_order = patch.order;
+  if (patch.isWon !== undefined) body.is_won = patch.isWon ? 1 : 0;
+  if (patch.isLost !== undefined) body.is_lost = patch.isLost ? 1 : 0;
+  await req(`/workspaces/${ws()}/pipeline/stages/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+export async function deleteStage(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/pipeline/stages/${id}`, { method: "DELETE" });
 }
 
 /* ---------- pipeline: items (oportunidades) ---------- */
@@ -842,6 +868,98 @@ export async function createPaymentMethod(name: string): Promise<void> {
 }
 export async function deletePaymentMethod(id: string): Promise<void> {
   await req(`/workspaces/${ws()}/payment-methods/${id}`, { method: "DELETE" });
+}
+
+/* ---------- customer types (config) ---------- */
+interface CustomerTypeRaw {
+  id: string;
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  sort_order?: number | null;
+}
+function mapCustomerType(r: CustomerTypeRaw): CustomerType {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? null,
+    color: r.color ?? null,
+    sortOrder: r.sort_order ?? null,
+  };
+}
+export async function listCustomerTypes(): Promise<CustomerType[]> {
+  const data = await req<{ items: CustomerTypeRaw[] }>(`/workspaces/${ws()}/customer-types`);
+  return (data.items ?? []).map(mapCustomerType);
+}
+export async function createCustomerType(input: { name: string; color?: string | null; description?: string | null }): Promise<void> {
+  await req(`/workspaces/${ws()}/customer-types`, {
+    method: "POST",
+    body: JSON.stringify({ name: input.name, color: input.color ?? null, description: input.description ?? null }),
+  });
+}
+export async function updateCustomerType(id: string, patch: { name?: string; color?: string | null; description?: string | null }): Promise<void> {
+  await req(`/workspaces/${ws()}/customer-types/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+export async function deleteCustomerType(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/customer-types/${id}`, { method: "DELETE" });
+}
+
+/* ---------- customer tags (config) ---------- */
+interface CustomerTagRaw {
+  id: string;
+  name: string;
+  color?: string | null;
+}
+function mapCustomerTag(r: CustomerTagRaw): CustomerTag {
+  return { id: r.id, name: r.name, color: r.color ?? null };
+}
+export async function listCustomerTags(): Promise<CustomerTag[]> {
+  const data = await req<{ items: CustomerTagRaw[] }>(`/workspaces/${ws()}/customer-tags`);
+  return (data.items ?? []).map(mapCustomerTag);
+}
+export async function createCustomerTag(input: { name: string; color?: string | null }): Promise<void> {
+  await req(`/workspaces/${ws()}/customer-tags`, {
+    method: "POST",
+    body: JSON.stringify({ name: input.name, color: input.color ?? null }),
+  });
+}
+export async function deleteCustomerTag(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/customer-tags/${id}`, { method: "DELETE" });
+}
+
+/* ---------- workspace logo/banner (R2) ---------- */
+/** Sube el logo/banner del negocio. El worker recibe el binario crudo con el
+ *  Content-Type de la imagen (no multipart). Devuelve la key + url relativas. */
+async function uploadAsset(kind: "logo" | "banner", file: File): Promise<{ key: string; url: string }> {
+  const token = getToken();
+  const res = await fetch(`${WORKER_URL}/workspaces/${ws()}/${kind}`, {
+    method: "POST",
+    headers: {
+      "content-type": file.type || "image/png",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    body: file,
+  });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : {};
+  if (!res.ok) throw new ApiError(res.status, (body && body.error) || `http_${res.status}`);
+  return { key: body.key, url: body.url };
+}
+export function uploadWorkspaceLogo(file: File) {
+  return uploadAsset("logo", file);
+}
+export function uploadWorkspaceBanner(file: File) {
+  return uploadAsset("banner", file);
+}
+export async function deleteWorkspaceLogo(): Promise<void> {
+  await req(`/workspaces/${ws()}/logo`, { method: "DELETE" });
+}
+export async function deleteWorkspaceBanner(): Promise<void> {
+  await req(`/workspaces/${ws()}/banner`, { method: "DELETE" });
+}
+/** URL absoluta para mostrar un asset (logo/banner) desde su key de R2. */
+export function assetUrl(key: string): string {
+  return `${WORKER_URL}/assets/${key}`;
 }
 
 /* ---------- cash movements (sesión abrir/cerrar diferida) ---------- */
