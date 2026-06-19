@@ -3,7 +3,7 @@
 Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a la app desktop**, y de ahí en más sumar lo que aporte valor real al vendedor PyME.
 
 > Este archivo es la fuente de verdad del plan. Se actualiza a medida que avanzamos.
-> **Última actualización:** 2026-06-18 (post IMEIs + precios por tipo + snapshot de costo)
+> **Última actualización:** 2026-06-18 (post Ajustes a fondo + gestión de equipos, rumbo al lanzamiento)
 
 ---
 
@@ -22,12 +22,16 @@ Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a 
 - **IMEIs en ventas** — campo **IMEI / N° de serie por ítem** en el modal de venta; se persiste (la columna `sale_items.imei` ya existía en el worker) y se muestra en el detalle. *Diferido: tracking unidad-por-unidad con decremento de stock (necesita tabla `stock_items` que el worker aún no tiene).*
 - **Snapshot de costo (margen histórico exacto)** — `sale_items.unit_cost` (worker SCHEMA v6): cada venta congela el costo del catálogo al momento de venderse. Reportes prefiere el snapshot y cae al costo actual sólo en ventas viejas (sin backfill). Editar el costo de un producto ya **no** reescribe el margen de ventas pasadas → cierra la salvedad del linkeo.
 - **Precios por tipo de cliente** — cada producto puede tener precio por **final / revendedor / mayorista / empresa** (en ARS). Tabla nueva `catalog_prices` (worker SCHEMA v7) con ruta dedicada (`GET/PUT /catalog-prices`, upsert ON CONFLICT). Se cargan en el ProductModal de Inventario (grilla opcional, vacío = precio base). El modal de venta **sugiere el precio según el tipo del cliente elegido** y re-precia al cambiar de cliente (respetando ediciones manuales y precios del preset). Decisión: 4 tipos fijos (no configurables) por simplicidad/robustez.
+- **Marca oficial** — logo Clozr (CZ) en favicon (`app/icon.svg`), login y sidebar (horizontal expandido / isotipo colapsado).
+- **Ajustes a fondo** (de 3 a 8 secciones, paridad con desktop): **logo del negocio** (subir/quitar, R2; se ve en el switcher del topbar), **objetivo diario** (monto+moneda, alimenta Mi Día), **tipos de cliente** (CRUD), **etiquetas** (CRUD), **etapas del pipeline** (CRUD con invariante ≥1 ganada/≥1 perdida), **editar nombre** de perfil (PATCH /me). Worker SCHEMA v8 = **dedupe de métodos de pago** (bug visible: venían x2/x3 del seed desktop) + índice único parcial.
+- **Gestión de equipos / workspaces** — crear y cambiar de espacio desde el switcher del topbar; invitar/roles/expulsar/código manual desde **Equipo**. (Ya existía; verificado end-to-end. El alta de workspace nuevo está en el onboarding y en el switcher.)
 
 ---
 
-## 🔜 Próximo (a definir)
+## 🔜 Próximo (rumbo al lanzamiento oficial)
 
-- **Roadmap de paridad cumplido + value-adds entregados.** No hay un próximo grande comprometido. Candidatos cuando haga falta: tipos de cliente configurables (hoy 4 fijos), tracking por IMEI con stock (`stock_items`), exportar Reportes, billing (Mercado Pago / Lemon Squeezy). Ver "Diferido por vista" más abajo.
+- **Pre-lanzamiento:** probar onboarding end-to-end con un usuario nuevo real (registro por email → crear workspace → invitar a alguien), y avisar a los primeros usuarios de Hotmail/Outlook que miren spam (dominio recién verificado, reputación en warm-up).
+- **Candidatos post-lanzamiento:** comisión/recargo por método de pago (`modifier_pct`+`kind`, necesita 2 columnas en el worker); plantillas de WhatsApp (schema nuevo); tipos de cliente configurables en el linkeo de precios (hoy 4 fijos); tracking por IMEI con stock (`stock_items`); export de Reportes; **billing** (Mercado Pago / Lemon Squeezy). Ver "Diferido por vista".
 
 ---
 

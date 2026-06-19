@@ -17,6 +17,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-06-18-ajustes",
+    date: "18 de junio de 2026",
+    bullets: [
+      { tone: "feat", text: "Ajustes más completo: subí el logo de tu negocio (aparece arriba), fijá tu objetivo de ventas del día, y configurá tipos de cliente, etiquetas y las etapas de tu pipeline." },
+      { tone: "feat", text: "Equipos: creá y cambiá de espacio de trabajo desde el menú de arriba, e invitá a tu equipo con roles desde la sección Equipo." },
+      { tone: "fix", text: "Métodos de pago: se limpiaron los duplicados que aparecían repetidos." },
+    ],
+  },
+  {
     version: "2026-06-18",
     date: "18 de junio de 2026",
     bullets: [
