@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   clearSession,
-  createWorkspace,
   fetchMe,
   getToken,
   getWorkspaceId,
@@ -16,6 +15,7 @@ import {
 } from "@/lib/api";
 import type { User, Workspace } from "@/lib/types";
 import Crm from "./Crm";
+import OnboardingWizard from "./OnboardingWizard";
 
 type Phase = "loading" | "auth" | "workspace" | "ready";
 
@@ -128,8 +128,10 @@ export default function AppClient() {
 
   if (phase === "workspace") {
     return (
-      <WorkspaceSetup
-        onCreated={(w) => {
+      <OnboardingWizard
+        user={user!}
+        onNameChange={(name) => setUser((u) => (u ? { ...u, name } : u))}
+        onComplete={(w) => {
           setWorkspaceId(w.id);
           setActiveWs(w);
           setWorkspaces((prev) => [...prev, w]);
@@ -281,60 +283,6 @@ function AuthScreen({
           </form>
         )}
 
-        {error && <p className="mt-4 text-center text-sm text-danger">{error}</p>}
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────── Crear workspace ─────────────────── */
-function WorkspaceSetup({ onCreated }: { onCreated: (w: Workspace) => void }) {
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const w = await createWorkspace(name.trim());
-      onCreated(w);
-    } catch {
-      setError("No pudimos crear el espacio. Intentá de nuevo.");
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="grid min-h-screen place-items-center px-6">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-4 text-center">
-          <LogoMark />
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Creá tu espacio</h1>
-            <p className="mt-1 text-sm text-text-muted">
-              Es donde van a vivir tus contactos y ventas. Podés invitar a tu
-              equipo después.
-            </p>
-          </div>
-        </div>
-        <form onSubmit={create} className="flex flex-col gap-3">
-          <input
-            required
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Mi empresa"
-            className="rounded-lg border border-border bg-surface-2 px-4 py-3 outline-none focus:border-primary"
-          />
-          <button
-            disabled={busy}
-            className="rounded-lg bg-primary py-3 font-semibold text-white transition hover:bg-primary-hover disabled:opacity-50"
-          >
-            {busy ? "Creando…" : "Crear espacio"}
-          </button>
-        </form>
         {error && <p className="mt-4 text-center text-sm text-danger">{error}</p>}
       </div>
     </div>

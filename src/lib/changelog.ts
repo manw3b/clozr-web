@@ -17,6 +17,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-06-19-onboarding",
+    date: "19 de junio de 2026",
+    bullets: [
+      { tone: "feat", text: "Nuevo arranque guiado: cuando creás tu espacio, Clozr te lleva paso a paso — tu nombre, los datos de tu negocio (rubro y objetivo del día) y la invitación a tu equipo, todo de una." },
+      { tone: "ux", text: "El alta dejó de ser un solo campo: ahora podés fijar tu objetivo de ventas y sumar a tu equipo sin salir del onboarding (y si querés, lo saltás)." },
+    ],
+  },
+  {
     version: "2026-06-19-roles",
     date: "19 de junio de 2026",
     bullets: [
