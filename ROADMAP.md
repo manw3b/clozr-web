@@ -3,12 +3,13 @@
 Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a la app desktop**, y de ahí en más sumar lo que aporte valor real al vendedor PyME.
 
 > Este archivo es la fuente de verdad del plan. Se actualiza a medida que avanzamos.
-> **Última actualización:** 2026-06-18 (post Ajustes a fondo + gestión de equipos, rumbo al lanzamiento)
+> **Última actualización:** 2026-06-19 (permisos reales por rol — arranque del plan de equipos/billing)
 
 ---
 
 ## ✅ Hecho y LIVE (www.clozr.online)
 
+- **Permisos reales por rol** — modelo central `can(role, perm)` en `src/lib/permissions.ts` (+ hook `usePermissions`) que reemplaza los `canManage` ad-hoc que solo existían en Equipo/Ajustes. Define permisos de **acción** para los 4 roles: **Dueño** (todo, incl. facturación y borrar espacio), **Encargado** (todo menos facturación/borrar espacio), **Vendedor** (opera clientes/ventas/caja/pipeline/tareas; no configura ni ve Reportes del negocio), **Solo lectura** (ve todo, no escribe nada). Aplicado en TODAS las vistas operativas (crear/editar/borrar gateados), el menú "Nuevo" del topbar, los atajos de teclado, el sidebar (Reportes/Equipo se ocultan por permiso) y el render de vistas en Crm. **Cierra el bug**: "Solo lectura" ya no podía editar todo. Frontend; `npm run build` verde. *Diferido (siguiente paso): enforcement server-side en el Worker y modo lectura dentro de los modales de edición.*
 - **Paridad base** — 11 vistas (Mi Día, Pipeline, Clientes, Ventas, Caja, Deudas, Inventario, Tareas, Reportes, Equipo, Ajustes) + shell completo (sidebar 3 secciones + topbar: switcher de workspace, chip de dólar, búsqueda ⌘K, notificaciones reales, menú "Nuevo").
 - **Pipeline a fondo** — kanban drag&drop, convertir oportunidad → venta, acciones en la card (WhatsApp/llamar), menú contextual (mover/ganar/perder/eliminar), filtro por prioridad.
 - **Import de clientes** — CSV / TSV / vCard (.vcf, contactos del celular), mapeo de columnas, dedupe por teléfono, alta en lote.
@@ -30,8 +31,19 @@ Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a 
 
 ## 🔜 Próximo (rumbo al lanzamiento oficial)
 
+### Plan de equipos + billing (decidido 2026-06-19)
+
+Decisiones tomadas (no re-discutir): **cobro con Mercado Pago en ARS**; **plan Free = 1 solo usuario** (invitar equipo = pago); **el Vendedor ve solo SUS datos** (clientes/ventas propias); arranque del trabajo por **permisos reales** (✅ hecho). Secuencia:
+
+1. **Permisos reales** — ✅ hecho (frontend). Falta cerrar: (a) enforcement **server-side** en el Worker (que rechace escrituras según rol, no solo ocultar botones); (b) **modo lectura dentro de los modales** de edición (hoy un viewer no ve los botones, pero si abre un registro el modal sigue siendo editable).
+2. **Vendedor "ve solo lo suyo"** (alcance de datos) — necesita **Worker**: columna `owner_id`/`created_by` en clientes/ventas/oportunidades + filtrado por dueño en las queries cuando el rol es vendedor (managers ven todo). Es el cambio de backend más grande de este bloque.
+3. **Onboarding mejorado** — sumar pasos de "¿a qué te dedicás?", elegir plan e invitar al equipo dentro del alta (hoy el alta solo pide nombre del espacio).
+4. **Billing (Mercado Pago, ARS)** — suscripción recurrente + webhook que escribe flag de plan en Turso + **límite de asientos** (Free = 1; pago = N). Mensaje claro + CTA a upgradear al llegar al tope.
+
+### Otros
+
 - **Pre-lanzamiento:** probar onboarding end-to-end con un usuario nuevo real (registro por email → crear workspace → invitar a alguien), y avisar a los primeros usuarios de Hotmail/Outlook que miren spam (dominio recién verificado, reputación en warm-up).
-- **Candidatos post-lanzamiento:** comisión/recargo por método de pago (`modifier_pct`+`kind`, necesita 2 columnas en el worker); plantillas de WhatsApp (schema nuevo); tipos de cliente configurables en el linkeo de precios (hoy 4 fijos); tracking por IMEI con stock (`stock_items`); export de Reportes; **billing** (Mercado Pago / Lemon Squeezy). Ver "Diferido por vista".
+- **Candidatos post-lanzamiento:** comisión/recargo por método de pago (`modifier_pct`+`kind`, necesita 2 columnas en el worker); plantillas de WhatsApp (schema nuevo); tipos de cliente configurables en el linkeo de precios (hoy 4 fijos); tracking por IMEI con stock (`stock_items`); export de Reportes. Ver "Diferido por vista".
 
 ---
 

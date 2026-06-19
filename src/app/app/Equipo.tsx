@@ -9,17 +9,11 @@ import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
-import { useWorkspaceStore } from "@/store/workspaceStore";
+import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
+import { roleLabel } from "@/lib/permissions";
 import type { Member, User } from "@/lib/types";
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: "Dueño",
-  admin: "Encargado",
-  vendedor: "Vendedor",
-  viewer: "Solo lectura",
-};
 
 const INVITABLE_ROLES: Array<{ value: "admin" | "vendedor" | "viewer"; label: string; desc: string }> = [
   { value: "admin", label: "Encargado", desc: "Casi todo menos cambios críticos." },
@@ -50,8 +44,8 @@ function errMsg(e: unknown, fallback: string): string {
  */
 export function Equipo({ user }: { user: User }) {
   const { showToast } = useUIStore();
-  const role = useWorkspaceStore((s) => s.activeWorkspace?.role) ?? "viewer";
-  const canManage = role === "owner" || role === "admin";
+  const { can } = usePermissions();
+  const canManage = can("team.manage");
 
   const [members, setMembers] = useState<Member[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -100,7 +94,7 @@ export function Equipo({ user }: { user: User }) {
   async function changeRole(m: Member, newRole: string) {
     try {
       await api.patchMemberRole(m.id, newRole);
-      showToast(`Rol actualizado a ${ROLE_LABELS[newRole] ?? newRole}`, "success");
+      showToast(`Rol actualizado a ${roleLabel(newRole)}`, "success");
       load();
     } catch (e) {
       showToast(errMsg(e, "No se pudo cambiar el rol"), "error");
@@ -283,7 +277,7 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
                       {isSelf && <span style={{ fontSize: text.xs, color: color.textDim, fontWeight: weight.regular }}>(vos)</span>}
                     </div>
                     <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2, display: "flex", gap: space[2], alignItems: "center" }}>
-                      <strong style={{ color: color.textMuted }}>{ROLE_LABELS[m.role] ?? m.role}</strong>
+                      <strong style={{ color: color.textMuted }}>{roleLabel(m.role)}</strong>
                       {isPending && (
                         <Badge tone="warning" variant="soft" size="sm">
                           <Mail size={10} /> Invitación pendiente

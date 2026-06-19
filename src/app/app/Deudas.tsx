@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Card } from "@/components/Card";
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { useUIStore } from "@/store/uiStore";
+import { usePermissions } from "@/store/usePermissions";
 import { color, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
@@ -42,6 +43,8 @@ interface DeudaRow {
 
 export function Deudas() {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canWrite = can("sales.write");
   const ctxMenu = useContextMenu();
   const [ctxRow, setCtxRow] = useState<DeudaRow | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -217,17 +220,19 @@ export function Deudas() {
               }}
             />
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            iconLeft={<Check size={13} />}
-            onClick={(e) => {
-              e.stopPropagation();
-              cobrar(r);
-            }}
-          >
-            Cobrar
-          </Button>
+          {canWrite && (
+            <Button
+              variant="ghost"
+              size="sm"
+              iconLeft={<Check size={13} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                cobrar(r);
+              }}
+            >
+              Cobrar
+            </Button>
+          )}
         </div>
       ),
     },
@@ -316,16 +321,18 @@ export function Deudas() {
               <ContextMenuDivider />
             </>
           )}
-          <ContextMenuItem
-            icon={<Check size={14} />}
-            onClick={() => {
-              const r = ctxRow;
-              ctxMenu.close();
-              cobrar(r);
-            }}
-          >
-            Marcar pagadas
-          </ContextMenuItem>
+          {canWrite && (
+            <ContextMenuItem
+              icon={<Check size={14} />}
+              onClick={() => {
+                const r = ctxRow;
+                ctxMenu.close();
+                cobrar(r);
+              }}
+            >
+              Marcar pagadas
+            </ContextMenuItem>
+          )}
         </ContextMenu>
       )}
     </div>

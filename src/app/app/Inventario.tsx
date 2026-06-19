@@ -16,6 +16,7 @@ import {
   useContextMenu,
 } from "@/components/ContextMenu";
 import { useUIStore } from "@/store/uiStore";
+import { usePermissions } from "@/store/usePermissions";
 import { useUndoableActions } from "@/store/useUndoableActions";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
@@ -39,6 +40,8 @@ function isOut(p: Product): boolean {
  */
 export function Inventario() {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canWrite = can("inventory.write");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -97,9 +100,11 @@ export function Inventario() {
         title="Inventario"
         subtitle={loading ? "Cargando…" : `${summary.total} producto${summary.total === 1 ? "" : "s"} en el catálogo`}
         actions={
-          <Button variant="primary" iconLeft={<Plus size={16} />} onClick={() => setPickerOpen(true)}>
-            Agregar producto
-          </Button>
+          canWrite ? (
+            <Button variant="primary" iconLeft={<Plus size={16} />} onClick={() => setPickerOpen(true)}>
+              Agregar producto
+            </Button>
+          ) : undefined
         }
       />
 
@@ -142,7 +147,7 @@ export function Inventario() {
                 : "Probá cambiar la búsqueda o el filtro."
             }
             action={
-              products.length === 0
+              products.length === 0 && canWrite
                 ? { label: "Agregar producto", iconLeft: <Plus size={14} />, onClick: () => setPickerOpen(true) }
                 : undefined
             }
@@ -158,11 +163,12 @@ export function Inventario() {
             {filtered.map((p) => (
               <Card
                 key={p.id}
-                interactive
+                interactive={canWrite}
                 padding={4}
-                onClick={() => setEditing(p)}
+                onClick={canWrite ? () => setEditing(p) : undefined}
                 onContextMenu={(e) => {
                   e.preventDefault();
+                  if (!canWrite) return;
                   setCtxProduct(p);
                   ctxMenu.openAt(e);
                 }}

@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { color, duration, ease, layout, radius, space, text, weight } from '../tokens';
 import { Avatar } from '../components/Avatar';
+import { usePermissions } from '../store/usePermissions';
+import type { Permission } from '../lib/permissions';
 const logoIsotipo = '/logo-isotipo.svg';
 const logoHorizontal = '/logo-horizontal.svg';
 
@@ -24,6 +26,8 @@ export interface SidebarItem {
   label: string;
   icon: LucideIcon;
   badge?: number;
+  /** Si está, el item solo se muestra cuando el rol tiene este permiso. */
+  perm?: Permission;
 }
 
 // F.navigation:
@@ -46,13 +50,13 @@ const SECTIONS: { title?: string; items: SidebarItem[] }[] = [
       { id: 'deudas', label: 'Deudas', icon: Receipt },
       { id: 'inventory', label: 'Inventario', icon: Package },
       { id: 'tasks', label: 'Tareas', icon: CheckSquare },
-      { id: 'reportes', label: 'Reportes', icon: BarChart3 },
+      { id: 'reportes', label: 'Reportes', icon: BarChart3, perm: 'reports.view' },
     ],
   },
   {
     title: 'Configuración',
     items: [
-      { id: 'team', label: 'Equipo', icon: UsersRound },
+      { id: 'team', label: 'Equipo', icon: UsersRound, perm: 'team.manage' },
       { id: 'settings', label: 'Ajustes', icon: Settings },
     ],
   },
@@ -68,6 +72,13 @@ interface SidebarProps {
 }
 
 export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user, onLogout }: SidebarProps) {
+  const { can } = usePermissions();
+  const sections = SECTIONS
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.perm || can(item.perm)),
+    }))
+    .filter((section) => section.items.length > 0);
   return (
     <aside
       style={{
@@ -141,7 +152,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
           padding: `${space[4]} ${collapsed ? space[2] : space[3]}`,
         }}
       >
-        {SECTIONS.map((section, idx) => (
+        {sections.map((section, idx) => (
           <div key={idx} style={{ marginBottom: space[5] }}>
             {!collapsed && section.title && (
               <div

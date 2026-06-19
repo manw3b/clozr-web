@@ -8,16 +8,11 @@ import { Badge } from "@/components/Badge";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
+import { roleLabel } from "@/lib/permissions";
 import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage } from "@/lib/types";
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: "Dueño",
-  admin: "Encargado",
-  vendedor: "Vendedor",
-  viewer: "Solo lectura",
-};
 
 /**
  * Vista Ajustes — config del workspace con backend real (worker):
@@ -27,9 +22,10 @@ const ROLE_LABELS: Record<string, string> = {
  */
 export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
   const role = activeWorkspace?.role ?? "viewer";
-  const canManage = role === "owner" || role === "admin";
+  const canManage = can("settings.manage");
 
   /* ── Espacio: nombre ── */
   const [name, setName] = useState(activeWorkspace?.name ?? "");
@@ -324,7 +320,7 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
         </div>
         <div style={{ marginTop: space[3], display: "flex", flexDirection: "column", gap: space[2] }}>
           <InfoRow label="Email" value={user.email} />
-          <InfoRow label="Rol" value={ROLE_LABELS[role] ?? role} />
+          <InfoRow label="Rol" value={roleLabel(role)} />
           <InfoRow label="Plan" value={user.plan || "—"} />
         </div>
         <div style={{ marginTop: space[4] }}>

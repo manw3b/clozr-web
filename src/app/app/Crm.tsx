@@ -32,6 +32,8 @@ import type {
 import { AppShell } from "@/layout/AppShell";
 import type { NewAction } from "@/layout/Topbar";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { usePermissions } from "@/store/usePermissions";
+import { can as canFor } from "@/lib/permissions";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmHost } from "@/components/ConfirmHost";
 import Toaster from "@/components/Toaster";
@@ -101,6 +103,7 @@ export default function Crm({
   onSwitchWorkspace: (w: Workspace) => void;
   onLogout: () => void;
 }) {
+  const { can } = usePermissions();
   const [view, setView] = useState<View>("home");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,9 +129,9 @@ export default function Crm({
   const activeWs = useWorkspaceStore((s) => s.activeWorkspace) ?? workspace;
 
   function handleNew(action: NewAction) {
-    if (action === "cliente") setModal({ kind: "customer" });
-    else if (action === "venta") setModal({ kind: "sale" });
-    else if (action === "lead") setModal({ kind: "item" });
+    if (action === "cliente") { if (can("customers.write")) setModal({ kind: "customer" }); }
+    else if (action === "venta") { if (can("sales.write")) setModal({ kind: "sale" }); }
+    else if (action === "lead") { if (can("pipeline.write")) setModal({ kind: "item" }); }
     else if (action === "tarea") setView("tasks");
     else flash("Próximamente");
   }
@@ -199,10 +202,12 @@ export default function Crm({
       // lo de atrás). Todos los overlays llevan aria-modal.
       if (document.querySelector('[aria-modal="true"]')) return;
       const k = e.key.toLowerCase();
+      // Permisos en vivo (este efecto corre una sola vez; evitamos closures viejos).
+      const role = useWorkspaceStore.getState().activeWorkspace?.role;
       if (NAV[k]) { e.preventDefault(); setView(NAV[k]); return; }
       if (k === "l") { e.preventDefault(); setView("pipeline"); return; }
-      if (k === "v") { e.preventDefault(); setModal({ kind: "sale" }); return; }
-      if (k === "c") { e.preventDefault(); setModal({ kind: "customer" }); return; }
+      if (k === "v") { e.preventDefault(); if (canFor(role, "sales.write")) setModal({ kind: "sale" }); return; }
+      if (k === "c") { e.preventDefault(); if (canFor(role, "customers.write")) setModal({ kind: "customer" }); return; }
       if (k === "m") { e.preventDefault(); setView("cash"); return; }
       if (k === "t") { e.preventDefault(); setView("tasks"); return; }
     }
@@ -273,9 +278,17 @@ export default function Crm({
         ) : view === "deudas" ? (
           <Deudas key={activeWs.id} />
         ) : view === "team" ? (
-          <Equipo key={activeWs.id} user={user} />
+          can("team.manage") ? (
+            <Equipo key={activeWs.id} user={user} />
+          ) : (
+            <EmptyState title="Sin acceso" description="No tenés permisos para gestionar el equipo." />
+          )
         ) : view === "reportes" ? (
-          <Reportes key={activeWs.id} />
+          can("reports.view") ? (
+            <Reportes key={activeWs.id} />
+          ) : (
+            <EmptyState title="Sin acceso" description="Los reportes del negocio son solo para dueños y encargados." />
+          )
         ) : view === "inventory" ? (
           <Inventario key={activeWs.id} />
         ) : view === "settings" ? (

@@ -45,6 +45,7 @@ import { confirmAsync } from "@/lib/confirmAsync";
 import { useUndoableActions } from "@/store/useUndoableActions";
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import { useUIStore } from "@/store/uiStore";
+import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
@@ -110,6 +111,8 @@ export function Pipeline({
   onConvertItem: (item: PipelineItem) => void;
 }) {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canWrite = can("pipeline.write");
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -288,14 +291,16 @@ export function Pipeline({
             : `${totalCount} ${totalCount === 1 ? "oportunidad" : "oportunidades"} · arrastrá las tarjetas entre etapas`
         }
         actions={
-          <Button
-            variant="primary"
-            size="md"
-            iconLeft={<Plus size={16} />}
-            onClick={() => onAddItem(stages[0]?.id ?? "")}
-          >
-            Nueva oportunidad
-          </Button>
+          canWrite ? (
+            <Button
+              variant="primary"
+              size="md"
+              iconLeft={<Plus size={16} />}
+              onClick={() => onAddItem(stages[0]?.id ?? "")}
+            >
+              Nueva oportunidad
+            </Button>
+          ) : undefined
         }
       />
 
@@ -358,12 +363,12 @@ export function Pipeline({
                   stage={stage}
                   count={colItems.length}
                   totalAmount={ars}
-                  onAdd={() => onAddItem(stage.id)}
+                  onAdd={canWrite ? () => onAddItem(stage.id) : undefined}
                 >
                   {colItems.length === 0 ? (
                     <ColumnEmpty
                       isTerminal={stage.isWon || stage.isLost}
-                      onAdd={() => onAddItem(stage.id)}
+                      onAdd={canWrite ? () => onAddItem(stage.id) : undefined}
                     />
                   ) : (
                     colItems.map((item) => (
@@ -372,7 +377,8 @@ export function Pipeline({
                         item={item}
                         dimmed={activeId === item.id}
                         phone={phoneOf(item)}
-                        canConvert={!(stage.isWon || stage.isLost)}
+                        canConvert={canWrite && !(stage.isWon || stage.isLost)}
+                        canDrag={canWrite}
                         onClick={() => onOpenItem(item.id)}
                         onConvert={() => onConvertItem(item)}
                         onContextMenu={(e) => {
@@ -409,7 +415,7 @@ export function Pipeline({
           >
             Abrir
           </ContextMenuItem>
-          {!isTerminal(ctxItem) && (
+          {canWrite && !isTerminal(ctxItem) && (
             <ContextMenuItem
               icon={<DollarSign size={14} />}
               onClick={() => {
@@ -445,6 +451,7 @@ export function Pipeline({
               </ContextMenuItem>
             </>
           )}
+          {canWrite && <>
           <ContextMenuDivider />
           {moveOptions.length > 0 && (
             <ContextMenuSub label="Mover a etapa" icon={<ArrowRight size={14} />}>
@@ -498,6 +505,7 @@ export function Pipeline({
           >
             Eliminar
           </ContextMenuItem>
+          </>}
         </ContextMenu>
       )}
     </div>
@@ -517,7 +525,7 @@ function Column({
   stage: PipelineStage;
   count: number;
   totalAmount: number;
-  onAdd: () => void;
+  onAdd?: () => void;
   children: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
@@ -599,7 +607,7 @@ function Column({
         >
           {count}
         </span>
-        {!isTerminal && (
+        {!isTerminal && onAdd && (
           <button
             onClick={onAdd}
             aria-label={`Agregar oportunidad a ${stage.name}`}
@@ -637,8 +645,8 @@ function Column({
   );
 }
 
-function ColumnEmpty({ isTerminal, onAdd }: { isTerminal: boolean; onAdd: () => void }) {
-  if (isTerminal) {
+function ColumnEmpty({ isTerminal, onAdd }: { isTerminal: boolean; onAdd?: () => void }) {
+  if (isTerminal || !onAdd) {
     return (
       <div
         style={{
@@ -705,6 +713,7 @@ function DraggableCard({
   dimmed,
   phone,
   canConvert,
+  canDrag,
   onClick,
   onConvert,
   onContextMenu,
@@ -713,11 +722,12 @@ function DraggableCard({
   dimmed: boolean;
   phone?: string;
   canConvert: boolean;
+  canDrag: boolean;
   onClick: () => void;
   onConvert: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
-  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id: item.id });
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id: item.id, disabled: !canDrag });
   return (
     <LeadCardView
       ref={setNodeRef}
@@ -728,7 +738,7 @@ function DraggableCard({
       onClick={onClick}
       onConvert={onConvert}
       onContextMenu={onContextMenu}
-      dragHandleProps={{ ...listeners, ...attributes }}
+      dragHandleProps={canDrag ? { ...listeners, ...attributes } : undefined}
     />
   );
 }

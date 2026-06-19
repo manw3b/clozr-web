@@ -20,6 +20,7 @@ import {
 } from "@/components/ContextMenu";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
+import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, formatRelative, formatDateLong, formatTime } from "@/lib/format";
 import * as api from "@/lib/api";
@@ -58,6 +59,8 @@ const PERIOD_FILTERS = [
  */
 export function Ventas({ onNewSale }: { onNewSale: () => void }) {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canWrite = can("sales.write");
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -285,9 +288,11 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
         title="Ventas"
         subtitle={loading ? "Cargando…" : `${filtered.length} ${filtered.length === 1 ? "venta" : "ventas"} · ${formatMoney(totals.vendido)} en el período`}
         actions={
-          <Button variant="primary" size="md" iconLeft={<Plus size={16} />} onClick={onNewSale}>
-            Nueva venta
-          </Button>
+          canWrite ? (
+            <Button variant="primary" size="md" iconLeft={<Plus size={16} />} onClick={onNewSale}>
+              Nueva venta
+            </Button>
+          ) : undefined
         }
       />
 
@@ -326,13 +331,13 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
               icon={<Search size={24} />}
               title={search.trim() ? "Sin resultados" : "Sin ventas en este período"}
               description={search.trim() ? `No encontramos ventas que coincidan con "${search}"` : "Probá ampliar el período o crear una nueva venta."}
-              action={search.trim() ? { label: "Limpiar búsqueda", onClick: () => setSearch(""), variant: "secondary" } : { label: "Nueva venta", onClick: onNewSale, iconLeft: <Plus size={14} /> }}
+              action={search.trim() ? { label: "Limpiar búsqueda", onClick: () => setSearch(""), variant: "secondary" } : canWrite ? { label: "Nueva venta", onClick: onNewSale, iconLeft: <Plus size={14} /> } : undefined}
             />
           }
         />
       </div>
 
-      {openSale && <SaleDrawer sale={openSale} onClose={() => setOpenId(null)} onChanged={load} />}
+      {openSale && <SaleDrawer sale={openSale} onClose={() => setOpenId(null)} onChanged={load} canWrite={canWrite} />}
 
       {ctxMenu.open && ctxSale && (
         <ContextMenu position={ctxMenu.position} onClose={ctxMenu.close}>
@@ -342,7 +347,7 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
           <ContextMenuItem icon={<Eye size={14} />} onClick={() => { setOpenId(ctxSale.id); ctxMenu.close(); }}>
             Ver detalle
           </ContextMenuItem>
-          {statusOf(ctxSale) !== "paid" && (
+          {canWrite && statusOf(ctxSale) !== "paid" && (
             <ContextMenuItem icon={<Check size={14} />} onClick={() => { const s = ctxSale; ctxMenu.close(); markPaid(s); }}>
               Marcar como pagada
             </ContextMenuItem>
@@ -350,10 +355,14 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
           <ContextMenuItem icon={<Copy size={14} />} onClick={() => { navigator.clipboard.writeText(ctxSale.id).catch(() => {}); showToast("ID copiado", "success"); ctxMenu.close(); }}>
             Copiar ID
           </ContextMenuItem>
-          <ContextMenuDivider />
-          <ContextMenuItem tone="danger" icon={<Trash2 size={14} />} onClick={() => { const s = ctxSale; ctxMenu.close(); remove(s); }}>
-            Eliminar
-          </ContextMenuItem>
+          {canWrite && (
+            <>
+              <ContextMenuDivider />
+              <ContextMenuItem tone="danger" icon={<Trash2 size={14} />} onClick={() => { const s = ctxSale; ctxMenu.close(); remove(s); }}>
+                Eliminar
+              </ContextMenuItem>
+            </>
+          )}
         </ContextMenu>
       )}
     </div>
@@ -362,7 +371,7 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
 
 /* ───────── SaleDrawer ───────── */
 
-function SaleDrawer({ sale, onClose, onChanged }: { sale: Sale; onClose: () => void; onChanged: () => void }) {
+function SaleDrawer({ sale, onClose, onChanged, canWrite }: { sale: Sale; onClose: () => void; onChanged: () => void; canWrite: boolean }) {
   const { showToast } = useUIStore();
   const [detail, setDetail] = useState<SaleDetail | null>(null);
   const [payOpen, setPayOpen] = useState(false);
@@ -410,7 +419,7 @@ function SaleDrawer({ sale, onClose, onChanged }: { sale: Sale; onClose: () => v
         </header>
       }
       footer={
-        st !== "paid" ? (
+        canWrite && st !== "paid" ? (
           <div style={{ display: "flex", gap: space[2] }}>
             <Button variant="secondary" size="md" onClick={() => setPayOpen(true)} fullWidth>
               Registrar pago
@@ -419,9 +428,9 @@ function SaleDrawer({ sale, onClose, onChanged }: { sale: Sale; onClose: () => v
               Marcar pagado
             </Button>
           </div>
-        ) : (
+        ) : st === "paid" ? (
           <div style={{ textAlign: "center", fontSize: text.sm, color: color.success, fontWeight: weight.semibold }}>✓ Venta cobrada</div>
-        )
+        ) : null
       }
     >
       <div style={{ padding: space[5], borderBottom: `1px solid ${color.border}`, textAlign: "center" }}>

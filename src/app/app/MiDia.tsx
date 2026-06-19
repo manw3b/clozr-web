@@ -20,6 +20,7 @@ import { Avatar } from "@/components/Avatar";
 import { SectionCard, SectionRow } from "@/components/SectionCard";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { useUIStore } from "@/store/uiStore";
+import { usePermissions } from "@/store/usePermissions";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, greetByHour, greetText, formatDateLong, toLocalISODate } from "@/lib/format";
@@ -44,6 +45,11 @@ export function MiDia({
   onNewSale: () => void;
 }) {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canSell = can("sales.write");
+  const canTasks = can("tasks.write");
+  const canManageSettings = can("settings.manage");
+  const canContact = can("customers.write");
   const activeWs = useWorkspaceStore((s) => s.activeWorkspace);
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -325,19 +331,21 @@ export function MiDia({
                   <span style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>
                     {formatMoney(todayTotal)} de {formatMoney(dailyGoal)}
                   </span>
-                  <button
-                    onClick={startEditGoal}
-                    aria-label="Editar objetivo"
-                    style={{
-                      background: "transparent",
-                      color: color.textDim,
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      padding: 2,
-                    }}
-                  >
-                    <Pencil size={12} />
-                  </button>
+                  {canManageSettings && (
+                    <button
+                      onClick={startEditGoal}
+                      aria-label="Editar objetivo"
+                      style={{
+                        background: "transparent",
+                        color: color.textDim,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        padding: 2,
+                      }}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  )}
                 </div>
                 <ProgressBar pct={goalProgress} />
                 <div style={{ marginTop: 6, fontSize: text.xs, color: goalProgress >= 100 ? color.success : color.textMuted }}>
@@ -346,11 +354,11 @@ export function MiDia({
                     : `Faltan ${formatMoney(goalRemaining)} para el objetivo`}
                 </div>
               </div>
-            ) : (
+            ) : canManageSettings ? (
               <Button variant="secondary" size="sm" iconLeft={<Target size={14} />} onClick={startEditGoal}>
                 Configurar objetivo del día
               </Button>
-            )}
+            ) : null}
           </div>
 
           <div style={{ display: "flex", gap: space[6], flexWrap: "wrap" }}>
@@ -375,9 +383,11 @@ export function MiDia({
           }}
         >
           <ScoreRing score={score} />
-          <Button variant="primary" size="lg" iconLeft={<Plus size={18} />} onClick={onNewSale}>
-            Nueva venta
-          </Button>
+          {canSell && (
+            <Button variant="primary" size="lg" iconLeft={<Plus size={18} />} onClick={onNewSale}>
+              Nueva venta
+            </Button>
+          )}
         </div>
       </div>
 
@@ -401,7 +411,8 @@ export function MiDia({
               pendingTasks.slice(0, 6).map((t, i, arr) => (
                 <SectionRow key={t.id} isLast={i === arr.length - 1}>
                   <button
-                    onClick={() => toggleTask(t)}
+                    disabled={!canTasks}
+                    onClick={() => { if (canTasks) toggleTask(t); }}
                     style={{
                       width: 20,
                       height: 20,
@@ -411,7 +422,7 @@ export function MiDia({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      cursor: "pointer",
+                      cursor: canTasks ? "pointer" : "default",
                       flexShrink: 0,
                     }}
                     aria-label="Completar"
@@ -450,7 +461,8 @@ export function MiDia({
                 return (
                   <SectionRow key={f.id} isLast={i === arr.length - 1}>
                     <button
-                      onClick={() => completeFollow(f)}
+                      disabled={!canTasks}
+                      onClick={() => { if (canTasks) completeFollow(f); }}
                       style={{
                         width: 20,
                         height: 20,
@@ -460,7 +472,7 @@ export function MiDia({
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        cursor: "pointer",
+                        cursor: canTasks ? "pointer" : "default",
                         flexShrink: 0,
                       }}
                       aria-label="Completar seguimiento"
@@ -476,7 +488,7 @@ export function MiDia({
                         {f.text || f.reason || ""}
                       </div>
                     </div>
-                    {(cust?.phone || undefined) && (
+                    {canContact && (cust?.phone || undefined) && (
                       <RowIconBtn
                         variant="wa"
                         label="WhatsApp"
@@ -509,9 +521,11 @@ export function MiDia({
                 <p style={{ margin: 0, fontSize: text.sm, color: color.textMuted, marginBottom: space[3] }}>
                   Todavía no vendiste hoy.
                 </p>
-                <Button variant="secondary" size="sm" iconLeft={<Plus size={14} />} onClick={onNewSale}>
-                  Registrar venta
-                </Button>
+                {canSell && (
+                  <Button variant="secondary" size="sm" iconLeft={<Plus size={14} />} onClick={onNewSale}>
+                    Registrar venta
+                  </Button>
+                )}
               </div>
             ) : (
               todaySales.slice(0, 5).map((s, i, arr) => (
@@ -582,7 +596,7 @@ export function MiDia({
                       {x.purchases > 0 ? ` · ${x.purchases} compra${x.purchases === 1 ? "" : "s"}` : ""}
                     </div>
                   </div>
-                  {x.customer.phone && (
+                  {canContact && x.customer.phone && (
                     <>
                       <RowIconBtn variant="wa" label="WhatsApp" onClick={() => contact(x.customer, "whatsapp")}>
                         <WhatsAppIcon size={13} />

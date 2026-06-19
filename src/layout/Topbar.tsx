@@ -20,9 +20,11 @@ import { Modal, ModalField } from '../components/Modal';
 import { Input } from '../components/Input';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUIStore } from '../store/uiStore';
+import { usePermissions } from '../store/usePermissions';
 import { DollarChip } from './DollarChip';
 import * as api from '../lib/api';
 import { formatMoney } from '../lib/format';
+import type { Permission } from '../lib/permissions';
 import type { Sale, Task } from '../lib/types';
 
 export type NewAction = 'cliente' | 'venta' | 'lead' | 'tarea' | 'movimiento';
@@ -260,16 +262,18 @@ function NotificationsMenu({ onNavigate }: { onNavigate: (s: NotifNavigate) => v
 
 /* ===== "Nuevo" dropdown menu ===== */
 
-const NEW_ITEMS: Array<{ id: NewAction; label: string; shortcut: string; Icon: typeof Users }> = [
-  { id: 'cliente', label: 'Cliente', shortcut: 'C', Icon: Users },
-  { id: 'venta', label: 'Venta', shortcut: 'V', Icon: ShoppingCart },
-  { id: 'lead', label: 'Lead', shortcut: 'L', Icon: GitBranch },
-  { id: 'tarea', label: 'Tarea', shortcut: 'T', Icon: CheckSquare },
-  { id: 'movimiento', label: 'Movimiento de caja', shortcut: 'M', Icon: Wallet },
+const NEW_ITEMS: Array<{ id: NewAction; label: string; shortcut: string; Icon: typeof Users; perm: Permission }> = [
+  { id: 'cliente', label: 'Cliente', shortcut: 'C', Icon: Users, perm: 'customers.write' },
+  { id: 'venta', label: 'Venta', shortcut: 'V', Icon: ShoppingCart, perm: 'sales.write' },
+  { id: 'lead', label: 'Lead', shortcut: 'L', Icon: GitBranch, perm: 'pipeline.write' },
+  { id: 'tarea', label: 'Tarea', shortcut: 'T', Icon: CheckSquare, perm: 'tasks.write' },
+  { id: 'movimiento', label: 'Movimiento de caja', shortcut: 'M', Icon: Wallet, perm: 'cash.write' },
 ];
 
 function NewMenu({ onAction }: { onAction: (a: NewAction) => void }) {
   const [open, setOpen] = useState(false);
+  const { can } = usePermissions();
+  const items = NEW_ITEMS.filter((item) => can(item.perm));
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -288,6 +292,8 @@ function NewMenu({ onAction }: { onAction: (a: NewAction) => void }) {
       };
     }
   }, [open]);
+
+  if (items.length === 0) return null;
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
@@ -309,7 +315,7 @@ function NewMenu({ onAction }: { onAction: (a: NewAction) => void }) {
             zIndex: 50,
           }}
         >
-          {NEW_ITEMS.map((item) => (
+          {items.map((item) => (
             <NewMenuItem
               key={item.id}
               label={item.label}

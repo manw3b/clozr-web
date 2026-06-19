@@ -17,6 +17,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-06-19-roles",
+    date: "19 de junio de 2026",
+    bullets: [
+      { tone: "feat", text: "Roles que ahora sí mandan: cada persona del equipo ve y puede hacer según su rol. El Encargado opera y configura, el Vendedor vende y gestiona su día, y Solo lectura ve todo sin tocar nada." },
+      { tone: "fix", text: "Solo lectura ya no puede crear, editar ni borrar (antes podía sin querer). Los botones de acción aparecen únicamente para quien tiene permiso." },
+      { tone: "ux", text: "El menú lateral se adapta al rol: Reportes y Equipo solo le aparecen a quien corresponde." },
+    ],
+  },
+  {
     version: "2026-06-18-ajustes",
     date: "18 de junio de 2026",
     bullets: [
