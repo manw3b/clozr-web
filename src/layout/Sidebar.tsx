@@ -17,6 +17,7 @@ import {
 import { color, duration, ease, layout, radius, space, text, weight } from '../tokens';
 import { Avatar } from '../components/Avatar';
 const logoIsotipo = '/logo-isotipo.svg';
+const logoHorizontal = '/logo-horizontal.svg';
 
 export interface SidebarItem {
   id: string;
@@ -337,20 +338,13 @@ function ClozrLogo({ collapsed }: { collapsed: boolean }) {
     );
   }
   return (
-    <span
-      style={{
-        fontSize: text.xl,
-        fontWeight: weight.black,
-        color: color.text,
-        letterSpacing: '-0.6px',
-        lineHeight: 1,
-      }}
-    >
-      Clozr
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={logoHorizontal} alt="Clozr" style={{ height: 26, width: "auto", display: "block" }} />
   );
 }
 
+// height fija + width auto: respeta el aspecto del isotipo (no es cuadrado).
 function IsotipoSVG({ size = 26 }: { size?: number }) {
-  return <img src={logoIsotipo} width={size} height={size} alt="Clozr" style={{ display: "block" }} />;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={logoIsotipo} alt="Clozr" style={{ display: "block", height: size, width: "auto" }} />;
 }

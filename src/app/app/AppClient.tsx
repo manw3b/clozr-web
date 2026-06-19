@@ -42,13 +42,10 @@ function GoogleIcon() {
   );
 }
 
-function LogoMark({ size = "h-12 w-12 text-xl" }: { size?: string }) {
+function LogoMark({ className = "h-12 w-auto" }: { className?: string }) {
   return (
-    <div
-      className={`grid ${size} -skew-x-6 place-items-center rounded-xl bg-primary font-extrabold tracking-tighter text-white`}
-    >
-      CZ
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/logo-isotipo.svg" alt="Clozr" className={className} />
   );
 }
 
