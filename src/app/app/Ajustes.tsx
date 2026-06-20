@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Plus, Trash2, LogOut, Upload, Trophy, XCircle } from "lucide-react";
+import { Plus, Trash2, LogOut, Upload, Trophy, XCircle, CreditCard } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -11,6 +11,7 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage } from "@/lib/types";
+import { PLANS, PAID_PLAN_IDS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, formatArs, type PlanId } from "@/lib/types";
 
 const ROLE_LABELS: Record<string, string> = {
   owner: "Dueño",
@@ -273,6 +274,9 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
         {!canManage && <Hint>Solo el dueño o un encargado pueden editar el espacio.</Hint>}
       </Card>
 
+      {/* Plan y facturación */}
+      <PlanCard />
+
       {/* Tipos de cliente */}
       <CustomerTypesCard canManage={canManage} showToast={showToast} />
 
@@ -334,6 +338,136 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
         </div>
       </Card>
     </div>
+  );
+}
+
+/* ════════════ Plan y facturación (billing T3) ════════════ */
+function PlanCard() {
+  const showToast = useUIStore((s) => s.showToast);
+  const ws = useWorkspaceStore((s) => s.activeWorkspace);
+  const isOwner = ws?.role === "owner";
+  const planId = (ws?.plan as PlanId) ?? "free";
+  const current = PLANS[planId] ?? PLANS.free;
+  const status = ws?.planStatus ?? "active";
+  const seats = ws?.seats ?? current.seats;
+  const [busy, setBusy] = useState<PlanId | null>(null);
+
+  // Planes a los que se puede subir (más caros que el actual).
+  const upgrades = PAID_PLAN_IDS.filter((p) => PLANS[p].priceArs > current.priceArs);
+
+  async function upgrade(target: "pro" | "team") {
+    setBusy(target);
+    try {
+      const { initPoint } = await api.createBillingCheckout(target);
+      window.location.assign(initPoint); // → checkout de Mercado Pago
+    } catch (e) {
+      const code = e instanceof api.ApiError ? e.code : "";
+      showToast(
+        code === "forbidden"
+          ? "Solo el dueño puede cambiar el plan."
+          : code === "billing_unavailable"
+            ? "El cobro no está disponible en este momento."
+            : "No pudimos iniciar el pago. Probá de nuevo.",
+        "error",
+      );
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Card padding={5}>
+      <SectionTitle>Plan y facturación</SectionTitle>
+
+      {/* Plan actual */}
+      <div style={{ display: "flex", alignItems: "center", gap: space[3], marginTop: space[3] }}>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: radius.md,
+            flexShrink: 0,
+            background: color.primaryBg,
+            color: color.primary,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <CreditCard size={20} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+            <span style={{ fontSize: text.md, fontWeight: weight.semibold, color: color.text }}>
+              Plan {current.name}
+            </span>
+            <PlanStatusBadge status={status} />
+          </div>
+          <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>
+            {current.priceArs > 0 ? `${formatArs(current.priceArs)}/mes · ` : "Gratis · "}
+            {seats >= SEATS_UNLIMITED ? "asientos ilimitados" : `${seats} ${seats === 1 ? "asiento" : "asientos"}`}
+          </div>
+        </div>
+      </div>
+
+      {/* Upgrades — solo el dueño gestiona el plan (billing.manage) */}
+      {isOwner && upgrades.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginTop: space[4] }}>
+          {upgrades.map((p) => {
+            const plan = PLANS[p];
+            return (
+              <div
+                key={p}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: space[3],
+                  padding: space[3],
+                  borderRadius: radius.md,
+                  background: color.surface2,
+                  border: `1px solid ${color.border}`,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>
+                    {plan.name} · {formatArs(plan.priceArs)}/mes
+                  </div>
+                  <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>
+                    {plan.seats >= SEATS_UNLIMITED ? "Asientos ilimitados" : `${plan.seats} asientos`} · {plan.tagline}
+                  </div>
+                </div>
+                <Button variant="primary" size="sm" loading={busy === p} onClick={() => upgrade(p)}>
+                  Mejorar
+                </Button>
+              </div>
+            );
+          })}
+          <Hint>
+            Pago mensual por Mercado Pago · {BILLING_TRIAL_DAYS} días de prueba · cancelás cuando quieras.
+          </Hint>
+        </div>
+      )}
+
+      {isOwner && upgrades.length === 0 && (
+        <Hint>Estás en el plan máximo. ¡Gracias por bancar Clozr! 🙌</Hint>
+      )}
+      {!isOwner && <Hint>Solo el dueño del espacio puede cambiar el plan.</Hint>}
+    </Card>
+  );
+}
+
+function PlanStatusBadge({ status }: { status: string }) {
+  const M: Record<string, { tone: "warning" | "danger" | "neutral"; label: string }> = {
+    trialing: { tone: "neutral", label: "En prueba" },
+    pending: { tone: "neutral", label: "Pendiente" },
+    past_due: { tone: "warning", label: "Pago pendiente" },
+    cancelled: { tone: "danger", label: "Cancelado" },
+  };
+  const m = M[status];
+  if (!m) return null; // 'active' (u otro) → sin badge
+  return (
+    <Badge tone={m.tone} variant="soft" size="sm">
+      {m.label}
+    </Badge>
   );
 }
 
