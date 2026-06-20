@@ -296,7 +296,7 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: space[3] }}>
+      <div className="cz-metric-grid">
         <MetricCard label="Vendido" value={formatMoney(totals.vendido)} />
         <MetricCard label="Cobrado" value={formatMoney(totals.cobrado)} tone="success" />
         <MetricCard label="Por cobrar" value={formatMoney(totals.porCobrar)} tone={totals.porCobrar > 0 ? "warning" : "neutral"} />

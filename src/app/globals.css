@@ -151,15 +151,66 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-button {
-  font-family: inherit;
-  font-size: inherit;
-  border: 0;
-  cursor: pointer;
-  background: none;
-  color: inherit;
-  padding: 0;
+/* Reset de botones dentro de @layer base para que las utilidades de Tailwind
+   (bg-*, p-*, border-*) le ganen. Sin la capa, esta regla quedaba "unlayered"
+   y pisaba las utilidades → botones con clases Tailwind salían sin estilo
+   (login + onboarding). */
+@layer base {
+  button {
+    font-family: inherit;
+    font-size: inherit;
+    border: 0;
+    cursor: pointer;
+    background: none;
+    color: inherit;
+    padding: 0;
+  }
 }
+
+/* =============================================================================
+   Responsive helpers — la app usa estilos inline (no clases Tailwind), así que
+   exponemos clases utilitarias para los layouts que tienen que apilar en móvil.
+   Breakpoint único: 768px (coincide con el hook useIsMobile).
+   ============================================================================= */
+.cz-metric-grid {
+  display: grid;
+  gap: var(--space-3, 12px);
+  grid-template-columns: repeat(var(--cz-cols, 4), minmax(0, 1fr));
+}
+.cz-two-col {
+  display: grid;
+  gap: var(--space-5, 20px);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+}
+.cz-hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  padding: var(--space-6, 24px) var(--space-8, 32px);
+}
+/* Scroll horizontal sin barra visible (filtros/pills en móvil). */
+.cz-noscrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.cz-noscrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .cz-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cz-two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cz-hero {
+    grid-template-columns: 1fr;
+    padding: var(--space-5, 20px);
+    justify-items: center;
+    text-align: center;
+  }
+}
+
 
 input,
 textarea,

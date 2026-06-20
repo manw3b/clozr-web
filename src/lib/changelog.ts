@@ -17,6 +17,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-06-20-movil",
+    date: "20 de junio de 2026",
+    bullets: [
+      { tone: "feat", text: "Clozr ahora se usa bien desde el celular: el menú lateral pasa a un cajón con el botón ☰, las listas se muestran como tarjetas y todo entra en la pantalla sin hacer zoom." },
+      { tone: "fix", text: "Se arreglaron los botones de las pantallas de inicio (ingreso y alta) que aparecían sin color de fondo." },
+    ],
+  },
+  {
     version: "2026-06-19-onboarding",
     date: "19 de junio de 2026",
     bullets: [

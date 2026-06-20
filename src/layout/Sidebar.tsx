@@ -69,9 +69,12 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   user: { name: string; email: string };
   onLogout?: () => void;
+  /** En móvil el sidebar es un drawer off-canvas. */
+  isMobile?: boolean;
+  mobileOpen?: boolean;
 }
 
-export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user, onLogout }: SidebarProps) {
+export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user, onLogout, isMobile = false, mobileOpen = false }: SidebarProps) {
   const { can } = usePermissions();
   const sections = SECTIONS
     .map((section) => ({
@@ -79,6 +82,18 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
       items: section.items.filter((item) => !item.perm || can(item.perm)),
     }))
     .filter((section) => section.items.length > 0);
+  // En móvil: drawer fijo que entra/sale; en desktop: columna normal.
+  const mobileStyle: React.CSSProperties = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    zIndex: 50,
+    width: layout.sidebarW,
+    maxWidth: '85vw',
+    transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+    transition: `transform ${duration.slow} ${ease}`,
+    boxShadow: mobileOpen ? '0 0 40px rgba(0,0,0,0.5)' : 'none',
+  };
   return (
     <aside
       style={{
@@ -91,6 +106,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
         flexDirection: 'column',
         transition: `width ${duration.slow} ${ease}`,
         position: 'relative',
+        ...(isMobile ? mobileStyle : null),
       }}
     >
       {/* Logo + collapse button — alineado con la altura del topbar */}
@@ -124,7 +140,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
         ) : (
           <ClozrLogo collapsed={collapsed} />
         )}
-        {!collapsed && (
+        {!collapsed && !isMobile && (
           <button
             onClick={onToggleCollapse}
             aria-label="Colapsar sidebar"

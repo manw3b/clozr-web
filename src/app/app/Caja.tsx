@@ -210,7 +210,7 @@ export function Caja() {
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: space[3] }}>
+      <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
         <MetricCard label="Ingresos" value={formatMoney(totals.income)} tone="success" icon={<ArrowUpRight size={16} />} />
         <MetricCard label="Egresos" value={formatMoney(totals.expense)} tone="danger" icon={<ArrowDownRight size={16} />} />
         <MetricCard

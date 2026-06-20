@@ -249,7 +249,7 @@ export function Deudas() {
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: space[3] }}>
+      <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
         <Card padding={5}>
           <div style={{ fontSize: text.sm, color: color.textMuted, marginBottom: space[2] }}>
             Saldo total

@@ -3,11 +3,13 @@
 Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a la app desktop**, y de ahí en más sumar lo que aporte valor real al vendedor PyME.
 
 > Este archivo es la fuente de verdad del plan. Se actualiza a medida que avanzamos.
-> **Última actualización:** 2026-06-19 (permisos reales por rol — arranque del plan de equipos/billing)
+> **Última actualización:** 2026-06-20 (responsive / mobile-first de toda la app)
 
 ---
 
 ## ✅ Hecho y LIVE (www.clozr.online)
+
+- **Responsive / mobile-first** — la app entera se usa bien en celular (verificado a 390px en build de prod). Foundation: `useIsMobile()` (`src/lib/useIsMobile.ts`, breakpoint 767px) + helpers CSS en `globals.css` (`.cz-metric-grid`, `.cz-two-col`, `.cz-hero`, `.cz-noscrollbar`). Shell: sidebar → **drawer off-canvas** con hamburguesa + backdrop (`AppShell`/`Sidebar`), topbar condensado (búsqueda ícono-only, oculta el chip del dólar). Vistas: grids de métricas 4/3-col → 2-col en móvil, Mi Día apila el hero, la **DataTable** renderiza cada fila como **tarjeta** en móvil (genérico → Clientes/Ventas/Tareas/Deudas), filtros con scroll horizontal. **Fix incluido**: el reset `button {}` de `globals.css` estaba fuera de `@layer` y pisaba las utilidades de Tailwind → los botones de login/onboarding salían sin estilo; ahora va en `@layer base`. 100% frontend; `npm run build` verde. *Diferido: pulido fino vista por vista (Pipeline kanban, Reportes) y PWA (instalable + offline).*
 
 - **Onboarding guiado** — wizard multi-paso (`src/app/app/OnboardingWizard.tsx`) que reemplaza el alta de un solo campo: bienvenida → tu nombre (si falta) → tu negocio (nombre + rubro + objetivo diario) → invitar al equipo (opcional, skippable) → listo. 100% frontend sobre endpoints existentes. Saltar onboarding a mitad y volver te deja igual adentro (si el espacio ya se creó, `fetchMe` lo encuentra).
 - **Permisos reales por rol** — modelo central `can(role, perm)` en `src/lib/permissions.ts` (+ hook `usePermissions`) que reemplaza los `canManage` ad-hoc que solo existían en Equipo/Ajustes. Define permisos de **acción** para los 4 roles: **Dueño** (todo, incl. facturación y borrar espacio), **Encargado** (todo menos facturación/borrar espacio), **Vendedor** (opera clientes/ventas/caja/pipeline/tareas; no configura ni ve Reportes del negocio), **Solo lectura** (ve todo, no escribe nada). Aplicado en TODAS las vistas operativas (crear/editar/borrar gateados), el menú "Nuevo" del topbar, los atajos de teclado, el sidebar (Reportes/Equipo se ocultan por permiso) y el render de vistas en Crm. **Cierra el bug**: "Solo lectura" ya no podía editar todo. Frontend; `npm run build` verde. *Diferido (siguiente paso): enforcement server-side en el Worker y modo lectura dentro de los modales de edición.*

@@ -107,6 +107,7 @@ function PillTabs({
 
   return (
     <div
+      className="cz-noscrollbar"
       style={{
         display: 'inline-flex',
         background: color.surface,
@@ -114,6 +115,9 @@ function PillTabs({
         borderRadius: 'var(--radius-md)',
         padding: 3,
         gap: 2,
+        // En móvil las pills pueden no entrar: scroll horizontal en vez de cortarse.
+        maxWidth: '100%',
+        overflowX: 'auto',
       }}
     >
       {items.map((item) => {
@@ -130,6 +134,8 @@ function PillTabs({
               fontSize,
               fontWeight: active ? weight.semibold : weight.medium,
               borderRadius: 'var(--radius-sm)',
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
             }}
           >
             {item.label}

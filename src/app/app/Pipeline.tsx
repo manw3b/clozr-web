@@ -304,7 +304,7 @@ export function Pipeline({
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: space[3] }}>
+      <div className="cz-metric-grid">
         <MetricCard label="Oportunidades abiertas" value={String(metrics.open)} />
         <MetricCard label="Pipeline (ARS)" value={formatMoney(metrics.pipelineArs)} />
         <MetricCard label="Ganados" value={String(metrics.won)} tone="success" />

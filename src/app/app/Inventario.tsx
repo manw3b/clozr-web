@@ -108,7 +108,7 @@ export function Inventario() {
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: space[3] }}>
+      <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
         <MetricCard label="En catálogo" value={summary.total} icon={<Package size={16} />} />
         <MetricCard label="Con stock" value={summary.conStock} tone="success" />
         <MetricCard label="Agotados" value={summary.agotados} tone={summary.agotados > 0 ? "danger" : "neutral"} />

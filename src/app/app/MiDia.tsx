@@ -223,12 +223,10 @@ export function MiDia({
     <div style={{ display: "flex", flexDirection: "column", gap: space[5] }}>
       {/* HERO */}
       <div
+        className="cz-hero"
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto",
           gap: space[6],
           alignItems: "center",
-          padding: `${space[6]} ${space[8]}`,
           background: `linear-gradient(135deg, ${color.surface} 0%, ${color.surface2} 100%)`,
           border: `1px solid ${color.border}`,
           borderRadius: radius.xl,
@@ -392,7 +390,7 @@ export function MiDia({
       </div>
 
       {/* GRID */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)", gap: space[5] }}>
+      <div className="cz-two-col">
         {/* IZQUIERDA — Tareas + Seguimientos */}
         <div style={{ display: "flex", flexDirection: "column", gap: space[5], minWidth: 0 }}>
           <SectionCard
