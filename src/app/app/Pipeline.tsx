@@ -46,6 +46,7 @@ import { useUndoableActions } from "@/store/useUndoableActions";
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
@@ -112,7 +113,10 @@ export function Pipeline({
 }) {
   const { showToast } = useUIStore();
   const { can } = usePermissions();
+  const isMobile = useIsMobile();
   const canWrite = can("pipeline.write");
+  // En móvil: columnas ~85vw con scroll-snap (se desliza una etapa a la vez).
+  const colWidth = isMobile ? "min(85vw, 320px)" : `${COL_WIDTH}px`;
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -288,7 +292,7 @@ export function Pipeline({
         subtitle={
           loading
             ? "Cargando…"
-            : `${totalCount} ${totalCount === 1 ? "oportunidad" : "oportunidades"} · arrastrá las tarjetas entre etapas`
+            : `${totalCount} ${totalCount === 1 ? "oportunidad" : "oportunidades"} · ${isMobile ? "deslizá entre etapas" : "arrastrá las tarjetas entre etapas"}`
         }
         actions={
           canWrite ? (
@@ -342,6 +346,7 @@ export function Pipeline({
           onDragCancel={() => setActiveId(null)}
         >
           <div
+            className={isMobile ? "cz-noscrollbar" : undefined}
             style={{
               flex: 1,
               minHeight: 0,
@@ -350,6 +355,7 @@ export function Pipeline({
               gap: space[3],
               overflowX: "auto",
               paddingBottom: space[3],
+              scrollSnapType: isMobile ? "x mandatory" : undefined,
             }}
           >
             {stages.map((stage) => {
@@ -364,6 +370,8 @@ export function Pipeline({
                   count={colItems.length}
                   totalAmount={ars}
                   onAdd={canWrite ? () => onAddItem(stage.id) : undefined}
+                  width={colWidth}
+                  snap={isMobile}
                 >
                   {colItems.length === 0 ? (
                     <ColumnEmpty
@@ -521,12 +529,16 @@ function Column({
   totalAmount,
   onAdd,
   children,
+  width = `${COL_WIDTH}px`,
+  snap = false,
 }: {
   stage: PipelineStage;
   count: number;
   totalAmount: number;
   onAdd?: () => void;
   children: React.ReactNode;
+  width?: string;
+  snap?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const isTerminal = stage.isWon || stage.isLost;
@@ -542,9 +554,10 @@ function Column({
         borderBottom: `1px solid ${isOver ? stage.color : color.border}`,
         borderLeft: `1px solid ${isOver ? stage.color : color.border}`,
         borderRadius: radius.lg,
-        width: COL_WIDTH,
-        minWidth: COL_WIDTH,
-        flex: `0 0 ${COL_WIDTH}px`,
+        width,
+        minWidth: width,
+        flex: `0 0 ${width}`,
+        scrollSnapAlign: snap ? "start" : undefined,
         height: "100%",
         overflow: "hidden",
         transition: "border-color 160ms, background 160ms",
