@@ -43,7 +43,7 @@ Decisiones tomadas (no re-discutir): **cobro con Mercado Pago en ARS**; **plan F
 
 > **Nota de acceso:** el Worker vive en `manw3b/clozr` (`cf-worker/`), que NO está autorizado en esta sesión (confirmado: el proxy git lo rechaza). Para hacer el backend hay que agregar ese repo al entorno. Mientras tanto, las 3 tareas de backend quedaron escritas listas-para-aplicar en `clozr-handoff/BACKEND-equipos-spec.md`.
 3. **Onboarding mejorado** — ✅ hecho (`src/app/app/OnboardingWizard.tsx`). Wizard multi-paso que reemplaza el alta de un solo campo: bienvenida → tu nombre (si falta, p.ej. login por email) → tu negocio (nombre + rubro/`industry` + objetivo diario) → invitar al equipo (opcional) → listo. 100% frontend sobre endpoints existentes (`updateMyName`, `createWorkspace`, `updateWorkspace`, `inviteMember`). *Falta cuando llegue billing: el paso "elegir plan" y gatear el invitar-equipo detrás de plan pago (Free = 1).*
-4. **Billing (Mercado Pago, ARS)** — suscripción recurrente + webhook que escribe flag de plan en Turso + **límite de asientos** (Free = 1; pago = N). Mensaje claro + CTA a upgradear al llegar al tope. Acá se suma el paso "elegir plan" al onboarding.
+4. **Billing (Mercado Pago, ARS)** — backend diseñado en `BACKEND-equipos-spec.md` (Tarea 3): suscripción recurrente + webhook que escribe flag de plan en Turso + **límite de asientos** (Free = 1; pago = N). Acá se suma el paso "elegir plan" al onboarding. *Frontend ya adelantado:* sección **Plan y suscripción** en Ajustes (`PlanCard` en `Ajustes.tsx`) que lee `user.plan` del `/me`, muestra los 3 tiers con el actual destacado y CTA de upgrade (hoy avisa "Mercado Pago llega pronto"; se cablea al checkout cuando exista el backend). Solo el dueño (`billing.manage`) ve los CTAs.
 
 ### Otros
 

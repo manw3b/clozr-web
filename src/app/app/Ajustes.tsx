@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Plus, Trash2, LogOut, Upload, Trophy, XCircle } from "lucide-react";
+import { Plus, Trash2, LogOut, Upload, Trophy, XCircle, Check } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -269,6 +269,9 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
         {!canManage && <Hint>Solo el dueño o un encargado pueden editar el espacio.</Hint>}
       </Card>
 
+      {/* Plan y suscripción */}
+      <PlanCard plan={user.plan} canBilling={can("billing.manage")} showToast={showToast} />
+
       {/* Tipos de cliente */}
       <CustomerTypesCard canManage={canManage} showToast={showToast} />
 
@@ -334,6 +337,87 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
 }
 
 /* ════════════ Tipos de cliente ════════════ */
+/* ───────── Plan y suscripción ─────────
+ * Lee el plan actual del usuario (lo único que hoy expone el Worker vía /me).
+ * El cobro real (Mercado Pago) y el plan/asientos por workspace llegan con el
+ * backend de billing (ver clozr-handoff/BACKEND-equipos-spec.md, Tarea 3); por
+ * eso el CTA de cambio avisa "próximamente" en vez de iniciar un checkout.
+ */
+const PLAN_TIERS: { id: string; name: string; price: string; tag: string; perks: string[] }[] = [
+  { id: "free", name: "Free", price: "$0", tag: "Para empezar", perks: ["1 usuario", "50 contactos", "Pipeline completo"] },
+  { id: "pro", name: "Pro", price: "US$ 12", tag: "por usuario / mes", perks: ["Contactos ilimitados", "Ventas y cobranzas", "Reportes", "Soporte prioritario"] },
+  { id: "team", name: "Team", price: "Hablemos", tag: "Equipos grandes", perks: ["Todo lo de Pro", "Roles avanzados", "Onboarding dedicado"] },
+];
+
+function PlanCard({ plan, canBilling, showToast }: { plan: string; canBilling: boolean; showToast: (m: string, t?: "success" | "error") => void }) {
+  const current = (plan || "free").toLowerCase();
+  const currentTier = PLAN_TIERS.find((t) => t.id === current) ?? PLAN_TIERS[0];
+  return (
+    <Card padding={5}>
+      <SectionTitle>Plan y suscripción</SectionTitle>
+      <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[3], marginBottom: space[3] }}>
+        <span style={{ fontSize: text.sm, color: color.textMuted }}>Tu plan actual:</span>
+        <Badge tone="primary" variant="soft">{currentTier.name}</Badge>
+      </div>
+      <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
+        {PLAN_TIERS.map((t) => {
+          const isCurrent = t.id === current;
+          return (
+            <div
+              key={t.id}
+              style={{
+                border: `1px solid ${isCurrent ? color.primary : color.border}`,
+                background: isCurrent ? color.primaryBg : color.surface2,
+                borderRadius: radius.md,
+                padding: space[4],
+                display: "flex",
+                flexDirection: "column",
+                gap: space[2],
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: space[2] }}>
+                <span style={{ fontSize: text.md, fontWeight: weight.bold, color: color.text }}>{t.name}</span>
+                {isCurrent && <Badge tone="primary" size="sm">Actual</Badge>}
+              </div>
+              <div>
+                <span style={{ fontSize: text.lg, fontWeight: weight.bold, color: color.text }}>{t.price}</span>{" "}
+                <span style={{ fontSize: text.xs, color: color.textDim }}>{t.tag}</span>
+              </div>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+                {t.perks.map((p) => (
+                  <li key={p} style={{ fontSize: text.xs, color: color.textMuted, display: "flex", gap: 6 }}>
+                    <Check size={13} color={color.success} style={{ flexShrink: 0, marginTop: 1 }} />
+                    {p}
+                  </li>
+                ))}
+              </ul>
+              {isCurrent ? (
+                <Button variant="ghost" size="sm" fullWidth disabled>
+                  Plan actual
+                </Button>
+              ) : canBilling ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  fullWidth
+                  onClick={() => showToast("El cobro con Mercado Pago estará disponible muy pronto.", "success")}
+                >
+                  {t.id === "free" ? "Cambiar a Free" : `Pasar a ${t.name}`}
+                </Button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <Hint>
+        {canBilling
+          ? "El cobro con Mercado Pago llega pronto; por ahora todos los espacios funcionan en modo Free."
+          : "Solo el dueño puede cambiar el plan del espacio."}
+      </Hint>
+    </Card>
+  );
+}
+
 function CustomerTypesCard({ canManage, showToast }: { canManage: boolean; showToast: (m: string, t?: "success" | "error") => void }) {
   const [items, setItems] = useState<CustomerType[]>([]);
   const [name, setName] = useState("");
