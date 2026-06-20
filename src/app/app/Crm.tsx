@@ -273,7 +273,7 @@ export default function Crm({
         ) : view === "deudas" ? (
           <Deudas key={activeWs.id} />
         ) : view === "team" ? (
-          <Equipo key={activeWs.id} user={user} />
+          <Equipo key={activeWs.id} user={user} onUpgrade={() => setView("settings")} />
         ) : view === "reportes" ? (
           <Reportes key={activeWs.id} />
         ) : view === "inventory" ? (
