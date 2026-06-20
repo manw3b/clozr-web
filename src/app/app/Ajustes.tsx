@@ -329,7 +329,6 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
         <div style={{ marginTop: space[3], display: "flex", flexDirection: "column", gap: space[2] }}>
           <InfoRow label="Email" value={user.email} />
           <InfoRow label="Rol" value={ROLE_LABELS[role] ?? role} />
-          <InfoRow label="Plan" value={user.plan || "—"} />
         </div>
         <div style={{ marginTop: space[4] }}>
           <Button variant="secondary" iconLeft={<LogOut size={14} />} onClick={onLogout}>
