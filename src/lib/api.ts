@@ -1317,6 +1317,15 @@ export async function catalogCheckout(catalog: string): Promise<{ initPoint: str
   return { initPoint: r.init_point };
 }
 
+/** POST /workspaces/:wid/referral — código de referido del workspace (se crea
+ *  si no existe). Al canjearlo, referido y referidor reciben el descuento. */
+export async function getReferralCode(): Promise<{ code: string; discountPct: number }> {
+  const r = await req<{ code: string; discount_pct?: number }>(`/workspaces/${ws()}/referral`, {
+    method: "POST",
+  });
+  return { code: r.code, discountPct: Number(r.discount_pct ?? 0) };
+}
+
 /* ---------- Consola: panel de cuentas (workspaces) ---------- */
 export interface ConsoleWorkspace {
   id: string;

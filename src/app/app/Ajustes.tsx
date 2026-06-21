@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Plus, Trash2, LogOut, Upload, Trophy, XCircle, Check, Zap, Rocket, Sparkles, Gift, Users } from "lucide-react";
+import { Plus, Trash2, LogOut, Upload, Trophy, XCircle, Check, Zap, Rocket, Sparkles, Gift, Users, Copy } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -346,6 +346,9 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
       {/* Plan y facturación */}
       <PlanCard />
 
+      {/* Referí y ganá */}
+      <ReferralCard />
+
       {/* Tipos de cliente */}
       <CustomerTypesCard canManage={canManage} showToast={showToast} />
 
@@ -546,6 +549,73 @@ function PlanCard() {
       </div>
 
       {isOwner && <RedeemCodeBox wsId={ws?.id} />}
+    </Card>
+  );
+}
+
+/* ───────── Referí y ganá ───────── */
+function ReferralCard() {
+  const showToast = useUIStore((s) => s.showToast);
+  const isOwner = useWorkspaceStore((s) => s.activeWorkspace?.role) === "owner";
+  const [data, setData] = useState<{ code: string; discountPct: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    setLoading(true);
+    api
+      .getReferralCode()
+      .then(setData)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [isOwner]);
+
+  if (!isOwner) return null;
+
+  function copy() {
+    if (!data) return;
+    navigator.clipboard.writeText(data.code).then(
+      () => showToast("Código copiado", "success"),
+      () => showToast("No se pudo copiar", "error"),
+    );
+  }
+
+  const pct = data?.discountPct ?? 20;
+
+  return (
+    <Card padding={5}>
+      <SectionTitle>Referí y ganá</SectionTitle>
+      <Hint>
+        Compartí tu código: cuando un negocio nuevo lo canjea (en Ajustes → "¿Tenés un código?"),
+        ustedes dos se llevan <strong style={{ color: color.text }}>{pct}% off</strong> su próximo pago.
+      </Hint>
+      {data ? (
+        <div style={{ display: "flex", gap: space[2], marginTop: space[3], alignItems: "center" }}>
+          <div
+            style={{
+              flex: 1,
+              fontFamily: "var(--font-mono)",
+              fontSize: text.md,
+              fontWeight: weight.bold,
+              letterSpacing: 1,
+              padding: `${space[2]} ${space[3]}`,
+              background: color.surface2,
+              border: `1px solid ${color.border}`,
+              borderRadius: radius.md,
+              color: color.text,
+            }}
+          >
+            {data.code}
+          </div>
+          <Button variant="secondary" iconLeft={<Copy size={14} />} onClick={copy}>
+            Copiar
+          </Button>
+        </div>
+      ) : (
+        <div style={{ fontSize: text.sm, color: color.textDim, marginTop: space[3] }}>
+          {loading ? "Generando tu código…" : "—"}
+        </div>
+      )}
     </Card>
   );
 }
