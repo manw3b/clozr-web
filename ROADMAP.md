@@ -3,7 +3,7 @@
 Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a la app desktop**, y de ahí en más sumar lo que aporte valor real al vendedor PyME.
 
 > Este archivo es la fuente de verdad del plan. Se actualiza a medida que avanzamos.
-> **Última actualización:** 2026-06-20 (responsive / mobile-first de toda la app)
+> **Última actualización:** 2026-06-21 (Consola + pricing USD F1–F5 LIVE; MP validado; arranca roadmap de crecimiento)
 
 ---
 
@@ -29,6 +29,13 @@ Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a 
 - **Marca oficial** — logo Clozr (CZ) en favicon (`app/icon.svg`), login y sidebar (horizontal expandido / isotipo colapsado).
 - **Ajustes a fondo** (de 3 a 8 secciones, paridad con desktop): **logo del negocio** (subir/quitar, R2; se ve en el switcher del topbar), **objetivo diario** (monto+moneda, alimenta Mi Día), **tipos de cliente** (CRUD), **etiquetas** (CRUD), **etapas del pipeline** (CRUD con invariante ≥1 ganada/≥1 perdida), **editar nombre** de perfil (PATCH /me). Worker SCHEMA v8 = **dedupe de métodos de pago** (bug visible: venían x2/x3 del seed desktop) + índice único parcial.
 - **Gestión de equipos / workspaces** — crear y cambiar de espacio desde el switcher del topbar; invitar/roles/expulsar/código manual desde **Equipo**. (Ya existía; verificado end-to-end. El alta de workspace nuevo está en el onboarding y en el switcher.)
+- **Consola Clozr (super-admin)** — gate por email (`SUPERADMIN_EMAILS`), enforced server-side. Pestaña **Cuentas** (todos los workspaces: dueño/contacto, plan, pago MP vs licencia, miembros, creación) y **Códigos** (generar/gestionar: **licencia** activa plan gratis, **descuento** %/USD apuntado, **desbloqueo** de catálogo). Canje desde Ajustes.
+- **Pricing en USD cobrado en ARS al blue (F1)** — Free (1 empleado) / **Pro USD 20** (2) / **Team USD 45** (5), + **empleado extra USD 5/mes**. La conversión la hace el Worker server-side con dolarapi (no manipulable). Tarjetas de planes con el actual destacado + "Recomendado".
+- **Re-pricing automático al dólar + empleados sobre plan activo (F2)** — cron que actualiza el monto ARS de cada suscripción al blue (re-aplica descuento); endpoint para cambiar empleados sin re-checkout (update del preapproval MP, fallback `needs_recheckout`).
+- **Rubros + miniatura (F3)** — templates de pipeline por rubro (Tecnología, Indumentaria, Kiosco, Gastronomía, Servicios, Salud + Genérico) sembrados al crear el workspace; selector de emoji como miniatura (fallback sin logo).
+- **Catálogo premium add-on (F4)** — catálogo Apple = desbloqueo único **USD 100** (pago MP one-time) **o por código**; entitlement por workspace; gatea el VisualProductPicker.
+- **Descuentos apuntados (F5)** — el descuento se guarda en el workspace al canjear y se aplica en cada checkout cuyo target matchee (plan/empleados/catálogo) + en el re-pricing.
+- **MP validado** — token de producción válido, conversión USD→ARS OK, y **webhook de producción 200 OK** (firma sincronizada, eventos Pagos + Suscripciones). *Pendiente operativo: rotar la clave secreta del webhook (quedó visible en una captura durante la validación) + hacer una suscripción real end-to-end.*
 
 ---
 
@@ -49,6 +56,21 @@ Decisiones tomadas (no re-discutir): **cobro con Mercado Pago en ARS**; **plan F
 
 - **Pre-lanzamiento:** probar onboarding end-to-end con un usuario nuevo real (registro por email → crear workspace → invitar a alguien), y avisar a los primeros usuarios de Hotmail/Outlook que miren spam (dominio recién verificado, reputación en warm-up).
 - **Candidatos post-lanzamiento:** comisión/recargo por método de pago (`modifier_pct`+`kind`, necesita 2 columnas en el worker); plantillas de WhatsApp (schema nuevo); tipos de cliente configurables en el linkeo de precios (hoy 4 fijos); tracking por IMEI con stock (`stock_items`); export de Reportes. Ver "Diferido por vista".
+
+---
+
+## 🚀 Crecimiento / monetización ("vamos con todo" — 2026-06-21)
+
+Lógica de los planes (el "por qué"): monetizamos por **3 ejes** — asientos (recurrente, escala con el equipo), tiers de features (Free→Pro→Team), y add-ons one-time (catálogo). Free es **gancho, no demo**: el disparador de pago es el **2º empleado**, no una función capada. Pro = "casi todo". Team = cosas que solo importan al crecer (IA, multi-sucursal, soporte). USD como ancla anti-inflación.
+
+Orden de construcción acordado:
+
+1. **Cobro anual (2 meses gratis)** — toggle mensual/anual en las tarjetas; anual = mensual×10; preapproval MP con `frequency` 12 meses; el re-pricing y el cambio de empleados respetan el intervalo (columna `billing_interval`). Mayor cash flow + en AR le ahorra al cliente 12 meses de inflación de una.
+2. **Referidos** — código self-serve por workspace; al canjearlo, **1 mes de Pro gratis** para el referido y el referidor; atribución sobre `console_code_redemptions`. ~80% reusa F1/F5 (códigos + licencia).
+3. **Espacios / sucursales adicionales** — varios espacios bajo un mismo dueño/facturación, como lever de **Team** o add-on por espacio (monetiza al multi-negocio). **Decisión de producto pendiente:** sucursal = *workspace separado* (reusa infra, **recomendado**) vs *sub-división dentro de un workspace* (más laburo, datos compartidos).
+4. **Descuento por volumen de empleados** — del 6º extra en adelante, precio menor (ej. USD 4).
+5. **Dunning + win-back** — mails de pago fallido (sobre el cron de gracia ya existente) + código de recuperación para los que bajaron a Free.
+6. **Repensar el techo de Free** — límite suave (sin Reportes, o tope ~100 clientes) para que el unipersonal eventualmente convierta sin espantarlo.
 
 ---
 

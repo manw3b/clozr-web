@@ -13,7 +13,7 @@ import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import { roleLabel } from "@/lib/permissions";
 import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage } from "@/lib/types";
-import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, formatArs, formatUsd, discountTargetLabel, type PlanId, type PlanInfo } from "@/lib/types";
+import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, ANNUAL_MONTHS_PAID, ANNUAL_MONTHS_FREE, formatArs, formatUsd, discountTargetLabel, type PlanId, type PlanInfo } from "@/lib/types";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchDolares } from "@/lib/dolar";
 import { Stepper } from "@/components/Stepper";
@@ -423,6 +423,9 @@ function PlanCard() {
   const status = ws?.planStatus ?? "active";
   const currentSeats = ws?.seats ?? current.seats;
   const [busy, setBusy] = useState<PlanId | null>(null);
+  const [cycle, setCycle] = useState<"monthly" | "annual">(
+    (ws?.billingInterval as "monthly" | "annual") ?? "monthly",
+  );
 
   // Dólar blue para mostrar el equivalente en ARS (referencia visual; el cobro
   // real lo calcula el Worker server-side con la misma fuente).
@@ -442,7 +445,7 @@ function PlanCard() {
   async function upgrade(target: "pro" | "team", extraSeats: number) {
     setBusy(target);
     try {
-      const { initPoint } = await api.createBillingCheckout(target, extraSeats);
+      const { initPoint } = await api.createBillingCheckout(target, extraSeats, cycle);
       window.location.assign(initPoint); // → checkout de Mercado Pago
     } catch (e) {
       const code = e instanceof api.ApiError ? e.code : "";
@@ -472,6 +475,32 @@ function PlanCard() {
     <Card padding={5}>
       <SectionTitle>Plan y facturación</SectionTitle>
 
+      {/* Toggle mensual / anual (solo si hay algo para mejorar) */}
+      {isOwner && recommendedId && (
+        <div style={{ display: "flex", gap: space[2], marginTop: space[3] }}>
+          {(["monthly", "annual"] as const).map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCycle(c)}
+              style={{
+                flex: 1,
+                padding: `${space[2]} ${space[3]}`,
+                borderRadius: radius.md,
+                background: cycle === c ? color.primaryBg : color.surface2,
+                border: `1px solid ${cycle === c ? color.primary : color.border}`,
+                color: cycle === c ? color.primary : color.textMuted,
+                fontSize: text.sm,
+                fontWeight: weight.semibold,
+                cursor: "pointer",
+              }}
+            >
+              {c === "monthly" ? "Mensual" : `Anual · ${ANNUAL_MONTHS_FREE} meses gratis`}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Tarjetas de planes (Free / Pro / Team) */}
       <div
         style={{
@@ -492,6 +521,7 @@ function PlanCard() {
             currentStatus={status}
             isOwner={!!isOwner}
             blueRate={blueRate}
+            interval={cycle}
             busy={busy === id}
             onUpgrade={(extra) => upgrade(id as "pro" | "team", extra)}
             onSeatsSaved={refreshWs}
@@ -530,6 +560,7 @@ function PlanTier({
   currentStatus,
   isOwner,
   blueRate,
+  interval,
   busy,
   onUpgrade,
   onSeatsSaved,
@@ -542,6 +573,7 @@ function PlanTier({
   currentStatus: string;
   isOwner: boolean;
   blueRate: number | null;
+  interval: "monthly" | "annual";
   busy: boolean;
   onUpgrade: (extraSeats: number) => void;
   onSeatsSaved: () => Promise<void>;
@@ -553,7 +585,11 @@ function PlanTier({
   const canBuy = isUpgrade && isOwner;
 
   const [extraSeats, setExtraSeats] = useState(0);
-  const totalUsd = plan.priceUsd + extraSeats * EXTRA_SEAT_USD;
+  // Precio por período: anual = ×ANNUAL_MONTHS_PAID (2 meses gratis).
+  const mult = interval === "annual" ? ANNUAL_MONTHS_PAID : 1;
+  const per = interval === "annual" ? "año" : "mes";
+  const basePeriodUsd = plan.priceUsd * mult;
+  const totalUsd = (plan.priceUsd + extraSeats * EXTRA_SEAT_USD) * mult;
   const arsApprox = (usd: number) => (blueRate ? `≈ ${formatArs(usd * blueRate)}` : null);
   // Desglose de asientos del plan actual (incluidos + extra comprados).
   const currentExtra = Math.max(0, currentSeats - plan.seats);
@@ -604,12 +640,15 @@ function PlanTier({
       <div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
           <span style={{ fontSize: text.xl, fontWeight: weight.bold, color: color.text }}>
-            {plan.priceUsd > 0 ? formatUsd(plan.priceUsd) : "Gratis"}
+            {plan.priceUsd > 0 ? formatUsd(basePeriodUsd) : "Gratis"}
           </span>
-          {plan.priceUsd > 0 && <span style={{ fontSize: text.xs, color: color.textDim }}>/mes</span>}
+          {plan.priceUsd > 0 && <span style={{ fontSize: text.xs, color: color.textDim }}>/{per}</span>}
         </div>
-        {plan.priceUsd > 0 && arsApprox(plan.priceUsd) && (
-          <div style={{ fontSize: text.xs, color: color.textDim }}>{arsApprox(plan.priceUsd)} hoy</div>
+        {plan.priceUsd > 0 && arsApprox(basePeriodUsd) && (
+          <div style={{ fontSize: text.xs, color: color.textDim }}>{arsApprox(basePeriodUsd)} hoy</div>
+        )}
+        {plan.priceUsd > 0 && interval === "annual" && (
+          <div style={{ fontSize: text.xs, color: color.success, marginTop: 2 }}>{ANNUAL_MONTHS_FREE} meses gratis 🎉</div>
         )}
         <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>{plan.tagline}</div>
         {isCurrent && plan.id !== "free" && !isOwner && (
@@ -674,7 +713,7 @@ function PlanTier({
         ) : canBuy ? (
           <>
             <Button variant="primary" size="sm" fullWidth loading={busy} onClick={() => onUpgrade(extraSeats)}>
-              Mejorar{extraSeats > 0 ? ` — ${formatUsd(totalUsd)}/mes` : ""}
+              Mejorar{extraSeats > 0 ? ` — ${formatUsd(totalUsd)}/${per}` : ""}
             </Button>
             {extraSeats > 0 && arsApprox(totalUsd) && (
               <div style={{ fontSize: text.xs, color: color.textDim, marginTop: space[1], textAlign: "center" }}>
