@@ -714,6 +714,20 @@ export async function createBillingCheckout(
   return { initPoint: r.init_point, preapprovalId: r.preapproval_id ?? null };
 }
 
+/**
+ * POST /workspaces/:wid/billing/seats — cambia los empleados extra sobre una
+ * suscripción ACTIVA (sin re-checkout). El Worker actualiza el monto en MP y
+ * persiste seats. Puede tirar ApiError "needs_recheckout" si MP no permite el
+ * cambio de monto (requiere re-autorización del pagador).
+ */
+export async function updateSeats(extraSeats: number): Promise<{ seats: number; extraSeats: number }> {
+  const r = await req<{ seats?: number; extra_seats?: number }>(
+    `/workspaces/${ws()}/billing/seats`,
+    { method: "POST", body: JSON.stringify({ extra_seats: extraSeats }) },
+  );
+  return { seats: Number(r.seats ?? 0), extraSeats: Number(r.extra_seats ?? 0) };
+}
+
 export async function patchMemberRole(memberId: string, role: string): Promise<void> {
   await req(`/workspaces/${ws()}/members/${memberId}`, { method: "PATCH", body: JSON.stringify({ role }) });
 }
