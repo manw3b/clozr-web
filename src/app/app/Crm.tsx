@@ -1417,7 +1417,7 @@ function SaleModal({
 
   return (
     <Modal title={title} onClose={onClose} isDirty={isDirty}>
-      <div className="flex flex-col gap-3.5 p-5">
+      <div className="flex flex-col gap-4 p-5">
         <div className="flex flex-col gap-1.5">
           <span className={labelCls}>Cliente</span>
           <ClientPicker
@@ -1498,19 +1498,19 @@ function SaleModal({
               </div>
             );
           })}
-          <button onClick={addLine} className="self-start text-xs font-semibold text-primary-hover hover:underline">
+          <button onClick={addLine} className="mt-0.5 w-full rounded-lg border border-dashed border-border-strong py-2 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary">
             + Agregar ítem
           </button>
         </div>
 
-        <div className="rounded-lg bg-surface-2 p-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-text-muted">Total</span>
-            <span className="font-bold">{money(total, "ARS")}</span>
+        <div className="rounded-xl bg-surface-2 p-4">
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm text-text-muted">Total</span>
+            <span className="text-xl font-extrabold tracking-tight">{money(total, "ARS")}</span>
           </div>
           {coverage.hasCosted && (
             <div
-              className="mt-1.5 flex justify-between"
+              className="mt-2 flex justify-between text-sm"
               style={{ color: coverage.marginEst < 0 ? color.danger : color.success }}
             >
               <span>Margen estimado{coverage.marginPct != null ? ` · ${Math.round(coverage.marginPct)}%` : ""}</span>
