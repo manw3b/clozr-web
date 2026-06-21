@@ -10,11 +10,11 @@ function Logo() {
 const FEATURES = [
   {
     title: "Pipeline visual",
-    desc: "Arrastrá cada oportunidad por tus etapas. Ves de un vistazo qué está por cerrar y qué se está enfriando.",
+    desc: "Arrastrá cada oportunidad por tus etapas. Ves de un vistazo qué está por cerrar y qué se enfría.",
     icon: "▦",
   },
   {
-    title: "Tus contactos, ordenados",
+    title: "Clientes ordenados",
     desc: "Toda tu cartera en un lugar: historial, notas y próximos pasos. Sin planillas perdidas.",
     icon: "☰",
   },
@@ -24,35 +24,66 @@ const FEATURES = [
     icon: "◧",
   },
   {
-    title: "En equipo",
-    desc: "Sumá a tu equipo con roles y permisos. Cada vendedor ve lo suyo, vos ves todo.",
-    icon: "⚇",
+    title: "Caja diaria",
+    desc: "Abrí y cerrá caja con arqueo por moneda. Ingresos y egresos siempre cuadrados.",
+    icon: "▤",
   },
+  {
+    title: "Inventario por rubro",
+    desc: "Catálogo con stock, costos y precios por tipo de cliente. Con plantillas según tu negocio.",
+    icon: "▥",
+  },
+  {
+    title: "Clozr de noche · IA",
+    desc: "Cada mañana te deja listos los seguimientos de los clientes que se están enfriando.",
+    icon: "✦",
+  },
+];
+
+const RUBROS = [
+  { label: "Gastronomía", emoji: "🍔" },
+  { label: "Indumentaria", emoji: "👕" },
+  { label: "Kiosco y almacén", emoji: "🛒" },
+  { label: "Tecnología", emoji: "📱" },
+  { label: "Servicios", emoji: "🔧" },
+  { label: "Salud y estética", emoji: "💅" },
 ];
 
 const PLANS = [
   {
     name: "Free",
-    price: "$0",
-    tag: "Para empezar",
-    perks: ["1 usuario", "50 contactos", "Pipeline completo"],
+    price: "Gratis",
+    tag: "",
+    perks: ["1 empleado", "Clientes, pipeline y ventas", "Caja diaria", "Para arrancar solo"],
     cta: "Crear cuenta",
     highlight: false,
   },
   {
     name: "Pro",
-    price: "US$ 12",
-    tag: "por usuario / mes",
-    perks: ["Contactos ilimitados", "Ventas y cobranzas", "Reportes", "Soporte prioritario"],
+    price: "US$ 20",
+    tag: "/ mes",
+    perks: [
+      "2 empleados incluidos",
+      "Inventario, deudas y tareas",
+      "Reportes del negocio",
+      "Multi-moneda + WhatsApp",
+      "Roles y permisos por miembro",
+    ],
     cta: "Probar 14 días",
     highlight: true,
   },
   {
     name: "Team",
-    price: "Hablemos",
-    tag: "Equipos grandes",
-    perks: ["Todo lo de Pro", "Roles avanzados", "Onboarding dedicado"],
-    cta: "Contactanos",
+    price: "US$ 45",
+    tag: "/ mes",
+    perks: [
+      "5 empleados incluidos",
+      "Todo lo de Pro",
+      "Clozr de noche (IA)",
+      "Reportes avanzados",
+      "Sucursales + soporte prioritario",
+    ],
+    cta: "Probar 14 días",
     highlight: false,
   },
 ];
@@ -66,6 +97,7 @@ export default function Home() {
           <Logo />
           <nav className="hidden items-center gap-8 text-sm text-text-muted md:flex">
             <a href="#features" className="hover:text-text">Funciones</a>
+            <a href="#rubros" className="hover:text-text">Rubros</a>
             <a href="#pricing" className="hover:text-text">Precios</a>
           </nav>
           <div className="flex items-center gap-3">
@@ -93,7 +125,7 @@ export default function Home() {
         />
         <div className="mx-auto max-w-3xl px-6 py-24 text-center md:py-32">
           <span className="inline-block rounded-full border border-border-strong bg-surface px-3 py-1 text-xs font-semibold text-text-muted">
-            Hecho para equipos de venta de LATAM 🌎
+            Hecho para comercios y PyMEs de LATAM 🌎
           </span>
           <h1 className="mt-6 text-4xl font-extrabold leading-tight tracking-tight md:text-6xl">
             Dejá el Excel.
@@ -101,8 +133,8 @@ export default function Home() {
             <span className="text-primary-hover">Cerrá más ventas.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-lg text-text-muted">
-            Clozr es el CRM simple para seguir tus contactos, oportunidades y
-            ventas sin complicarte. En español y al precio de tu mercado.
+            El CRM simple para tu negocio: clientes, ventas, caja e inventario en
+            un solo lugar. Cualquiera sea tu rubro — en español y lo pagás en pesos.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
@@ -125,12 +157,12 @@ export default function Home() {
       {/* Features */}
       <section id="features" className="mx-auto max-w-6xl px-6 py-20">
         <h2 className="text-center text-3xl font-bold tracking-tight">
-          Todo lo que tu equipo necesita
+          Todo lo que tu negocio necesita
         </h2>
         <p className="mx-auto mt-3 max-w-lg text-center text-text-muted">
           Sin las 200 funciones que nunca vas a usar. Solo lo que mueve la aguja.
         </p>
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
             <div
               key={f.title}
@@ -146,13 +178,39 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Rubros */}
+      <section id="rubros" className="border-y border-border bg-surface/40">
+        <div className="mx-auto max-w-6xl px-6 py-20">
+          <h2 className="text-center text-3xl font-bold tracking-tight">
+            Funciona para tu rubro
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-center text-text-muted">
+            Elegís tu rubro y Clozr arranca con el embudo de ventas listo. Lo
+            ajustás en 2 minutos.
+          </p>
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
+            {RUBROS.map((r) => (
+              <span
+                key={r.label}
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-text-muted"
+              >
+                <span className="text-base">{r.emoji}</span> {r.label}
+              </span>
+            ))}
+            <span className="inline-flex items-center rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-text-dim">
+              y más…
+            </span>
+          </div>
+        </div>
+      </section>
+
       {/* Pricing */}
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-20">
         <h2 className="text-center text-3xl font-bold tracking-tight">
           Precio simple, sin sorpresas
         </h2>
         <p className="mx-auto mt-3 max-w-lg text-center text-text-muted">
-          Empezá gratis. Crecé cuando tu equipo crezca.
+          Empezá gratis. Pagás recién cuando sumás a tu equipo.
         </p>
         <div className="mt-12 grid gap-6 md:grid-cols-3">
           {PLANS.map((p) => (
@@ -172,7 +230,7 @@ export default function Home() {
               <h3 className="text-lg font-bold">{p.name}</h3>
               <div className="mt-3 flex items-baseline gap-1.5">
                 <span className="text-3xl font-extrabold tracking-tight">{p.price}</span>
-                <span className="text-sm text-text-dim">{p.tag}</span>
+                {p.tag && <span className="text-sm text-text-dim">{p.tag}</span>}
               </div>
               <ul className="mt-6 space-y-3 text-sm">
                 {p.perks.map((perk) => (
@@ -194,6 +252,12 @@ export default function Home() {
             </div>
           ))}
         </div>
+        <p className="mx-auto mt-8 max-w-2xl text-center text-sm text-text-dim">
+          + US$ 5 por empleado extra · + US$ 10 por sucursal · 2 meses gratis
+          pagando al año · 14 días de prueba.
+          <br />
+          Precios en dólares — los pagás en pesos con Mercado Pago, al cambio del día.
+        </p>
       </section>
 
       {/* CTA final */}
@@ -201,7 +265,7 @@ export default function Home() {
         <div className="rounded-3xl border border-border bg-gradient-to-br from-surface to-bg p-12 text-center">
           <h2 className="text-3xl font-bold tracking-tight">Tu próxima venta empieza acá</h2>
           <p className="mx-auto mt-3 max-w-md text-text-muted">
-            Sumate a los equipos que ya dejaron las planillas atrás.
+            Sumate a los negocios que ya dejaron las planillas atrás.
           </p>
           <Link
             href="/app"
