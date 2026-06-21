@@ -81,7 +81,7 @@ const PLANS = [
       "Todo lo de Pro",
       "Clozr de noche (IA)",
       "Reportes avanzados",
-      "Sucursales + soporte prioritario",
+      "Soporte prioritario",
     ],
     cta: "Probar 14 días",
     highlight: false,
