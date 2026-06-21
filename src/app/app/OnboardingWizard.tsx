@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import * as api from "@/lib/api";
 import { setWorkspaceId } from "@/lib/api";
 import type { User, Workspace } from "@/lib/types";
-import { PLANS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, formatArs, type PlanId } from "@/lib/types";
+import { PLANS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, formatUsd, type PlanId } from "@/lib/types";
 
 /**
  * Onboarding guiado (multi-paso) que reemplaza el alta de un solo campo.
@@ -311,14 +311,14 @@ export default function OnboardingWizard({
                 const isPaid = id !== "free";
                 const seatsLabel =
                   p.seats >= SEATS_UNLIMITED
-                    ? "Asientos ilimitados"
-                    : `${p.seats} ${p.seats === 1 ? "asiento" : "asientos"}`;
+                    ? "Empleados ilimitados"
+                    : `${p.seats} ${p.seats === 1 ? "empleado" : "empleados"}`;
                 return (
                   <div key={id} className="rounded-xl border border-border bg-surface-2 p-4">
                     <div className="flex items-baseline justify-between">
                       <span className="font-bold">{p.name}</span>
                       <span className="text-sm text-text-muted">
-                        {p.priceArs > 0 ? `${formatArs(p.priceArs)}/mes` : "Gratis"}
+                        {p.priceUsd > 0 ? `${formatUsd(p.priceUsd)}/mes` : "Gratis"}
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-text-dim">

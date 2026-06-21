@@ -48,43 +48,58 @@ export type PlanId = "free" | "pro" | "team";
 export interface PlanInfo {
   id: PlanId;
   name: string;
-  /** Precio mensual en ARS. 0 = gratis. */
-  priceArs: number;
-  /** Asientos incluidos. SEATS_UNLIMITED = sin tope. */
+  /** Precio mensual en USD (fuente de verdad). 0 = gratis. Se cobra en ARS
+   *  al dólar blue del momento. */
+  priceUsd: number;
+  /** Empleados incluidos (base). Se pueden sumar más a EXTRA_SEAT_USD c/u. */
   seats: number;
   tagline: string;
   features: string[];
 }
 
-/** seats === este valor ⇒ "ilimitado" (mismo número que usa el worker). */
+/** seats === este valor ⇒ "ilimitado" (legacy; hoy ningún plan lo usa). */
 export const SEATS_UNLIMITED = 9999;
 /** Días de prueba de los planes pagos. */
 export const BILLING_TRIAL_DAYS = 14;
+/** Precio mensual (USD) de cada empleado extra, más allá de los del plan. */
+export const EXTRA_SEAT_USD = 5;
 
 export const PLANS: Record<PlanId, PlanInfo> = {
   free: {
     id: "free",
     name: "Free",
-    priceArs: 0,
+    priceUsd: 0,
     seats: 1,
     tagline: "Para arrancar solo.",
-    features: ["1 asiento", "CRM, ventas y caja completos", "Reportes del negocio"],
+    features: ["1 empleado", "Clientes, pipeline y ventas", "Caja básica"],
   },
   pro: {
     id: "pro",
     name: "Pro",
-    priceArs: 25000,
-    seats: 3,
-    tagline: "Para un equipo chico.",
-    features: ["3 asientos", "Roles y permisos por miembro", "Todo lo de Free"],
+    priceUsd: 20,
+    seats: 2,
+    tagline: "Tu negocio, casi todo incluido.",
+    features: [
+      "2 empleados incluidos",
+      "Roles y permisos por miembro",
+      "Inventario, deudas y tareas",
+      "Reportes del negocio",
+      "Multi-moneda + WhatsApp",
+    ],
   },
   team: {
     id: "team",
     name: "Team",
-    priceArs: 60000,
-    seats: SEATS_UNLIMITED,
-    tagline: "Para escalar sin límite.",
-    features: ["Asientos ilimitados", "Soporte prioritario", "Todo lo de Pro"],
+    priceUsd: 45,
+    seats: 5,
+    tagline: "Para escalar con tu equipo.",
+    features: [
+      "5 empleados incluidos",
+      "Todo lo de Pro",
+      "Clozr de noche (IA)",
+      "Reportes avanzados",
+      "Soporte prioritario",
+    ],
   },
 };
 
@@ -94,6 +109,11 @@ export const PAID_PLAN_IDS: Array<Exclude<PlanId, "free">> = ["pro", "team"];
 /** Formatea un monto en ARS para mostrar (sin decimales). */
 export function formatArs(n: number): string {
   return `$ ${Math.round(n).toLocaleString("es-AR")}`;
+}
+
+/** Formatea un precio en USD para mostrar. */
+export function formatUsd(n: number): string {
+  return `USD ${n.toLocaleString("en-US")}`;
 }
 
 /** Tipo de cliente configurable (customer_types). */

@@ -705,10 +705,11 @@ export async function inviteMember(email: string, role: "admin" | "vendedor" | "
  */
 export async function createBillingCheckout(
   plan: "pro" | "team",
+  extraSeats = 0,
 ): Promise<{ initPoint: string; preapprovalId: string | null }> {
   const r = await req<{ init_point: string; preapproval_id?: string | null }>(
     `/workspaces/${ws()}/billing/checkout`,
-    { method: "POST", body: JSON.stringify({ plan }) },
+    { method: "POST", body: JSON.stringify({ plan, extra_seats: extraSeats }) },
   );
   return { initPoint: r.init_point, preapprovalId: r.preapproval_id ?? null };
 }
