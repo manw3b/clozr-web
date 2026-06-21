@@ -15,7 +15,7 @@ import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import type { ConsoleCode, ConsoleCodeKind, ConsoleWorkspace, DiscountType } from "@/lib/api";
-import { formatArs, CATALOG_PACKS } from "@/lib/types";
+import { formatArs, CATALOG_PACKS, DISCOUNT_TARGETS, discountTargetLabel } from "@/lib/types";
 
 /* ── helpers ─────────────────────────────────────────────────────────── */
 
@@ -271,8 +271,9 @@ function benefitLabel(c: ConsoleCode): string {
     const key = (c.target ?? "").replace(/^catalog:/, "");
     return `Desbloquea catálogo ${key || "premium"}`;
   }
-  if (c.discountType === "percent") return `${c.discountValue ?? 0}% de descuento`;
-  return `${formatArs(c.discountValue ?? 0)} de descuento`;
+  const tgt = c.target && c.target !== "all" ? ` en ${discountTargetLabel(c.target).toLowerCase()}` : "";
+  if (c.discountType === "percent") return `${c.discountValue ?? 0}% de descuento${tgt}`;
+  return `USD ${c.discountValue ?? 0} de descuento${tgt}`;
 }
 
 function CodesPanel() {
@@ -447,6 +448,7 @@ function CreateCodeModal({
   const [durationDays, setDurationDays] = useState("");
   const [discountType, setDiscountType] = useState<DiscountType>("percent");
   const [discountValue, setDiscountValue] = useState("");
+  const [discountTarget, setDiscountTarget] = useState("all");
   const [catalog, setCatalog] = useState("apple");
   const [maxUses, setMaxUses] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
@@ -462,6 +464,7 @@ function CreateCodeModal({
       setDurationDays("");
       setDiscountType("percent");
       setDiscountValue("");
+      setDiscountTarget("all");
       setCatalog("apple");
       setMaxUses("");
       setExpiresAt("");
@@ -497,6 +500,7 @@ function CreateCodeModal({
             ? {
                 discountType,
                 discountValue: Number(discountValue),
+                target: discountTarget,
               }
             : { target: `catalog:${catalog}` }),
         maxUses: maxUses.trim() ? Number(maxUses) : null,
@@ -577,29 +581,39 @@ function CreateCodeModal({
             </div>
           </div>
         ) : kind === "discount" ? (
-          <div style={{ display: "flex", gap: space[2] }}>
-            <div style={{ flex: 1 }}>
-              <div style={labelStyle}>Tipo</div>
-              <select
-                value={discountType}
-                onChange={(e) => setDiscountType(e.target.value as DiscountType)}
-                className={selectCls}
-                style={selectStyle}
-              >
-                <option value="percent">Porcentaje (%)</option>
-                <option value="amount">Monto fijo (ARS)</option>
-              </select>
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+            <div style={{ display: "flex", gap: space[2] }}>
+              <div style={{ flex: 1 }}>
+                <div style={labelStyle}>Tipo</div>
+                <select
+                  value={discountType}
+                  onChange={(e) => setDiscountType(e.target.value as DiscountType)}
+                  className={selectCls}
+                  style={selectStyle}
+                >
+                  <option value="percent">Porcentaje (%)</option>
+                  <option value="amount">Monto fijo (USD)</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={labelStyle}>{discountType === "percent" ? "Porcentaje" : "Monto (USD)"}</div>
+                <Input
+                  type="number"
+                  min="1"
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value)}
+                  placeholder={discountType === "percent" ? "20" : "10"}
+                  disabled={submitting}
+                />
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={labelStyle}>{discountType === "percent" ? "Porcentaje" : "Monto (ARS)"}</div>
-              <Input
-                type="number"
-                min="1"
-                value={discountValue}
-                onChange={(e) => setDiscountValue(e.target.value)}
-                placeholder={discountType === "percent" ? "20" : "10000"}
-                disabled={submitting}
-              />
+            <div>
+              <div style={labelStyle}>Aplica a</div>
+              <select value={discountTarget} onChange={(e) => setDiscountTarget(e.target.value)} className={selectCls} style={selectStyle}>
+                {DISCOUNT_TARGETS.map((t) => (
+                  <option key={t.key} value={t.key}>{t.label}</option>
+                ))}
+              </select>
             </div>
           </div>
         ) : (

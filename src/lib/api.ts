@@ -115,6 +115,7 @@ interface MeRaw {
     banner_key?: string | null;
     icon?: string | null;
     unlocked_catalogs?: string[] | null;
+    discount?: { type: string; value: number; target: string } | null;
     plan?: string | null;
     seats?: number | null;
     plan_status?: string | null;
@@ -143,6 +144,7 @@ export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }
       bannerKey: w.banner_key ?? null,
       icon: w.icon ?? null,
       unlockedCatalogs: Array.isArray(w.unlocked_catalogs) ? w.unlocked_catalogs : [],
+      discount: w.discount ?? null,
       plan: w.plan ?? "free",
       seats: Number(w.seats ?? 1),
       planStatus: w.plan_status ?? "active",

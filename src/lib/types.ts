@@ -29,6 +29,8 @@ export interface Workspace {
   icon?: string | null;
   /** F4: catálogos premium desbloqueados (keys, ej ["apple"]). */
   unlockedCatalogs?: string[];
+  /** F5: descuento activo del workspace (otorgado por código), o null. */
+  discount?: { type: string; value: number; target: string } | null;
   /** Objetivo diario (monto). 0 / undefined = sin objetivo seteado. */
   dailyGoal?: number;
   dailyGoalCurrency?: string;
@@ -138,6 +140,23 @@ export const CATALOG_PACKS: Record<string, CatalogPack> = {
     description: "iPhone, iPad, Mac, Watch y AirPods con imágenes, colores y capacidades — listos para cargar.",
   },
 };
+
+/* ───────── Descuentos apuntados (F5) ───────── */
+/** A qué puede apuntar un código de descuento (Consola). */
+export const DISCOUNT_TARGETS: Array<{ key: string; label: string }> = [
+  { key: "all", label: "Todo" },
+  { key: "plan:any", label: "Cualquier plan" },
+  { key: "plan:pro", label: "Plan Pro" },
+  { key: "plan:team", label: "Plan Team" },
+  { key: "catalog:any", label: "Cualquier catálogo" },
+  { key: "catalog:apple", label: "Catálogo Apple" },
+];
+
+/** Etiqueta legible de un target de descuento. */
+export function discountTargetLabel(target: string | null | undefined): string {
+  if (!target) return "—";
+  return DISCOUNT_TARGETS.find((t) => t.key === target)?.label ?? target;
+}
 
 /** Tipo de cliente configurable (customer_types). */
 export interface CustomerType {

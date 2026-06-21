@@ -13,7 +13,7 @@ import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import { roleLabel } from "@/lib/permissions";
 import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage } from "@/lib/types";
-import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, formatArs, formatUsd, type PlanId, type PlanInfo } from "@/lib/types";
+import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, formatArs, formatUsd, discountTargetLabel, type PlanId, type PlanInfo } from "@/lib/types";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchDolares } from "@/lib/dolar";
 import { Stepper } from "@/components/Stepper";
@@ -500,6 +500,12 @@ function PlanCard() {
       </div>
 
       <div style={{ marginTop: space[3] }}>
+        {ws?.discount && (
+          <Hint>
+            🎟️ Descuento activo: {ws.discount.type === "percent" ? `${ws.discount.value}%` : formatUsd(ws.discount.value)} en{" "}
+            {discountTargetLabel(ws.discount.target).toLowerCase()} — se aplica al pagar.
+          </Hint>
+        )}
         {isOwner && recommendedId && (
           <Hint>Precios en USD, se cobran en ARS al dólar blue · {BILLING_TRIAL_DAYS} días de prueba · cancelás cuando quieras.</Hint>
         )}
