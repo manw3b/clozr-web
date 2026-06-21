@@ -551,6 +551,17 @@ export async function addPayment(
   });
 }
 
+/** Envía el certificado de garantía por mail al cliente. */
+export async function sendWarranty(
+  saleId: string,
+  p: { to: string; customerName: string; businessName: string; items: string; months: number; startDate: string },
+): Promise<void> {
+  await req(`/workspaces/${ws()}/sales/${saleId}/warranty`, {
+    method: "POST",
+    body: JSON.stringify(p),
+  });
+}
+
 /* ---------- sale items (bulk, para Reportes v2) ---------- */
 interface SaleItemReportRaw {
   id: string;
