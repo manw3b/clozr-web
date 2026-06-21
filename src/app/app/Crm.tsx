@@ -410,16 +410,31 @@ export default function Crm({
 }
 
 /* ───────── Modal shell ───────── */
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({ title, onClose, children, isDirty }: { title: string; onClose: () => void; children: React.ReactNode; isDirty?: () => boolean }) {
+  const [shaking, setShaking] = useState(false);
+  const shakeTimer = useRef<number | null>(null);
+  function triggerShake() {
+    setShaking(false);
+    if (shakeTimer.current) window.clearTimeout(shakeTimer.current);
+    requestAnimationFrame(() => {
+      setShaking(true);
+      shakeTimer.current = window.setTimeout(() => setShaking(false), 450);
+    });
+  }
   return (
     <div
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (isDirty?.()) { triggerShake(); return; } // hay datos → no cerrar, avisar con shake
+        onClose();
+      }}
       className="fixed inset-0 z-50 grid place-items-center bg-[rgba(2,6,23,0.7)] p-5 backdrop-blur-sm"
     >
       <div
         role="dialog"
         aria-modal="true"
         className="max-h-[90vh] w-full max-w-md overflow-auto rounded-xl border border-border-strong bg-surface shadow-2xl"
+        style={shaking ? { animation: "cz-modal-shake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97)" } : undefined}
       >
         <div className="flex items-center border-b border-border px-5 py-4">
           <h3 className="text-base font-bold">{title}</h3>
@@ -1241,7 +1256,7 @@ function SaleModal({
   }
 
   return (
-    <Modal title={title} onClose={onClose} isDirty={isDirty} confirmCloseText="¿Cerrar y descartar la venta?">
+    <Modal title={title} onClose={onClose} isDirty={isDirty}>
       <div className="flex flex-col gap-3.5 p-5">
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Cliente</span>

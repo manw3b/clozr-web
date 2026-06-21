@@ -297,6 +297,13 @@ input[type="datetime-local"]:not(:focus):invalid {
 .fade-in {
   animation: fadeIn 0.15s ease forwards;
 }
+/* Shake del modal cuando se clickea afuera con datos sin guardar. */
+@keyframes cz-modal-shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-8px); }
+  40%, 60% { transform: translateX(8px); }
+}
 
 /* Table rows */
 tr.hoverable:hover td {
