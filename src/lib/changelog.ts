@@ -17,6 +17,31 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-06-20-movil",
+    date: "20 de junio de 2026",
+    bullets: [
+      { tone: "feat", text: "Clozr ahora se usa bien desde el celular: el menú lateral pasa a un cajón con el botón ☰, las listas se muestran como tarjetas y todo entra en la pantalla sin hacer zoom." },
+      { tone: "fix", text: "Se arreglaron los botones de las pantallas de inicio (ingreso y alta) que aparecían sin color de fondo." },
+    ],
+  },
+  {
+    version: "2026-06-19-onboarding",
+    date: "19 de junio de 2026",
+    bullets: [
+      { tone: "feat", text: "Nuevo arranque guiado: cuando creás tu espacio, Clozr te lleva paso a paso — tu nombre, los datos de tu negocio (rubro y objetivo del día) y la invitación a tu equipo, todo de una." },
+      { tone: "ux", text: "El alta dejó de ser un solo campo: ahora podés fijar tu objetivo de ventas y sumar a tu equipo sin salir del onboarding (y si querés, lo saltás)." },
+    ],
+  },
+  {
+    version: "2026-06-19-roles",
+    date: "19 de junio de 2026",
+    bullets: [
+      { tone: "feat", text: "Roles que ahora sí mandan: cada persona del equipo ve y puede hacer según su rol. El Encargado opera y configura, el Vendedor vende y gestiona su día, y Solo lectura ve todo sin tocar nada." },
+      { tone: "fix", text: "Solo lectura ya no puede crear, editar ni borrar (antes podía sin querer). Los botones de acción aparecen únicamente para quien tiene permiso." },
+      { tone: "ux", text: "El menú lateral se adapta al rol: Reportes y Equipo solo le aparecen a quien corresponde." },
+    ],
+  },
+  {
     version: "2026-06-18-ajustes",
     date: "18 de junio de 2026",
     bullets: [

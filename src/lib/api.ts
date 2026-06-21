@@ -112,6 +112,9 @@ interface MeRaw {
     daily_goal_count?: number | null;
     logo_key?: string | null;
     banner_key?: string | null;
+    plan?: string | null;
+    seats?: number | null;
+    plan_status?: string | null;
   }>;
 }
 export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }> {
@@ -128,6 +131,9 @@ export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }
       dailyGoalCount: Number(w.daily_goal_count ?? 0),
       logoKey: w.logo_key ?? null,
       bannerKey: w.banner_key ?? null,
+      plan: w.plan ?? "free",
+      seats: Number(w.seats ?? 1),
+      planStatus: w.plan_status ?? "active",
     })),
   };
 }
@@ -136,8 +142,26 @@ export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }
 export async function updateMyName(name: string): Promise<void> {
   await req("/me", { method: "PATCH", body: JSON.stringify({ name }) });
 }
+interface WorkspaceRaw {
+  id: string;
+  name: string;
+  role: string;
+  status: string;
+  plan?: string | null;
+  seats?: number | null;
+  plan_status?: string | null;
+}
 export async function createWorkspace(name: string): Promise<Workspace> {
-  return req<Workspace>("/workspaces", { method: "POST", body: JSON.stringify({ name }) });
+  const r = await req<WorkspaceRaw>("/workspaces", { method: "POST", body: JSON.stringify({ name }) });
+  return {
+    id: r.id,
+    name: r.name,
+    role: r.role,
+    status: r.status,
+    plan: r.plan ?? "free",
+    seats: Number(r.seats ?? 1),
+    planStatus: r.plan_status ?? "active",
+  };
 }
 
 /* ---------- helpers de tenancy ---------- */
@@ -661,6 +685,22 @@ export async function listMembers(): Promise<Member[]> {
 
 export async function inviteMember(email: string, role: "admin" | "vendedor" | "viewer"): Promise<void> {
   await req(`/workspaces/${ws()}/invite`, { method: "POST", body: JSON.stringify({ email, role }) });
+}
+
+/**
+ * POST /workspaces/:wid/billing/checkout — crea la suscripción (preapproval) en
+ * Mercado Pago y devuelve el init_point para redirigir al checkout. Solo el
+ * dueño (permiso billing.manage). Errores de MP: billing_unavailable (sin token)
+ * / billing_upstream (MP rechazó).
+ */
+export async function createBillingCheckout(
+  plan: "pro" | "team",
+): Promise<{ initPoint: string; preapprovalId: string | null }> {
+  const r = await req<{ init_point: string; preapproval_id?: string | null }>(
+    `/workspaces/${ws()}/billing/checkout`,
+    { method: "POST", body: JSON.stringify({ plan }) },
+  );
+  return { initPoint: r.init_point, preapprovalId: r.preapproval_id ?? null };
 }
 
 export async function patchMemberRole(memberId: string, role: string): Promise<void> {

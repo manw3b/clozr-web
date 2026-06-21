@@ -29,6 +29,69 @@ export interface Workspace {
   /** Keys de R2 (relativas) del logo/banner del negocio. El cliente arma /assets/{key}. */
   logoKey?: string | null;
   bannerKey?: string | null;
+  /** Plan de suscripción del workspace (billing T3): 'free' | 'pro' | 'team'. */
+  plan?: string;
+  /** Asientos permitidos por el plan (free=1, pro=3, team=9999 ≈ ilimitado). */
+  seats?: number;
+  /** Estado de la suscripción: 'active' | 'trialing' | 'past_due' | 'cancelled'. */
+  planStatus?: string;
+}
+
+/* ───────── Planes / billing (T3) ─────────
+ * Espejo del PLAN_CONFIG del worker (cf-worker/src/routes/billing.ts):
+ * Free = 1 asiento (gratis); Pro = ARS 25.000/mes · 3 asientos; Team =
+ * ARS 60.000/mes · asientos ilimitados. Los pagos tienen 14 días de prueba. */
+export type PlanId = "free" | "pro" | "team";
+
+export interface PlanInfo {
+  id: PlanId;
+  name: string;
+  /** Precio mensual en ARS. 0 = gratis. */
+  priceArs: number;
+  /** Asientos incluidos. SEATS_UNLIMITED = sin tope. */
+  seats: number;
+  tagline: string;
+  features: string[];
+}
+
+/** seats === este valor ⇒ "ilimitado" (mismo número que usa el worker). */
+export const SEATS_UNLIMITED = 9999;
+/** Días de prueba de los planes pagos. */
+export const BILLING_TRIAL_DAYS = 14;
+
+export const PLANS: Record<PlanId, PlanInfo> = {
+  free: {
+    id: "free",
+    name: "Free",
+    priceArs: 0,
+    seats: 1,
+    tagline: "Para arrancar solo.",
+    features: ["1 asiento", "CRM, ventas y caja completos", "Reportes del negocio"],
+  },
+  pro: {
+    id: "pro",
+    name: "Pro",
+    priceArs: 25000,
+    seats: 3,
+    tagline: "Para un equipo chico.",
+    features: ["3 asientos", "Roles y permisos por miembro", "Todo lo de Free"],
+  },
+  team: {
+    id: "team",
+    name: "Team",
+    priceArs: 60000,
+    seats: SEATS_UNLIMITED,
+    tagline: "Para escalar sin límite.",
+    features: ["Asientos ilimitados", "Soporte prioritario", "Todo lo de Pro"],
+  },
+};
+
+/** Planes pagos, en orden de precio (para upsell). */
+export const PAID_PLAN_IDS: Array<Exclude<PlanId, "free">> = ["pro", "team"];
+
+/** Formatea un monto en ARS para mostrar (sin decimales). */
+export function formatArs(n: number): string {
+  return `$ ${Math.round(n).toLocaleString("es-AR")}`;
 }
 
 /** Tipo de cliente configurable (customer_types). */

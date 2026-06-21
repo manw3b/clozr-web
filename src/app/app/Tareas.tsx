@@ -15,6 +15,7 @@ import {
 } from "@/components/ContextMenu";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
+import { usePermissions } from "@/store/usePermissions";
 import { color, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import type { Task, TaskType } from "@/lib/types";
@@ -31,6 +32,8 @@ type FilterType = "todos" | TaskType;
  */
 export function Tareas() {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canWrite = can("tasks.write");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("pendientes");
@@ -104,9 +107,10 @@ export function Tareas() {
       width: "44px",
       cell: (t) => (
         <button
+          disabled={!canWrite}
           onClick={(e) => {
             e.stopPropagation();
-            toggle(t);
+            if (canWrite) toggle(t);
           }}
           style={{
             width: 20,
@@ -117,7 +121,7 @@ export function Tareas() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            cursor: "pointer",
+            cursor: canWrite ? "pointer" : "default",
           }}
         >
           {t.completed && <Check size={12} color="#fff" strokeWidth={3} />}
@@ -178,17 +182,18 @@ export function Tareas() {
       id: "actions",
       header: "",
       width: "60px",
-      cell: (t) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          iconLeft={<Trash2 size={13} />}
-          onClick={(e) => {
-            e.stopPropagation();
-            remove(t);
-          }}
-        />
-      ),
+      cell: (t) =>
+        canWrite ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            iconLeft={<Trash2 size={13} />}
+            onClick={(e) => {
+              e.stopPropagation();
+              remove(t);
+            }}
+          />
+        ) : null,
     },
   ];
 
@@ -198,9 +203,11 @@ export function Tareas() {
         title="Tareas"
         subtitle={loading ? "Cargando…" : `${filtered.length} de ${tasks.length}`}
         actions={
-          <Button variant="primary" iconLeft={<Plus size={16} />} onClick={() => setOpenForm(true)}>
-            Nueva tarea
-          </Button>
+          canWrite ? (
+            <Button variant="primary" iconLeft={<Plus size={16} />} onClick={() => setOpenForm(true)}>
+              Nueva tarea
+            </Button>
+          ) : undefined
         }
       />
 
@@ -249,7 +256,7 @@ export function Tareas() {
                   : "Probá cambiar los filtros."
               }
               action={
-                tasks.length === 0
+                tasks.length === 0 && canWrite
                   ? { label: "Nueva tarea", onClick: () => setOpenForm(true), iconLeft: <Plus size={14} /> }
                   : undefined
               }
@@ -260,7 +267,7 @@ export function Tareas() {
 
       <NewTaskModal open={openForm} onClose={() => setOpenForm(false)} onCreated={load} />
 
-      {ctxMenu.open && ctxTask && (
+      {canWrite && ctxMenu.open && ctxTask && (
         <ContextMenu position={ctxMenu.position} onClose={ctxMenu.close}>
           <ContextMenuLabel>{ctxTask.title}</ContextMenuLabel>
           <ContextMenuItem

@@ -11,6 +11,7 @@ import { CashSessionChip } from "@/components/CashSessionChip";
 import { CloseCashModal } from "./CloseCashModal";
 import { OpenCashModal } from "./OpenCashModal";
 import { useUIStore } from "@/store/uiStore";
+import { usePermissions } from "@/store/usePermissions";
 import { useUndoableActions } from "@/store/useUndoableActions";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, toLocalISODate } from "@/lib/format";
@@ -48,6 +49,8 @@ function inPeriod(movedAt: string | null | undefined, period: Period): boolean {
  */
 export function Caja() {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canWrite = can("cash.write");
   const [movements, setMovements] = useState<CashMovement[]>([]);
   const [sessions, setSessions] = useState<CashSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,40 +175,42 @@ export function Caja() {
         }
         subtitle="Ingresos y egresos de dinero"
         actions={
-          <>
-            {!todaySession && (
-              <Button variant="primary" iconLeft={<Wallet size={16} />} onClick={() => setOpenOpen(true)}>
-                Abrir caja
+          canWrite ? (
+            <>
+              {!todaySession && (
+                <Button variant="primary" iconLeft={<Wallet size={16} />} onClick={() => setOpenOpen(true)}>
+                  Abrir caja
+                </Button>
+              )}
+              <Button
+                variant="success"
+                iconLeft={<ArrowUpRight size={16} strokeWidth={2.4} />}
+                onClick={() => setForm("income")}
+                disabled={!isOpen}
+                title={!isOpen ? "Abrí la caja para registrar movimientos" : undefined}
+              >
+                Ingreso
               </Button>
-            )}
-            <Button
-              variant="success"
-              iconLeft={<ArrowUpRight size={16} strokeWidth={2.4} />}
-              onClick={() => setForm("income")}
-              disabled={!isOpen}
-              title={!isOpen ? "Abrí la caja para registrar movimientos" : undefined}
-            >
-              Ingreso
-            </Button>
-            <Button
-              variant="danger"
-              iconLeft={<ArrowDownRight size={16} strokeWidth={2.4} />}
-              onClick={() => setForm("expense")}
-              disabled={!isOpen}
-              title={!isOpen ? "Abrí la caja para registrar movimientos" : undefined}
-            >
-              Egreso
-            </Button>
-            {isOpen && (
-              <Button variant="secondary" iconLeft={<Lock size={15} />} onClick={() => setCloseOpen(true)}>
-                Cerrar caja
+              <Button
+                variant="danger"
+                iconLeft={<ArrowDownRight size={16} strokeWidth={2.4} />}
+                onClick={() => setForm("expense")}
+                disabled={!isOpen}
+                title={!isOpen ? "Abrí la caja para registrar movimientos" : undefined}
+              >
+                Egreso
               </Button>
-            )}
-          </>
+              {isOpen && (
+                <Button variant="secondary" iconLeft={<Lock size={15} />} onClick={() => setCloseOpen(true)}>
+                  Cerrar caja
+                </Button>
+              )}
+            </>
+          ) : undefined
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: space[3] }}>
+      <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
         <MetricCard label="Ingresos" value={formatMoney(totals.income)} tone="success" icon={<ArrowUpRight size={16} />} />
         <MetricCard label="Egresos" value={formatMoney(totals.expense)} tone="danger" icon={<ArrowDownRight size={16} />} />
         <MetricCard
@@ -286,7 +291,7 @@ export function Caja() {
                     {isIncome ? "+" : "−"}
                     {formatMoney(m.amount, m.currency)}
                   </span>
-                  <Button variant="ghost" size="sm" iconLeft={<Trash2 size={13} />} onClick={() => remove(m)} />
+                  {canWrite && <Button variant="ghost" size="sm" iconLeft={<Trash2 size={13} />} onClick={() => remove(m)} />}
                 </div>
               );
             })}

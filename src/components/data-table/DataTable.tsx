@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { color, radius, text, weight } from '../../tokens';
+import { useIsMobile } from '../../lib/useIsMobile';
 
 /* ============================================================
  *  Tipos
@@ -75,9 +76,76 @@ export function DataTable<T>({
   empty,
   density = 'normal',
 }: DataTableProps<T>) {
+  const isMobile = useIsMobile();
   const hasSelection = !!selection;
   const allSelected = hasSelection && rows.length > 0 && rows.every((r) => selection.selected.has(getRowId(r)));
   const someSelected = hasSelection && !allSelected && rows.some((r) => selection.selected.has(getRowId(r)));
+
+  // ── Móvil: cada fila como tarjeta (1ª columna = título; resto label/valor;
+  //    columnas sin header = full-width, p.ej. acciones). Genérico para todas
+  //    las tablas (Clientes/Ventas/Tareas/Deudas) sin tocar cada vista.
+  if (isMobile) {
+    if (rows.length === 0) return <>{empty}</>;
+    const headerOf = (c: ColumnDef<T>) =>
+      typeof c.header === 'string' ? c.header.trim() : c.header;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map((row, idx) => {
+          const id = getRowId(row);
+          const isActive = activeRowId === id;
+          return (
+            <div
+              key={id}
+              role="row"
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(row, e) : undefined}
+              style={{
+                background: color.surface,
+                border: `1px solid ${isActive ? color.borderStrong : color.border}`,
+                borderRadius: radius.lg,
+                padding: 14,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                cursor: onRowClick ? 'pointer' : 'default',
+              }}
+            >
+              {columns.map((col, cIdx) => {
+                const content = col.cell(row, idx);
+                if (cIdx === 0) {
+                  // título prominente (nombre/cliente/etc.)
+                  return (
+                    <div key={col.id} style={{ minWidth: 0, fontWeight: weight.semibold }}>
+                      {content}
+                    </div>
+                  );
+                }
+                if (!headerOf(col)) {
+                  // columna sin título (acciones) → full width
+                  return (
+                    <div key={col.id} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {content}
+                    </div>
+                  );
+                }
+                return (
+                  <div
+                    key={col.id}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, minWidth: 0 }}
+                  >
+                    <span style={{ fontSize: text.xs, color: color.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', flexShrink: 0 }}>
+                      {col.header}
+                    </span>
+                    <span style={{ minWidth: 0, textAlign: 'right' }}>{content}</span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   // Construir grid template
   const gridTemplate = [

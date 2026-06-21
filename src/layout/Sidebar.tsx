@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { color, duration, ease, layout, radius, space, text, weight } from '../tokens';
 import { Avatar } from '../components/Avatar';
+import { usePermissions } from '../store/usePermissions';
+import type { Permission } from '../lib/permissions';
 const logoIsotipo = '/logo-isotipo.svg';
 const logoHorizontal = '/logo-horizontal.svg';
 
@@ -24,6 +26,8 @@ export interface SidebarItem {
   label: string;
   icon: LucideIcon;
   badge?: number;
+  /** Si está, el item solo se muestra cuando el rol tiene este permiso. */
+  perm?: Permission;
 }
 
 // F.navigation:
@@ -46,13 +50,13 @@ const SECTIONS: { title?: string; items: SidebarItem[] }[] = [
       { id: 'deudas', label: 'Deudas', icon: Receipt },
       { id: 'inventory', label: 'Inventario', icon: Package },
       { id: 'tasks', label: 'Tareas', icon: CheckSquare },
-      { id: 'reportes', label: 'Reportes', icon: BarChart3 },
+      { id: 'reportes', label: 'Reportes', icon: BarChart3, perm: 'reports.view' },
     ],
   },
   {
     title: 'Configuración',
     items: [
-      { id: 'team', label: 'Equipo', icon: UsersRound },
+      { id: 'team', label: 'Equipo', icon: UsersRound, perm: 'team.manage' },
       { id: 'settings', label: 'Ajustes', icon: Settings },
     ],
   },
@@ -65,9 +69,34 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   user: { name: string; email: string };
   onLogout?: () => void;
+  /** En móvil el sidebar es un drawer off-canvas. */
+  isMobile?: boolean;
+  mobileOpen?: boolean;
+  /** Ids de nav a ocultar por rol (ej. ['cash'] para no-managers). */
+  hiddenNav?: string[];
 }
 
-export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user, onLogout }: SidebarProps) {
+export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user, onLogout, isMobile = false, mobileOpen = false, hiddenNav = [] }: SidebarProps) {
+  const { can } = usePermissions();
+  const sections = SECTIONS
+    .map((section) => ({
+      ...section,
+      // Filtra por permiso (Reportes/Equipo) y por hiddenNav (Caja para no-managers).
+      items: section.items.filter((item) => (!item.perm || can(item.perm)) && !hiddenNav.includes(item.id)),
+    }))
+    .filter((section) => section.items.length > 0);
+  // En móvil: drawer fijo que entra/sale; en desktop: columna normal.
+  const mobileStyle: React.CSSProperties = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    zIndex: 50,
+    width: layout.sidebarW,
+    maxWidth: '85vw',
+    transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+    transition: `transform ${duration.slow} ${ease}`,
+    boxShadow: mobileOpen ? '0 0 40px rgba(0,0,0,0.5)' : 'none',
+  };
   return (
     <aside
       style={{
@@ -80,6 +109,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
         flexDirection: 'column',
         transition: `width ${duration.slow} ${ease}`,
         position: 'relative',
+        ...(isMobile ? mobileStyle : null),
       }}
     >
       {/* Logo + collapse button — alineado con la altura del topbar */}
@@ -113,7 +143,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
         ) : (
           <ClozrLogo collapsed={collapsed} />
         )}
-        {!collapsed && (
+        {!collapsed && !isMobile && (
           <button
             onClick={onToggleCollapse}
             aria-label="Colapsar sidebar"
@@ -141,7 +171,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
           padding: `${space[4]} ${collapsed ? space[2] : space[3]}`,
         }}
       >
-        {SECTIONS.map((section, idx) => (
+        {sections.map((section, idx) => (
           <div key={idx} style={{ marginBottom: space[5] }}>
             {!collapsed && section.title && (
               <div

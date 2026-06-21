@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, ShieldCheck, UserMinus, Mail, RefreshCw, KeyRound, Copy } from "lucide-react";
+import { Plus, ShieldCheck, UserMinus, Mail, RefreshCw, KeyRound, Copy, CreditCard } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -10,16 +10,12 @@ import { EmptyState } from "@/components/EmptyState";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
+import { roleLabel } from "@/lib/permissions";
 import type { Member, User } from "@/lib/types";
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: "Dueño",
-  admin: "Encargado",
-  vendedor: "Vendedor",
-  viewer: "Solo lectura",
-};
+import { PLANS, SEATS_UNLIMITED, type PlanId } from "@/lib/types";
 
 const INVITABLE_ROLES: Array<{ value: "admin" | "vendedor" | "viewer"; label: string; desc: string }> = [
   { value: "admin", label: "Encargado", desc: "Casi todo menos cambios críticos." },
@@ -38,6 +34,7 @@ function errMsg(e: unknown, fallback: string): string {
     cant_modify_self: "No podés cambiar tu propio rol.",
     cant_revoke_self: "No podés expulsarte a vos mismo.",
     workspace_needs_one_owner: "Tiene que haber al menos un Dueño activo.",
+    seat_limit: "Llegaste al límite de asientos de tu plan.",
   };
   return M[code] ?? fallback;
 }
@@ -48,10 +45,14 @@ function errMsg(e: unknown, fallback: string): string {
  * expulsar, generar código de acceso) vía el Worker (api.ts). Reescrita con
  * los componentes de Clozr (Card/Button/Input/Modal/Badge).
  */
-export function Equipo({ user }: { user: User }) {
+export function Equipo({ user, onUpgrade }: { user: User; onUpgrade?: () => void }) {
   const { showToast } = useUIStore();
-  const role = useWorkspaceStore((s) => s.activeWorkspace?.role) ?? "viewer";
-  const canManage = role === "owner" || role === "admin";
+  const { can } = usePermissions();
+  const activeWs = useWorkspaceStore((s) => s.activeWorkspace);
+  const canManage = can("team.manage");
+  const isOwner = can("billing.manage"); // solo el dueño puede mejorar el plan
+  const planId = (activeWs?.plan as PlanId) ?? "free";
+  const seats = activeWs?.seats ?? 1;
 
   const [members, setMembers] = useState<Member[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,6 +63,8 @@ export function Equipo({ user }: { user: User }) {
   const [codeModal, setCodeModal] = useState<
     null | { email: string; code: string; expiresInMin: number; generating?: boolean }
   >(null);
+  // T3: el invite pegó el seat-gate (402). Mostramos un CTA para mejorar el plan.
+  const [seatLimit, setSeatLimit] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -84,6 +87,7 @@ export function Equipo({ user }: { user: User }) {
       return;
     }
     setSubmitting(true);
+    setSeatLimit(false);
     try {
       await api.inviteMember(email, inviteRole);
       showToast(`Invitación enviada a ${email}`, "success");
@@ -91,7 +95,12 @@ export function Equipo({ user }: { user: User }) {
       setShowInvite(false);
       load();
     } catch (e) {
-      showToast(errMsg(e, "No se pudo invitar"), "error");
+      // 402 seat_limit → CTA "mejorá tu plan" en vez de un toast de error.
+      if (e instanceof api.ApiError && e.code === "seat_limit") {
+        setSeatLimit(true);
+      } else {
+        showToast(errMsg(e, "No se pudo invitar"), "error");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -100,7 +109,7 @@ export function Equipo({ user }: { user: User }) {
   async function changeRole(m: Member, newRole: string) {
     try {
       await api.patchMemberRole(m.id, newRole);
-      showToast(`Rol actualizado a ${ROLE_LABELS[newRole] ?? newRole}`, "success");
+      showToast(`Rol actualizado a ${roleLabel(newRole)}`, "success");
       load();
     } catch (e) {
       showToast(errMsg(e, "No se pudo cambiar el rol"), "error");
@@ -177,6 +186,45 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
           </>
         }
       />
+
+      {seatLimit && (
+        <Card padding={4}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: radius.md,
+                flexShrink: 0,
+                background: color.primaryBg,
+                color: color.primary,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <CreditCard size={20} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>
+                Llegaste al límite de asientos
+              </div>
+              <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>
+                Tu plan {PLANS[planId]?.name ?? "actual"} incluye{" "}
+                {seats >= SEATS_UNLIMITED
+                  ? "asientos ilimitados"
+                  : `${seats} ${seats === 1 ? "asiento" : "asientos"}`}
+                . {isOwner ? "Mejorá tu plan para sumar a tu equipo." : "Pedile al dueño que mejore el plan."}
+              </div>
+            </div>
+            {isOwner && onUpgrade && (
+              <Button variant="primary" size="sm" onClick={onUpgrade}>
+                Mejorá tu plan
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
 
       {showInvite && canManage && (
         <Card padding={5}>
@@ -283,7 +331,7 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
                       {isSelf && <span style={{ fontSize: text.xs, color: color.textDim, fontWeight: weight.regular }}>(vos)</span>}
                     </div>
                     <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2, display: "flex", gap: space[2], alignItems: "center" }}>
-                      <strong style={{ color: color.textMuted }}>{ROLE_LABELS[m.role] ?? m.role}</strong>
+                      <strong style={{ color: color.textMuted }}>{roleLabel(m.role)}</strong>
                       {isPending && (
                         <Badge tone="warning" variant="soft" size="sm">
                           <Mail size={10} /> Invitación pendiente

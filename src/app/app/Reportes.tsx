@@ -188,7 +188,7 @@ export function Reportes() {
         subtitle={loading ? "Cargando…" : `${kpis.count} venta${kpis.count === 1 ? "" : "s"} · montos en ARS`}
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: space[3] }}>
+      <div className="cz-metric-grid">
         <MetricCard label="Facturado" value={formatMoney(kpis.facturado)} icon={<DollarSign size={16} />} />
         <MetricCard label="Cobrado" value={formatMoney(kpis.cobrado)} tone="success" icon={<HandCoins size={16} />} />
         <MetricCard
@@ -205,7 +205,7 @@ export function Reportes() {
         <h2 style={{ ...sectionTitle, marginBottom: space[3] }}>
           <Percent size={16} color={color.primary} /> Margen del mes
         </h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: space[3] }}>
+        <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
           <MetricCard label="Facturado (mes)" value={formatMoney(margin.revThis)} icon={<DollarSign size={16} />} />
           <MetricCard
             label="Margen estimado (mes)"

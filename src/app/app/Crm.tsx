@@ -32,6 +32,8 @@ import type {
 import { AppShell } from "@/layout/AppShell";
 import type { NewAction } from "@/layout/Topbar";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { usePermissions } from "@/store/usePermissions";
+import { can as canFor } from "@/lib/permissions";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmHost } from "@/components/ConfirmHost";
 import Toaster from "@/components/Toaster";
@@ -101,6 +103,7 @@ export default function Crm({
   onSwitchWorkspace: (w: Workspace) => void;
   onLogout: () => void;
 }) {
+  const { can } = usePermissions();
   const [view, setView] = useState<View>("home");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,11 +127,14 @@ export default function Crm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const activeWs = useWorkspaceStore((s) => s.activeWorkspace) ?? workspace;
+  // Caja restringida a managers (decisión de producto): ocultamos el item del
+  // sidebar y la vista para vendedor/viewer (el server además devuelve 403).
+  const isManager = activeWs.role === "owner" || activeWs.role === "admin";
 
   function handleNew(action: NewAction) {
-    if (action === "cliente") setModal({ kind: "customer" });
-    else if (action === "venta") setModal({ kind: "sale" });
-    else if (action === "lead") setModal({ kind: "item" });
+    if (action === "cliente") { if (can("customers.write")) setModal({ kind: "customer" }); }
+    else if (action === "venta") { if (can("sales.write")) setModal({ kind: "sale" }); }
+    else if (action === "lead") { if (can("pipeline.write")) setModal({ kind: "item" }); }
     else if (action === "tarea") setView("tasks");
     else flash("Próximamente");
   }
@@ -199,10 +205,12 @@ export default function Crm({
       // lo de atrás). Todos los overlays llevan aria-modal.
       if (document.querySelector('[aria-modal="true"]')) return;
       const k = e.key.toLowerCase();
+      // Permisos en vivo (este efecto corre una sola vez; evitamos closures viejos).
+      const role = useWorkspaceStore.getState().activeWorkspace?.role;
       if (NAV[k]) { e.preventDefault(); setView(NAV[k]); return; }
       if (k === "l") { e.preventDefault(); setView("pipeline"); return; }
-      if (k === "v") { e.preventDefault(); setModal({ kind: "sale" }); return; }
-      if (k === "c") { e.preventDefault(); setModal({ kind: "customer" }); return; }
+      if (k === "v") { e.preventDefault(); if (canFor(role, "sales.write")) setModal({ kind: "sale" }); return; }
+      if (k === "c") { e.preventDefault(); if (canFor(role, "customers.write")) setModal({ kind: "customer" }); return; }
       if (k === "m") { e.preventDefault(); setView("cash"); return; }
       if (k === "t") { e.preventDefault(); setView("tasks"); return; }
     }
@@ -221,6 +229,7 @@ export default function Crm({
         onSearchClick={() => setPaletteOpen(true)}
         onNewAction={handleNew}
         onNotificationClick={(s) => setView(s as View)}
+        hiddenNav={isManager ? undefined : ["cash"]}
       >
         {loading ? (
           <div className="animate-pulse text-text-dim">Cargando datos…</div>
@@ -273,15 +282,30 @@ export default function Crm({
         ) : view === "deudas" ? (
           <Deudas key={activeWs.id} />
         ) : view === "team" ? (
-          <Equipo key={activeWs.id} user={user} />
+          can("team.manage") ? (
+            <Equipo key={activeWs.id} user={user} onUpgrade={() => setView("settings")} />
+          ) : (
+            <EmptyState title="Sin acceso" description="No tenés permisos para gestionar el equipo." />
+          )
         ) : view === "reportes" ? (
-          <Reportes key={activeWs.id} />
+          can("reports.view") ? (
+            <Reportes key={activeWs.id} />
+          ) : (
+            <EmptyState title="Sin acceso" description="Los reportes del negocio son solo para dueños y encargados." />
+          )
         ) : view === "inventory" ? (
           <Inventario key={activeWs.id} />
         ) : view === "settings" ? (
           <Ajustes key={activeWs.id} user={user} onLogout={onLogout} />
         ) : view === "cash" ? (
-          <Caja key={activeWs.id} />
+          isManager ? (
+            <Caja key={activeWs.id} />
+          ) : (
+            <EmptyState
+              title="Caja restringida"
+              description="La caja del negocio es visible solo para el dueño y los encargados."
+            />
+          )
         ) : (
           <EmptyState title="Próximamente" description="Esta vista se está portando desde la app desktop." />
         )}
@@ -304,6 +328,7 @@ export default function Crm({
           onNeedCustomer={() => setModal({ kind: "customer" })}
           onClose={() => setModal(null)}
           onSaved={(msg) => { setModal(null); refreshItems(); flash(msg); window.dispatchEvent(new Event("clozr:item-changed")); }}
+          readOnly={!can("pipeline.write")}
         />
       )}
       {modal?.kind === "sale" && (
@@ -504,6 +529,7 @@ function ItemModal({
   onNeedCustomer,
   onClose,
   onSaved,
+  readOnly = false,
 }: {
   item?: PipelineItem;
   presetStageId?: string;
@@ -512,6 +538,7 @@ function ItemModal({
   onNeedCustomer: () => void;
   onClose: () => void;
   onSaved: (msg: string) => void;
+  readOnly?: boolean;
 }) {
   const [customerId, setCustomerId] = useState(item?.customerId ?? customers[0]?.id ?? "");
   const [product, setProduct] = useState(item?.product ?? "");
@@ -538,6 +565,7 @@ function ItemModal({
   }
 
   async function save() {
+    if (readOnly) return;
     const stage = stages.find((s) => s.id === stageId);
     const cust = customers.find((c) => c.id === customerId);
     if (!stage || !cust) return;
@@ -572,11 +600,11 @@ function ItemModal({
   }
 
   return (
-    <Modal title={item ? "Editar oportunidad" : "Nueva oportunidad"} onClose={onClose}>
+    <Modal title={readOnly ? "Oportunidad" : item ? "Editar oportunidad" : "Nueva oportunidad"} onClose={onClose}>
       <div className="flex flex-col gap-3.5 p-5">
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Cliente *</span>
-          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={fieldCls}>
+          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={fieldCls} disabled={readOnly}>
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -586,16 +614,16 @@ function ItemModal({
         </label>
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Producto / detalle</span>
-          <input value={product} onChange={(e) => setProduct(e.target.value)} className={fieldCls} />
+          <input value={product} onChange={(e) => setProduct(e.target.value)} className={fieldCls} disabled={readOnly} />
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5">
             <span className={labelCls}>Monto</span>
-            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className={fieldCls} />
+            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className={fieldCls} disabled={readOnly} />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className={labelCls}>Moneda</span>
-            <select value={currency} onChange={(e) => setCurrency(e.target.value as Currency)} className={fieldCls}>
+            <select value={currency} onChange={(e) => setCurrency(e.target.value as Currency)} className={fieldCls} disabled={readOnly}>
               <option value="ARS">ARS</option>
               <option value="USD">USD</option>
             </select>
@@ -604,7 +632,7 @@ function ItemModal({
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5">
             <span className={labelCls}>Etapa</span>
-            <select value={stageId} onChange={(e) => setStageId(e.target.value)} className={fieldCls}>
+            <select value={stageId} onChange={(e) => setStageId(e.target.value)} className={fieldCls} disabled={readOnly}>
               {stages.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -614,7 +642,7 @@ function ItemModal({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className={labelCls}>Prioridad</span>
-            <select value={priority} onChange={(e) => setPriority(e.target.value as LeadPriority)} className={fieldCls}>
+            <select value={priority} onChange={(e) => setPriority(e.target.value as LeadPriority)} className={fieldCls} disabled={readOnly}>
               {PRIORITIES.map((p) => (
                 <option key={p} value={p}>
                   {PRIORITY_LABELS[p]}
@@ -625,7 +653,7 @@ function ItemModal({
         </div>
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Origen</span>
-          <select value={source} onChange={(e) => setSource(e.target.value as LeadSource)} className={fieldCls}>
+          <select value={source} onChange={(e) => setSource(e.target.value as LeadSource)} className={fieldCls} disabled={readOnly}>
             {SOURCES.map((s) => (
               <option key={s} value={s}>
                 {SOURCE_LABELS[s]}
@@ -635,7 +663,7 @@ function ItemModal({
         </label>
       </div>
       <div className="flex items-center gap-2.5 border-t border-border px-5 py-4">
-        {item && (
+        {item && !readOnly && (
           <button
             onClick={remove}
             disabled={busy}
@@ -646,15 +674,17 @@ function ItemModal({
         )}
         <div className="flex-1" />
         <button onClick={onClose} className="rounded-lg bg-surface-2 px-3.5 py-2 text-sm font-semibold hover:bg-border-strong">
-          Cancelar
+          {readOnly ? "Cerrar" : "Cancelar"}
         </button>
-        <button
-          onClick={save}
-          disabled={busy}
-          className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50"
-        >
-          Guardar
-        </button>
+        {!readOnly && (
+          <button
+            onClick={save}
+            disabled={busy}
+            className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50"
+          >
+            Guardar
+          </button>
+        )}
       </div>
     </Modal>
   );

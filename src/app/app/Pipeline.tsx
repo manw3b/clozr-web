@@ -45,6 +45,8 @@ import { confirmAsync } from "@/lib/confirmAsync";
 import { useUndoableActions } from "@/store/useUndoableActions";
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import { useUIStore } from "@/store/uiStore";
+import { usePermissions } from "@/store/usePermissions";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
@@ -110,6 +112,11 @@ export function Pipeline({
   onConvertItem: (item: PipelineItem) => void;
 }) {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const isMobile = useIsMobile();
+  const canWrite = can("pipeline.write");
+  // En móvil: columnas ~85vw con scroll-snap (se desliza una etapa a la vez).
+  const colWidth = isMobile ? "min(85vw, 320px)" : `${COL_WIDTH}px`;
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -285,21 +292,23 @@ export function Pipeline({
         subtitle={
           loading
             ? "Cargando…"
-            : `${totalCount} ${totalCount === 1 ? "oportunidad" : "oportunidades"} · arrastrá las tarjetas entre etapas`
+            : `${totalCount} ${totalCount === 1 ? "oportunidad" : "oportunidades"} · ${isMobile ? "deslizá entre etapas" : "arrastrá las tarjetas entre etapas"}`
         }
         actions={
-          <Button
-            variant="primary"
-            size="md"
-            iconLeft={<Plus size={16} />}
-            onClick={() => onAddItem(stages[0]?.id ?? "")}
-          >
-            Nueva oportunidad
-          </Button>
+          canWrite ? (
+            <Button
+              variant="primary"
+              size="md"
+              iconLeft={<Plus size={16} />}
+              onClick={() => onAddItem(stages[0]?.id ?? "")}
+            >
+              Nueva oportunidad
+            </Button>
+          ) : undefined
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: space[3] }}>
+      <div className="cz-metric-grid">
         <MetricCard label="Oportunidades abiertas" value={String(metrics.open)} />
         <MetricCard label="Pipeline (ARS)" value={formatMoney(metrics.pipelineArs)} />
         <MetricCard label="Ganados" value={String(metrics.won)} tone="success" />
@@ -337,6 +346,7 @@ export function Pipeline({
           onDragCancel={() => setActiveId(null)}
         >
           <div
+            className={isMobile ? "cz-noscrollbar" : undefined}
             style={{
               flex: 1,
               minHeight: 0,
@@ -345,6 +355,7 @@ export function Pipeline({
               gap: space[3],
               overflowX: "auto",
               paddingBottom: space[3],
+              scrollSnapType: isMobile ? "x mandatory" : undefined,
             }}
           >
             {stages.map((stage) => {
@@ -358,12 +369,14 @@ export function Pipeline({
                   stage={stage}
                   count={colItems.length}
                   totalAmount={ars}
-                  onAdd={() => onAddItem(stage.id)}
+                  onAdd={canWrite ? () => onAddItem(stage.id) : undefined}
+                  width={colWidth}
+                  snap={isMobile}
                 >
                   {colItems.length === 0 ? (
                     <ColumnEmpty
                       isTerminal={stage.isWon || stage.isLost}
-                      onAdd={() => onAddItem(stage.id)}
+                      onAdd={canWrite ? () => onAddItem(stage.id) : undefined}
                     />
                   ) : (
                     colItems.map((item) => (
@@ -372,7 +385,8 @@ export function Pipeline({
                         item={item}
                         dimmed={activeId === item.id}
                         phone={phoneOf(item)}
-                        canConvert={!(stage.isWon || stage.isLost)}
+                        canConvert={canWrite && !(stage.isWon || stage.isLost)}
+                        canDrag={canWrite}
                         onClick={() => onOpenItem(item.id)}
                         onConvert={() => onConvertItem(item)}
                         onContextMenu={(e) => {
@@ -409,7 +423,7 @@ export function Pipeline({
           >
             Abrir
           </ContextMenuItem>
-          {!isTerminal(ctxItem) && (
+          {canWrite && !isTerminal(ctxItem) && (
             <ContextMenuItem
               icon={<DollarSign size={14} />}
               onClick={() => {
@@ -445,6 +459,7 @@ export function Pipeline({
               </ContextMenuItem>
             </>
           )}
+          {canWrite && <>
           <ContextMenuDivider />
           {moveOptions.length > 0 && (
             <ContextMenuSub label="Mover a etapa" icon={<ArrowRight size={14} />}>
@@ -498,6 +513,7 @@ export function Pipeline({
           >
             Eliminar
           </ContextMenuItem>
+          </>}
         </ContextMenu>
       )}
     </div>
@@ -513,12 +529,16 @@ function Column({
   totalAmount,
   onAdd,
   children,
+  width = `${COL_WIDTH}px`,
+  snap = false,
 }: {
   stage: PipelineStage;
   count: number;
   totalAmount: number;
-  onAdd: () => void;
+  onAdd?: () => void;
   children: React.ReactNode;
+  width?: string;
+  snap?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const isTerminal = stage.isWon || stage.isLost;
@@ -534,9 +554,10 @@ function Column({
         borderBottom: `1px solid ${isOver ? stage.color : color.border}`,
         borderLeft: `1px solid ${isOver ? stage.color : color.border}`,
         borderRadius: radius.lg,
-        width: COL_WIDTH,
-        minWidth: COL_WIDTH,
-        flex: `0 0 ${COL_WIDTH}px`,
+        width,
+        minWidth: width,
+        flex: `0 0 ${width}`,
+        scrollSnapAlign: snap ? "start" : undefined,
         height: "100%",
         overflow: "hidden",
         transition: "border-color 160ms, background 160ms",
@@ -599,7 +620,7 @@ function Column({
         >
           {count}
         </span>
-        {!isTerminal && (
+        {!isTerminal && onAdd && (
           <button
             onClick={onAdd}
             aria-label={`Agregar oportunidad a ${stage.name}`}
@@ -637,8 +658,8 @@ function Column({
   );
 }
 
-function ColumnEmpty({ isTerminal, onAdd }: { isTerminal: boolean; onAdd: () => void }) {
-  if (isTerminal) {
+function ColumnEmpty({ isTerminal, onAdd }: { isTerminal: boolean; onAdd?: () => void }) {
+  if (isTerminal || !onAdd) {
     return (
       <div
         style={{
@@ -705,6 +726,7 @@ function DraggableCard({
   dimmed,
   phone,
   canConvert,
+  canDrag,
   onClick,
   onConvert,
   onContextMenu,
@@ -713,11 +735,12 @@ function DraggableCard({
   dimmed: boolean;
   phone?: string;
   canConvert: boolean;
+  canDrag: boolean;
   onClick: () => void;
   onConvert: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
-  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id: item.id });
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id: item.id, disabled: !canDrag });
   return (
     <LeadCardView
       ref={setNodeRef}
@@ -728,7 +751,7 @@ function DraggableCard({
       onClick={onClick}
       onConvert={onConvert}
       onContextMenu={onContextMenu}
-      dragHandleProps={{ ...listeners, ...attributes }}
+      dragHandleProps={canDrag ? { ...listeners, ...attributes } : undefined}
     />
   );
 }
