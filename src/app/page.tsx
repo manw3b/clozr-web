@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Users, Workflow, Wallet, Package, Sparkles, BarChart3, ShoppingCart,
   MessageCircle, UserPlus, ShieldCheck, Layers, ArrowRight, Check, Zap, Rocket,
+  Mail, ListTodo, MoreHorizontal,
 } from "lucide-react";
 
 /* Tipo mínimo para los íconos de Lucide (evita depender del nombre del type exportado). */
@@ -52,50 +53,63 @@ function SiteNav() {
   );
 }
 
-/* ════════════ Hero: composición tipo sistema operativo ════════════ */
+/* ════════════ Hero: escena tipo sistema operativo + software financiero ════════════ */
 const NAV_MOCK: { label: string; Icon: IconType; active?: boolean }[] = [
-  { label: "Mi día", Icon: Sparkles },
+  { label: "Resumen", Icon: BarChart3, active: true },
+  { label: "Pipeline", Icon: Workflow },
   { label: "Clientes", Icon: Users },
-  { label: "Pipeline", Icon: Workflow, active: true },
   { label: "Ventas", Icon: ShoppingCart },
   { label: "Caja", Icon: Wallet },
   { label: "Inventario", Icon: Package },
-  { label: "Reportes", Icon: BarChart3 },
 ];
 
-const KANBAN: { title: string; tone: string; cards: { name: string; sub: string; amount: string }[] }[] = [
-  {
-    title: "Contactado", tone: "#3B82F6",
-    cards: [
-      { name: "Sofía R.", sub: "Consulta", amount: "$120.000" },
-      { name: "Local Centro", sub: "Mayorista", amount: "$80.000" },
-    ],
-  },
-  {
-    title: "Negociando", tone: "#E11D48",
-    cards: [
-      { name: "Martín G.", sub: "Presupuesto", amount: "$320.000" },
-      { name: "Belén A.", sub: "Reposición", amount: "$540.000" },
-    ],
-  },
-  {
-    title: "Cerrado", tone: "#10B981",
-    cards: [{ name: "Carla P.", sub: "Pagado", amount: "$210.000" }],
-  },
+const METRICS: { label: string; value: string; delta: string }[] = [
+  { label: "Ventas", value: "$98.540.000", delta: "+28%" },
+  { label: "Nuevos clientes", value: "124", delta: "+18%" },
+  { label: "Oportunidades", value: "32", delta: "+12%" },
+  { label: "Ticket promedio", value: "$306.700", delta: "+8%" },
 ];
+
+const STAGES: { n: string; c: string; rows: number }[] = [
+  { n: "Contacto", c: "12", rows: 2 },
+  { n: "Calificación", c: "8", rows: 2 },
+  { n: "Propuesta", c: "6", rows: 2 },
+  { n: "Negociación", c: "4", rows: 1 },
+  { n: "Cierre", c: "2", rows: 1 },
+];
+
+const DOCK: { label: string; Icon: IconType }[] = [
+  { label: "WhatsApp", Icon: MessageCircle },
+  { label: "Email", Icon: Mail },
+  { label: "Tareas", Icon: ListTodo },
+  { label: "Reportes", Icon: BarChart3 },
+  { label: "Más", Icon: MoreHorizontal },
+];
+
+/* Mini sparkline reutilizable. */
+function Spark({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 120 30" className={className} fill="none" preserveAspectRatio="none" aria-hidden>
+      <polyline
+        points="0,24 16,20 30,23 46,13 62,17 80,8 98,12 120,4"
+        stroke="#E11D48" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.85"
+      />
+    </svg>
+  );
+}
 
 function HeroWindow() {
   return (
     <div className="relative mx-auto mt-16 max-w-5xl px-2 sm:px-0">
-      {/* halo rojo detrás de la ventana */}
+      {/* halo rojo + piso reflectante */}
       <div
-        className="pointer-events-none absolute -inset-x-10 -top-10 bottom-0 -z-10 opacity-70"
+        className="pointer-events-none absolute -inset-x-16 -top-12 bottom-0 -z-10 opacity-80"
         style={{ background: "radial-gradient(60% 50% at 50% 0%, rgba(225,29,72,0.16), transparent 70%)" }}
       />
+      <div className="lp-floor pointer-events-none absolute -bottom-12 left-1/2 -z-10 hidden h-24 w-[78%] -translate-x-1/2 xl:block" />
 
-      {/* Ventana principal (OS) */}
-      <div className="lp-glass lp-shadow lp-glow overflow-hidden rounded-2xl">
-        {/* Barra de título */}
+      {/* Ventana principal — "Resumen del negocio" */}
+      <div className="lp-glass lp-shadow lp-glow relative overflow-hidden rounded-2xl">
         <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
           <div className="flex gap-1.5">
             <span className="h-3 w-3 rounded-full bg-[#ff5f57]/80" />
@@ -110,8 +124,7 @@ function HeroWindow() {
           </div>
         </div>
 
-        {/* Cuerpo: rail + contenido */}
-        <div className="grid grid-cols-1 md:grid-cols-[180px_1fr]">
+        <div className="grid grid-cols-1 md:grid-cols-[170px_1fr]">
           {/* Rail lateral */}
           <aside className="hidden flex-col gap-1 border-r border-white/10 p-3 md:flex">
             {NAV_MOCK.map(({ label, Icon, active }) => (
@@ -127,65 +140,107 @@ function HeroWindow() {
             ))}
           </aside>
 
-          {/* Contenido: mini pipeline */}
-          <div className="p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-white">Pipeline</h3>
-              <div className="flex gap-2 text-[11px]">
-                {[["Hoy", "$420.000"], ["Abiertos", "12"], ["Por cerrar", "3"]].map(([k, v]) => (
-                  <div key={k} className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1">
-                    <span className="text-white/40">{k} </span>
-                    <span className="font-semibold text-white/80">{v}</span>
+          {/* Contenido */}
+          <div className="p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-white">Resumen del negocio</h3>
+
+            {/* Métricas */}
+            <div className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+              {METRICS.map((m) => (
+                <div key={m.label} className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                  <div className="text-[10px] text-white/40">{m.label}</div>
+                  <div className="mt-1 text-[15px] font-bold text-white">{m.value}</div>
+                  <div className="text-[10px] font-medium text-[#10B981]">
+                    {m.delta} <span className="text-white/30">vs mes ant.</span>
+                  </div>
+                  <Spark className="mt-1.5 h-5 w-full" />
+                </div>
+              ))}
+            </div>
+
+            {/* Pipeline */}
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[12px] font-medium text-white/70">Pipeline de ventas</span>
+                <span className="hidden text-[10px] text-white/30 sm:inline">$ 98.4M en juego</span>
+              </div>
+              <div className="cz-noscrollbar -mx-1 flex gap-2 overflow-x-auto px-1">
+                {STAGES.map((s) => (
+                  <div key={s.n} className="min-w-[104px] flex-1 rounded-xl border border-white/8 bg-white/[0.02] p-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="whitespace-nowrap text-[10px] font-medium text-white/60">{s.n}</span>
+                      <span className="text-[9px] text-white/30">{s.c}</span>
+                    </div>
+                    <div className="mt-2 space-y-1.5">
+                      {Array.from({ length: s.rows }).map((_, r) => (
+                        <div key={r} className="h-7 rounded-md border border-white/10 bg-white/[0.04]" />
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              {KANBAN.map((col) => (
-                <div key={col.title} className="rounded-xl border border-white/8 bg-white/[0.02] p-2.5">
-                  <div className="mb-2 flex items-center gap-1.5 px-1">
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: col.tone }} />
-                    <span className="text-[11px] font-medium text-white/55">{col.title}</span>
-                    <span className="ml-auto text-[10px] text-white/30">{col.cards.length}</span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {col.cards.map((c) => (
-                      <div key={c.name} className="rounded-lg border border-white/10 bg-white/[0.04] p-2.5">
-                        <div className="text-[11px] font-medium text-white/85">{c.name}</div>
-                        <div className="mt-0.5 flex items-center justify-between">
-                          <span className="text-[10px] text-white/35">{c.sub}</span>
-                          <span className="text-[10px] font-semibold text-white/70">{c.amount}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Cards flotantes (solo desktop, para no romper en móvil) */}
-      <div className="lp-glass lp-float absolute -right-6 top-16 hidden items-center gap-3 rounded-xl px-4 py-3 lg:flex">
-        <span className="grid h-9 w-9 place-items-center rounded-lg bg-[#10B981]/15 text-[#10B981]">
-          <Check size={18} strokeWidth={2} />
-        </span>
-        <div>
-          <div className="text-xs font-semibold text-white">Venta cerrada</div>
-          <div className="text-[11px] text-[#10B981]">+ $85.000</div>
+      {/* ── Paneles flotantes (solo ≥xl, donde hay aire para que no rompan) ── */}
+      {/* Clientes (izquierda) */}
+      <div className="lp-glass lp-float lp-platform absolute -left-12 top-24 hidden w-56 rounded-xl p-3.5 xl:block">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-white">Clientes</span>
+          <span className="text-[10px] text-primary">512</span>
+        </div>
+        <div className="mt-3 flex flex-col gap-2.5">
+          {[["Distribuidora Norte", "Distribución"], ["Grupo Casarino", "Construcción"], ["Retail Express", "Retail"]].map(
+            ([n, r]) => (
+              <div key={n} className="flex items-center gap-2.5">
+                <span className="h-7 w-7 shrink-0 rounded-full bg-primary/15" />
+                <div className="min-w-0">
+                  <div className="truncate text-[11px] font-medium text-white/85">{n}</div>
+                  <div className="text-[10px] text-white/35">{r}</div>
+                </div>
+              </div>
+            ),
+          )}
         </div>
       </div>
 
-      <div className="lp-glass lp-float-2 absolute -left-8 bottom-12 hidden items-center gap-3 rounded-xl px-4 py-3 lg:flex">
-        <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-          <Sparkles size={18} strokeWidth={1.8} />
-        </span>
-        <div>
-          <div className="text-xs font-semibold text-white">Clozr de noche</div>
-          <div className="text-[11px] text-white/45">3 seguimientos listos</div>
+      {/* Caja (derecha arriba) */}
+      <div className="lp-glass lp-float-2 absolute -right-12 top-12 hidden w-52 rounded-xl p-3.5 xl:block">
+        <span className="text-xs font-semibold text-white">Caja</span>
+        <div className="mt-2 text-[10px] text-white/40">Saldo disponible</div>
+        <div className="text-lg font-bold text-white">$ 34.850.000</div>
+        <div className="text-[10px] font-medium text-[#10B981]">+15% vs mes ant.</div>
+        <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2 text-[10px]">
+          <span className="text-[#10B981]">↑ Ingresos</span>
+          <span className="text-white/60">$ 4.250.000</span>
         </div>
+      </div>
+
+      {/* IA (derecha abajo) */}
+      <div className="lp-glass lp-glow lp-float absolute -right-6 -bottom-2 hidden w-56 rounded-xl p-3.5 xl:block">
+        <div className="flex items-center gap-2">
+          <Sparkles size={14} strokeWidth={1.8} className="text-primary" />
+          <span className="text-xs font-semibold text-white">IA de Clozr</span>
+          <span className="ml-auto rounded bg-primary/15 px-1.5 py-0.5 text-[9px] text-primary">Beta</span>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-white/55">
+          Detecté 3 oportunidades con alta probabilidad de cierre esta semana.
+        </p>
+        <div className="mt-2.5 rounded-md bg-primary/15 py-1.5 text-center text-[10px] font-semibold text-primary">
+          Ver oportunidades
+        </div>
+      </div>
+
+      {/* Dock flotante */}
+      <div className="lp-glass absolute -bottom-7 left-1/2 hidden -translate-x-1/2 items-end gap-1 rounded-2xl px-2.5 py-2 xl:flex">
+        {DOCK.map(({ label, Icon }) => (
+          <div key={label} className="group flex w-14 flex-col items-center gap-1 rounded-xl px-1 py-1.5 transition-colors hover:bg-white/5">
+            <Icon size={18} strokeWidth={1.8} className="text-white/70 transition-colors group-hover:text-primary" />
+            <span className="text-[9px] text-white/40">{label}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -307,28 +362,47 @@ function ConnectedSection() {
         {/* Diagrama radial (desktop ≥lg, donde la columna tiene ancho para 460px) */}
         <div className="hidden justify-center lg:flex">
           <div className="relative" style={{ width: HUB_SIZE, height: HUB_SIZE }}>
+            {/* Campo de partículas / red detrás */}
+            <div className="lp-particles pointer-events-none absolute -inset-10" aria-hidden />
+
             <svg
               viewBox={`0 0 ${HUB_SIZE} ${HUB_SIZE}`}
               width={HUB_SIZE}
               height={HUB_SIZE}
-              className="absolute inset-0"
+              className="absolute inset-0 overflow-visible"
               fill="none"
             >
+              {/* Conexiones: base tenue + trazo rojo con glow y flujo */}
               {SATELLITES.map((s) => (
                 <g key={s.label}>
-                  <line x1={HUB_C} y1={HUB_C} x2={s.x} y2={s.y} stroke="rgba(255,255,255,0.10)" strokeWidth={1} />
+                  <line x1={HUB_C} y1={HUB_C} x2={s.x} y2={s.y} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
                   <line
                     x1={HUB_C} y1={HUB_C} x2={s.x} y2={s.y}
-                    stroke="rgba(225,29,72,0.5)" strokeWidth={1} className="lp-dash"
+                    stroke="rgba(225,29,72,0.55)" strokeWidth={1.25} className="lp-glow-line lp-dash"
                   />
                 </g>
               ))}
+              {/* Nodos en el punto medio de cada conexión (●──●──●) */}
+              {SATELLITES.map((s) => (
+                <circle
+                  key={`m-${s.label}`}
+                  cx={(HUB_C + s.x) / 2}
+                  cy={(HUB_C + s.y) / 2}
+                  r={3}
+                  className="lp-node-soft"
+                />
+              ))}
+              {/* Nodos luminosos en cada módulo + en el centro */}
+              {SATELLITES.map((s) => (
+                <circle key={`n-${s.label}`} cx={s.x} cy={s.y} r={4} className="lp-node" />
+              ))}
+              <circle cx={HUB_C} cy={HUB_C} r={5} className="lp-node" />
             </svg>
 
             {/* Hub central */}
             <div
               className="lp-glass lp-glow absolute grid h-24 w-24 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full"
-              style={{ left: HUB_C, top: HUB_C, borderColor: "rgba(225,29,72,0.35)" }}
+              style={{ left: HUB_C, top: HUB_C, borderColor: "rgba(225,29,72,0.4)" }}
             >
               <div className="grid place-items-center text-center">
                 <Layers size={22} strokeWidth={1.8} className="text-primary" />
@@ -336,18 +410,18 @@ function ConnectedSection() {
               </div>
             </div>
 
-            {/* Satélites */}
+            {/* Satélites sobre plataformas de glow */}
             {SATELLITES.map((s) => (
               <div
                 key={s.label}
                 className="absolute -translate-x-1/2 -translate-y-1/2"
                 style={{ left: s.x, top: s.y }}
               >
-                <div className="flex flex-col items-center gap-1.5">
-                  <div className="lp-glass grid h-14 w-14 place-items-center rounded-2xl text-white/80">
-                    <s.Icon size={20} strokeWidth={1.8} />
+                <div className="flex flex-col items-center gap-2">
+                  <div className="lp-glass lp-platform grid h-16 w-16 place-items-center rounded-2xl text-primary">
+                    <s.Icon size={22} strokeWidth={1.8} />
                   </div>
-                  <span className="text-[11px] text-white/55">{s.label}</span>
+                  <span className="text-[11px] font-medium text-white/60">{s.label}</span>
                 </div>
               </div>
             ))}

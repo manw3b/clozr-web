@@ -745,6 +745,41 @@ tr.hoverable:hover td {
   animation: lp-sweep 3.4s linear infinite;
 }
 
+/* Campo de partículas / red — atmósfera de nodos detrás de las composiciones. */
+.lp-particles {
+  background-image:
+    radial-gradient(rgba(225, 29, 72, 0.10) 1px, transparent 1.6px),
+    radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1.6px);
+  background-size: 48px 48px, 30px 30px;
+  background-position: 0 0, 14px 20px;
+  mask-image: radial-gradient(75% 75% at 50% 45%, #000 35%, transparent 80%);
+  -webkit-mask-image: radial-gradient(75% 75% at 50% 45%, #000 35%, transparent 80%);
+}
+/* Plataforma de glow (elipse) bajo una card flotante — efecto "holograma apoyado". */
+.lp-platform { position: relative; }
+.lp-platform::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -12px;
+  width: 124%;
+  height: 44px;
+  transform: translateX(-50%);
+  background: radial-gradient(50% 100% at 50% 0%, rgba(225, 29, 72, 0.30), transparent 72%);
+  filter: blur(10px);
+  pointer-events: none;
+  z-index: -1;
+}
+/* Líneas SVG con glow rojo + nodos luminosos. */
+.lp-glow-line { filter: drop-shadow(0 0 3px rgba(225, 29, 72, 0.55)); }
+.lp-node { fill: #e11d48; filter: drop-shadow(0 0 5px rgba(225, 29, 72, 0.95)); }
+.lp-node-soft { fill: rgba(225, 29, 72, 0.85); filter: drop-shadow(0 0 4px rgba(225, 29, 72, 0.7)); }
+/* Piso reflectante bajo el hero (glow rojo difuso). */
+.lp-floor {
+  background: radial-gradient(60% 100% at 50% 0%, rgba(225, 29, 72, 0.18), transparent 70%);
+  filter: blur(6px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lp-rise, .lp-float, .lp-float-2, .lp-pulse, .lp-dash, .lp-flowline { animation: none; }
 }
