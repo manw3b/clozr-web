@@ -1261,3 +1261,56 @@ export async function redeemCode(code: string): Promise<RedeemResult> {
     discountValue: r.discount_value,
   };
 }
+
+/* ---------- Consola: panel de cuentas (workspaces) ---------- */
+export interface ConsoleWorkspace {
+  id: string;
+  name: string;
+  plan: string;
+  seats: number;
+  planStatus: string;
+  createdAt: string | null;
+  /** Vencimiento de licencia gratis (Consola). null = sin licencia. */
+  licenseExpiresAt: string | null;
+  /** Id de suscripción Mercado Pago. Si está, es pago real (no licencia). */
+  mpPreapprovalId: string | null;
+  ownerEmail: string | null;
+  ownerName: string | null;
+  memberCount: number;
+}
+interface ConsoleWorkspaceRaw {
+  id: string;
+  name: string;
+  plan?: string | null;
+  seats?: number | null;
+  plan_status?: string | null;
+  created_at?: string | null;
+  license_expires_at?: string | null;
+  mp_preapproval_id?: string | null;
+  owner_email?: string | null;
+  owner_name?: string | null;
+  member_count?: number | null;
+}
+export interface ConsoleWorkspacesResult {
+  items: ConsoleWorkspace[];
+  totalUsers: number;
+}
+export async function listConsoleWorkspaces(): Promise<ConsoleWorkspacesResult> {
+  const data = await req<{ items: ConsoleWorkspaceRaw[]; total_users?: number }>("/console/workspaces");
+  return {
+    totalUsers: Number(data.total_users ?? 0),
+    items: (data.items ?? []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      plan: r.plan ?? "free",
+      seats: Number(r.seats ?? 1),
+      planStatus: r.plan_status ?? "active",
+      createdAt: r.created_at ?? null,
+      licenseExpiresAt: r.license_expires_at ?? null,
+      mpPreapprovalId: r.mp_preapproval_id ?? null,
+      ownerEmail: r.owner_email ?? null,
+      ownerName: r.owner_name ?? null,
+      memberCount: Number(r.member_count ?? 0),
+    })),
+  };
+}
