@@ -100,7 +100,8 @@ function Spark({ className = "" }: { className?: string }) {
 
 function HeroWindow() {
   return (
-    <div className="relative mx-auto mt-16 max-w-5xl px-2 sm:px-0">
+    <div className="lp-scene-wrap">
+    <div className="lp-scene relative mx-auto mt-16 max-w-5xl px-2 sm:px-0">
       {/* halo rojo + piso reflectante */}
       <div
         className="pointer-events-none absolute -inset-x-16 -top-12 bottom-0 -z-10 opacity-80"
@@ -186,7 +187,7 @@ function HeroWindow() {
 
       {/* ── Paneles flotantes (solo ≥xl, donde hay aire para que no rompan) ── */}
       {/* Clientes (izquierda) */}
-      <div className="lp-glass lp-float lp-platform absolute -left-12 top-24 hidden w-56 rounded-xl p-3.5 xl:block">
+      <div className="lp-glass lp-pop lp-platform absolute -left-12 top-24 hidden w-56 rounded-xl p-3.5 xl:block">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-white">Clientes</span>
           <span className="text-[10px] text-primary">512</span>
@@ -207,7 +208,7 @@ function HeroWindow() {
       </div>
 
       {/* Caja (derecha arriba) */}
-      <div className="lp-glass lp-float-2 absolute -right-12 top-12 hidden w-52 rounded-xl p-3.5 xl:block">
+      <div className="lp-glass lp-pop-2 absolute -right-12 top-12 hidden w-52 rounded-xl p-3.5 xl:block">
         <span className="text-xs font-semibold text-white">Caja</span>
         <div className="mt-2 text-[10px] text-white/40">Saldo disponible</div>
         <div className="text-lg font-bold text-white">$ 34.850.000</div>
@@ -219,7 +220,7 @@ function HeroWindow() {
       </div>
 
       {/* IA (derecha abajo) */}
-      <div className="lp-glass lp-glow lp-float absolute -right-6 -bottom-2 hidden w-56 rounded-xl p-3.5 xl:block">
+      <div className="lp-glass lp-glow lp-pop absolute -right-6 -bottom-2 hidden w-56 rounded-xl p-3.5 xl:block">
         <div className="flex items-center gap-2">
           <Sparkles size={14} strokeWidth={1.8} className="text-primary" />
           <span className="text-xs font-semibold text-white">IA de Clozr</span>
@@ -242,6 +243,7 @@ function HeroWindow() {
           </div>
         ))}
       </div>
+    </div>
     </div>
   );
 }
