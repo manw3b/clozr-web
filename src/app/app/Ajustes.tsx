@@ -390,6 +390,14 @@ function PlanCard() {
     }
   }
 
+  // Re-hidrata el workspaceStore con /me (tras cambiar empleados) para que el
+  // plan/asientos se reflejen al instante en toda la app.
+  async function refreshWs() {
+    const me = await api.fetchMe();
+    const active = me.workspaces.find((w) => w.id === ws?.id) ?? me.workspaces[0] ?? null;
+    useWorkspaceStore.setState({ workspaces: me.workspaces, activeWorkspace: active });
+  }
+
   return (
     <Card padding={5}>
       <SectionTitle>Plan y facturación</SectionTitle>
@@ -416,6 +424,7 @@ function PlanCard() {
             blueRate={blueRate}
             busy={busy === id}
             onUpgrade={(extra) => upgrade(id as "pro" | "team", extra)}
+            onSeatsSaved={refreshWs}
           />
         ))}
       </div>
@@ -447,6 +456,7 @@ function PlanTier({
   blueRate,
   busy,
   onUpgrade,
+  onSeatsSaved,
 }: {
   plan: PlanInfo;
   isCurrent: boolean;
@@ -458,6 +468,7 @@ function PlanTier({
   blueRate: number | null;
   busy: boolean;
   onUpgrade: (extraSeats: number) => void;
+  onSeatsSaved: () => Promise<void>;
 }) {
   const Icon = TIER_ICON[plan.id];
   const isUpgrade = plan.priceUsd > currentPriceUsd;
@@ -525,7 +536,7 @@ function PlanTier({
           <div style={{ fontSize: text.xs, color: color.textDim }}>{arsApprox(plan.priceUsd)} hoy</div>
         )}
         <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>{plan.tagline}</div>
-        {isCurrent && plan.id !== "free" && (
+        {isCurrent && plan.id !== "free" && !isOwner && (
           <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: space[1] }}>
             {currentSeats} empleados{currentExtra > 0 ? ` (${plan.seats} incl. + ${currentExtra} extra)` : ""}
           </div>
@@ -560,6 +571,17 @@ function PlanTier({
         </div>
       )}
 
+      {/* Gestión de empleados sobre el plan ACTIVO (dueño) */}
+      {isCurrent && plan.id !== "free" && isOwner && (
+        <CurrentSeatsManager
+          baseSeats={plan.seats}
+          currentExtra={currentExtra}
+          planUsd={plan.priceUsd}
+          blueRate={blueRate}
+          onSaved={onSeatsSaved}
+        />
+      )}
+
       {/* CTA al fondo */}
       <div style={{ marginTop: "auto", paddingTop: space[2] }}>
         {isCurrent ? (
@@ -590,6 +612,72 @@ function PlanTier({
           </Button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** Editor de empleados extra sobre un plan ACTIVO (F2). Cambia el monto en MP
+ *  vía el endpoint y refresca el store. Si MP pide re-autorización, avisa. */
+function CurrentSeatsManager({
+  baseSeats,
+  currentExtra,
+  planUsd,
+  blueRate,
+  onSaved,
+}: {
+  baseSeats: number;
+  currentExtra: number;
+  planUsd: number;
+  blueRate: number | null;
+  onSaved: () => Promise<void>;
+}) {
+  const showToast = useUIStore((s) => s.showToast);
+  const [extra, setExtra] = useState(currentExtra);
+  const [busy, setBusy] = useState(false);
+  const changed = extra !== currentExtra;
+  const totalUsd = planUsd + extra * EXTRA_SEAT_USD;
+  const arsApprox = blueRate ? `≈ ${formatArs(totalUsd * blueRate)}` : null;
+
+  async function save() {
+    setBusy(true);
+    try {
+      await api.updateSeats(extra);
+      await onSaved();
+      showToast("Empleados actualizados", "success");
+    } catch (e) {
+      const code = e instanceof api.ApiError ? e.code : "";
+      showToast(
+        code === "needs_recheckout"
+          ? "Mercado Pago necesita re-autorizar el nuevo monto. Por ahora cambialo re-suscribiéndote desde el plan."
+          : code === "exchange_unavailable"
+            ? "No pudimos obtener la cotización del dólar. Probá de nuevo."
+            : code === "plan_not_active" || code === "no_subscription"
+              ? "Tu suscripción no está activa."
+              : "No pudimos actualizar los empleados.",
+        "error",
+      );
+      setExtra(currentExtra); // revertir el stepper al valor real
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ borderTop: `1px solid ${color.border}`, paddingTop: space[3], display: "flex", flexDirection: "column", gap: space[2] }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2] }}>
+        <span style={{ display: "flex", alignItems: "center", gap: space[1], fontSize: text.xs, color: color.textMuted }}>
+          <Users size={13} /> Empleados extra
+        </span>
+        <Stepper value={extra} onChange={setExtra} min={0} max={50} />
+      </div>
+      <div style={{ fontSize: text.xs, color: color.textDim }}>
+        {baseSeats + extra} empleados en total · {formatUsd(totalUsd)}/mes{arsApprox ? ` · ${arsApprox}` : ""}
+      </div>
+      {changed && (
+        <Button variant="secondary" size="sm" fullWidth loading={busy} onClick={save}>
+          Actualizar empleados
+        </Button>
+      )}
     </div>
   );
 }
