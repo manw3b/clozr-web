@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Plus, Trash2, LogOut, Upload, Trophy, XCircle, Check, Zap, Rocket, Sparkles, Gift } from "lucide-react";
+import { Plus, Trash2, LogOut, Upload, Trophy, XCircle, Check, Zap, Rocket, Sparkles, Gift, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -13,8 +13,10 @@ import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import { roleLabel } from "@/lib/permissions";
 import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage } from "@/lib/types";
-import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, formatArs, type PlanId, type PlanInfo } from "@/lib/types";
+import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, formatArs, formatUsd, type PlanId, type PlanInfo } from "@/lib/types";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { fetchDolares } from "@/lib/dolar";
+import { Stepper } from "@/components/Stepper";
 
 /**
  * Vista Ajustes — config del workspace con backend real (worker):
@@ -349,24 +351,39 @@ function PlanCard() {
   const planId = (ws?.plan as PlanId) ?? "free";
   const current = PLANS[planId] ?? PLANS.free;
   const status = ws?.planStatus ?? "active";
+  const currentSeats = ws?.seats ?? current.seats;
   const [busy, setBusy] = useState<PlanId | null>(null);
 
-  // El próximo escalón pago: lo destacamos como "Recomendado".
-  const recommendedId = PAID_PLAN_IDS.find((p) => PLANS[p].priceArs > current.priceArs) ?? null;
+  // Dólar blue para mostrar el equivalente en ARS (referencia visual; el cobro
+  // real lo calcula el Worker server-side con la misma fuente).
+  const [blueRate, setBlueRate] = useState<number | null>(null);
+  useEffect(() => {
+    fetchDolares()
+      .then((rates) => {
+        const blue = rates.find((r) => r.casa === "blue") ?? rates[0];
+        if (blue?.venta) setBlueRate(blue.venta);
+      })
+      .catch(() => {});
+  }, []);
 
-  async function upgrade(target: "pro" | "team") {
+  // El próximo escalón pago: lo destacamos como "Recomendado".
+  const recommendedId = PAID_PLAN_IDS.find((p) => PLANS[p].priceUsd > current.priceUsd) ?? null;
+
+  async function upgrade(target: "pro" | "team", extraSeats: number) {
     setBusy(target);
     try {
-      const { initPoint } = await api.createBillingCheckout(target);
+      const { initPoint } = await api.createBillingCheckout(target, extraSeats);
       window.location.assign(initPoint); // → checkout de Mercado Pago
     } catch (e) {
       const code = e instanceof api.ApiError ? e.code : "";
       showToast(
         code === "forbidden"
           ? "Solo el dueño puede cambiar el plan."
-          : code === "billing_unavailable"
-            ? "El cobro no está disponible en este momento."
-            : "No pudimos iniciar el pago. Probá de nuevo.",
+          : code === "exchange_unavailable"
+            ? "No pudimos obtener la cotización del dólar. Probá de nuevo."
+            : code === "billing_unavailable"
+              ? "El cobro no está disponible en este momento."
+              : "No pudimos iniciar el pago. Probá de nuevo.",
         "error",
       );
       setBusy(null);
@@ -392,18 +409,20 @@ function PlanCard() {
             plan={PLANS[id]}
             isCurrent={id === planId}
             isRecommended={id === recommendedId}
-            currentPrice={current.priceArs}
+            currentPriceUsd={current.priceUsd}
+            currentSeats={currentSeats}
             currentStatus={status}
             isOwner={!!isOwner}
+            blueRate={blueRate}
             busy={busy === id}
-            onUpgrade={() => upgrade(id as "pro" | "team")}
+            onUpgrade={(extra) => upgrade(id as "pro" | "team", extra)}
           />
         ))}
       </div>
 
       <div style={{ marginTop: space[3] }}>
         {isOwner && recommendedId && (
-          <Hint>Pago mensual por Mercado Pago · {BILLING_TRIAL_DAYS} días de prueba · cancelás cuando quieras.</Hint>
+          <Hint>Precios en USD, se cobran en ARS al dólar blue · {BILLING_TRIAL_DAYS} días de prueba · cancelás cuando quieras.</Hint>
         )}
         {isOwner && !recommendedId && (
           <Hint>Estás en el plan máximo. ¡Gracias por bancar Clozr! 🙌</Hint>
@@ -421,25 +440,36 @@ function PlanTier({
   plan,
   isCurrent,
   isRecommended,
-  currentPrice,
+  currentPriceUsd,
+  currentSeats,
   currentStatus,
   isOwner,
+  blueRate,
   busy,
   onUpgrade,
 }: {
   plan: PlanInfo;
   isCurrent: boolean;
   isRecommended: boolean;
-  currentPrice: number;
+  currentPriceUsd: number;
+  currentSeats: number;
   currentStatus: string;
   isOwner: boolean;
+  blueRate: number | null;
   busy: boolean;
-  onUpgrade: () => void;
+  onUpgrade: (extraSeats: number) => void;
 }) {
   const Icon = TIER_ICON[plan.id];
-  const isUpgrade = plan.priceArs > currentPrice;
-  const isLower = plan.priceArs < currentPrice;
+  const isUpgrade = plan.priceUsd > currentPriceUsd;
+  const isLower = plan.priceUsd < currentPriceUsd;
   const accent = isCurrent || isRecommended;
+  const canBuy = isUpgrade && isOwner;
+
+  const [extraSeats, setExtraSeats] = useState(0);
+  const totalUsd = plan.priceUsd + extraSeats * EXTRA_SEAT_USD;
+  const arsApprox = (usd: number) => (blueRate ? `≈ ${formatArs(usd * blueRate)}` : null);
+  // Desglose de asientos del plan actual (incluidos + extra comprados).
+  const currentExtra = Math.max(0, currentSeats - plan.seats);
 
   return (
     <div
@@ -487,11 +517,19 @@ function PlanTier({
       <div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
           <span style={{ fontSize: text.xl, fontWeight: weight.bold, color: color.text }}>
-            {plan.priceArs > 0 ? formatArs(plan.priceArs) : "Gratis"}
+            {plan.priceUsd > 0 ? formatUsd(plan.priceUsd) : "Gratis"}
           </span>
-          {plan.priceArs > 0 && <span style={{ fontSize: text.xs, color: color.textDim }}>/mes</span>}
+          {plan.priceUsd > 0 && <span style={{ fontSize: text.xs, color: color.textDim }}>/mes</span>}
         </div>
+        {plan.priceUsd > 0 && arsApprox(plan.priceUsd) && (
+          <div style={{ fontSize: text.xs, color: color.textDim }}>{arsApprox(plan.priceUsd)} hoy</div>
+        )}
         <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>{plan.tagline}</div>
+        {isCurrent && plan.id !== "free" && (
+          <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: space[1] }}>
+            {currentSeats} empleados{currentExtra > 0 ? ` (${plan.seats} incl. + ${currentExtra} extra)` : ""}
+          </div>
+        )}
       </div>
 
       {/* Features */}
@@ -507,6 +545,21 @@ function PlanTier({
         ))}
       </div>
 
+      {/* Empleados extra (solo al comprar/upgradear, dueño) */}
+      {canBuy && (
+        <div style={{ borderTop: `1px solid ${color.border}`, paddingTop: space[3], display: "flex", flexDirection: "column", gap: space[2] }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2] }}>
+            <span style={{ display: "flex", alignItems: "center", gap: space[1], fontSize: text.xs, color: color.textMuted }}>
+              <Users size={13} /> Empleados extra
+            </span>
+            <Stepper value={extraSeats} onChange={setExtraSeats} min={0} max={50} />
+          </div>
+          <div style={{ fontSize: text.xs, color: color.textDim }}>
+            +{formatUsd(EXTRA_SEAT_USD)}/mes c/u · {plan.seats + extraSeats} empleados en total
+          </div>
+        </div>
+      )}
+
       {/* CTA al fondo */}
       <div style={{ marginTop: "auto", paddingTop: space[2] }}>
         {isCurrent ? (
@@ -520,10 +573,17 @@ function PlanTier({
               </div>
             )}
           </>
-        ) : isUpgrade && isOwner ? (
-          <Button variant="primary" size="sm" fullWidth loading={busy} onClick={onUpgrade}>
-            Mejorar
-          </Button>
+        ) : canBuy ? (
+          <>
+            <Button variant="primary" size="sm" fullWidth loading={busy} onClick={() => onUpgrade(extraSeats)}>
+              Mejorar{extraSeats > 0 ? ` — ${formatUsd(totalUsd)}/mes` : ""}
+            </Button>
+            {extraSeats > 0 && arsApprox(totalUsd) && (
+              <div style={{ fontSize: text.xs, color: color.textDim, marginTop: space[1], textAlign: "center" }}>
+                {arsApprox(totalUsd)} hoy
+              </div>
+            )}
+          </>
         ) : isLower ? (
           <Button variant="ghost" size="sm" fullWidth disabled>
             Incluido
