@@ -319,115 +319,125 @@ function FlowSection() {
   );
 }
 
-/* ════════════ Todo conectado (hub-spoke) ════════════ */
-const HUB_SIZE = 460;
-const HUB_R = 166;
-const HUB_C = HUB_SIZE / 2;
-const SATELLITES: { label: string; Icon: IconType; x: number; y: number }[] = (
-  [
-    { label: "Clientes", Icon: Users },
-    { label: "Ventas", Icon: ShoppingCart },
-    { label: "Inventario", Icon: Package },
-    { label: "Caja", Icon: Wallet },
-    { label: "Equipo", Icon: ShieldCheck },
-    { label: "IA", Icon: Sparkles },
-  ] as { label: string; Icon: IconType }[]
-).map((s, i) => {
-  const a = ((-90 + i * 60) * Math.PI) / 180;
-  return { ...s, x: HUB_C + HUB_R * Math.cos(a), y: HUB_C + HUB_R * Math.sin(a) };
-});
+/* ════════════ Todo conectado (sistema de nodos en grilla) ════════════ */
+const BOX_W = 760;
+const BOX_H = 560;
+const HUB = { x: 380, y: 290, w: 158, h: 104 };
+const NODE_CARDS: {
+  id: string; title: string; sub: string; stat: string; unit: string; delta: string; Icon: IconType; x: number; y: number;
+}[] = [
+  { id: "clientes", title: "Clientes", sub: "Tu cartera ordenada", stat: "1.250", unit: "activos", delta: "+18%", Icon: Users, x: 150, y: 86 },
+  { id: "ventas", title: "Ventas", sub: "Pipeline que avanza", stat: "32", unit: "oportunidades", delta: "+24%", Icon: ShoppingCart, x: 380, y: 86 },
+  { id: "equipo", title: "Equipo", sub: "Tu equipo alineado", stat: "48", unit: "tareas hoy", delta: "+16%", Icon: ShieldCheck, x: 610, y: 86 },
+  { id: "inventario", title: "Inventario", sub: "Stock en tiempo real", stat: "1.847", unit: "productos", delta: "+3%", Icon: Package, x: 250, y: 478 },
+  { id: "ia", title: "IA de Clozr", sub: "Inteligencia que vende", stat: "7", unit: "cierres probables", delta: "+35%", Icon: Sparkles, x: 510, y: 478 },
+];
+/* Conexiones ortogonales (●──●──●) entre el hub y las tarjetas. */
+const NODE_SEG: [number, number, number, number][] = [
+  [150, 160, 150, 205], [380, 160, 380, 205], [610, 160, 610, 205], // bajadas (fila superior → bus)
+  [150, 205, 610, 205],                                             // bus superior
+  [380, 205, 380, 238],                                             // hub ↔ bus superior
+  [380, 342, 380, 375],                                             // hub ↔ bus inferior
+  [250, 375, 510, 375],                                             // bus inferior
+  [250, 375, 250, 400], [510, 375, 510, 400],                       // subidas (bus → fila inferior)
+];
+const NODE_DOTS: [number, number][] = [
+  [150, 205], [380, 205], [610, 205], [380, 238], [380, 342], [250, 375], [510, 375],
+];
+
+function NodeCard({ title, sub, stat, unit, delta, Icon }: {
+  title: string; sub: string; stat: string; unit: string; delta: string; Icon: IconType;
+}) {
+  return (
+    <div className="lp-glass lp-platform lp-lift w-full rounded-2xl p-4">
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+          <Icon size={18} strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-white">{title}</div>
+          <div className="truncate text-[10px] text-white/40">{sub}</div>
+        </div>
+      </div>
+      <div className="mt-3 flex items-end justify-between">
+        <div>
+          <div className="text-xl font-bold leading-none text-white">{stat}</div>
+          <div className="mt-1 text-[10px] text-white/40">{unit}</div>
+        </div>
+        <span className="text-[10px] font-medium text-[#10B981]">{delta}</span>
+      </div>
+      <Spark className="mt-2.5 h-5 w-full" />
+    </div>
+  );
+}
 
 function ConnectedSection() {
   return (
     <section id="ecosistema" className="mx-auto max-w-6xl px-6 py-28">
-      <div className="grid items-center gap-14 lg:grid-cols-2">
-        <div>
-          <SectionKicker>El ecosistema</SectionKicker>
-          <h2 className="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">
-            No son módulos sueltos.
-            <br />
-            Es un solo sistema.
-          </h2>
-          <p className="mt-5 max-w-md text-white/50">
-            Clientes, ventas, inventario, caja, equipo e IA comparten la misma información.
-            Cargás un dato una vez y vive en todo tu negocio — sin exportar, sin duplicar, sin planillas.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-2">
-            {SATELLITES.map((s) => (
-              <span key={s.label} className="lp-glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm text-white/65">
-                <s.Icon size={14} strokeWidth={1.8} className="text-primary" /> {s.label}
-              </span>
+      <div className="text-center">
+        <SectionKicker>El ecosistema</SectionKicker>
+        <h2 className="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">
+          No son módulos sueltos. Es un solo sistema.
+        </h2>
+        <p className="mx-auto mt-4 max-w-xl text-white/50">
+          Clientes, ventas, equipo, inventario e IA comparten la misma información.
+          Cargás un dato una vez y vive en todo tu negocio — sin exportar, sin duplicar, sin planillas.
+        </p>
+      </div>
+
+      {/* Composición de nodos (desktop ≥lg) */}
+      <div className="mt-16 hidden justify-center lg:flex">
+        <div className="relative" style={{ width: BOX_W, height: BOX_H }}>
+          {/* Campo de partículas / red */}
+          <div className="lp-particles pointer-events-none absolute -inset-16" aria-hidden />
+
+          {/* Conexiones + nodos luminosos */}
+          <svg viewBox={`0 0 ${BOX_W} ${BOX_H}`} width={BOX_W} height={BOX_H} className="absolute inset-0 overflow-visible" fill="none">
+            {NODE_SEG.map(([x1, y1, x2, y2], i) => (
+              <line key={`b${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
             ))}
+            {NODE_SEG.map(([x1, y1, x2, y2], i) => (
+              <line key={`g${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(225,29,72,0.55)" strokeWidth={1.25} className="lp-glow-line lp-dash" />
+            ))}
+            {NODE_DOTS.map(([cx, cy], i) => (
+              <circle key={`d${i}`} cx={cx} cy={cy} r={3.5} className="lp-node" />
+            ))}
+          </svg>
+
+          {/* Tarjetas-stat */}
+          {NODE_CARDS.map((n) => (
+            <div key={n.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: n.x, top: n.y, width: 196 }}>
+              <NodeCard {...n} />
+            </div>
+          ))}
+
+          {/* Hub central */}
+          <div
+            className="lp-glass lp-glow absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-2xl"
+            style={{ left: HUB.x, top: HUB.y, width: HUB.w, height: HUB.h, borderColor: "rgba(225,29,72,0.45)" }}
+          >
+            <div className="text-center">
+              <span className="mx-auto grid h-9 w-9 place-items-center rounded-xl bg-primary/15 text-primary">
+                <Layers size={18} strokeWidth={1.8} />
+              </span>
+              <div className="mt-1.5 text-sm font-bold text-white">Clozr</div>
+              <div className="text-[10px] text-white/40">Tu negocio, conectado</div>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Diagrama radial (desktop ≥lg, donde la columna tiene ancho para 460px) */}
-        <div className="hidden justify-center lg:flex">
-          <div className="relative" style={{ width: HUB_SIZE, height: HUB_SIZE }}>
-            {/* Campo de partículas / red detrás */}
-            <div className="lp-particles pointer-events-none absolute -inset-10" aria-hidden />
-
-            <svg
-              viewBox={`0 0 ${HUB_SIZE} ${HUB_SIZE}`}
-              width={HUB_SIZE}
-              height={HUB_SIZE}
-              className="absolute inset-0 overflow-visible"
-              fill="none"
-            >
-              {/* Conexiones: base tenue + trazo rojo con glow y flujo */}
-              {SATELLITES.map((s) => (
-                <g key={s.label}>
-                  <line x1={HUB_C} y1={HUB_C} x2={s.x} y2={s.y} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
-                  <line
-                    x1={HUB_C} y1={HUB_C} x2={s.x} y2={s.y}
-                    stroke="rgba(225,29,72,0.55)" strokeWidth={1.25} className="lp-glow-line lp-dash"
-                  />
-                </g>
-              ))}
-              {/* Nodos en el punto medio de cada conexión (●──●──●) */}
-              {SATELLITES.map((s) => (
-                <circle
-                  key={`m-${s.label}`}
-                  cx={(HUB_C + s.x) / 2}
-                  cy={(HUB_C + s.y) / 2}
-                  r={3}
-                  className="lp-node-soft"
-                />
-              ))}
-              {/* Nodos luminosos en cada módulo + en el centro */}
-              {SATELLITES.map((s) => (
-                <circle key={`n-${s.label}`} cx={s.x} cy={s.y} r={4} className="lp-node" />
-              ))}
-              <circle cx={HUB_C} cy={HUB_C} r={5} className="lp-node" />
-            </svg>
-
-            {/* Hub central */}
-            <div
-              className="lp-glass lp-glow absolute grid h-24 w-24 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full"
-              style={{ left: HUB_C, top: HUB_C, borderColor: "rgba(225,29,72,0.4)" }}
-            >
-              <div className="grid place-items-center text-center">
-                <Layers size={22} strokeWidth={1.8} className="text-primary" />
-                <span className="mt-1 text-[11px] font-semibold tracking-wide text-white">Clozr</span>
-              </div>
-            </div>
-
-            {/* Satélites sobre plataformas de glow */}
-            {SATELLITES.map((s) => (
-              <div
-                key={s.label}
-                className="absolute -translate-x-1/2 -translate-y-1/2"
-                style={{ left: s.x, top: s.y }}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <div className="lp-glass lp-platform grid h-16 w-16 place-items-center rounded-2xl text-primary">
-                    <s.Icon size={22} strokeWidth={1.8} />
-                  </div>
-                  <span className="text-[11px] font-medium text-white/60">{s.label}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Fallback mobile: hub + grilla simple */}
+      <div className="mt-12 lg:hidden">
+        <div className="lp-glass lp-glow mx-auto mb-4 flex max-w-xs items-center justify-center gap-2 rounded-2xl px-4 py-3">
+          <Layers size={16} strokeWidth={1.8} className="text-primary" />
+          <span className="text-sm font-bold text-white">Clozr</span>
+          <span className="text-xs text-white/40">· Tu negocio, conectado</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {NODE_CARDS.map((n) => (
+            <NodeCard key={n.id} {...n} />
+          ))}
         </div>
       </div>
     </section>
