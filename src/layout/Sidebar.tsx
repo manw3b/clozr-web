@@ -10,6 +10,7 @@ import {
   UsersRound,
   Receipt,
   BarChart3,
+  ShieldCheck,
   ChevronLeft,
   LogOut,
   type LucideIcon,
@@ -58,6 +59,16 @@ const SECTIONS: { title?: string; items: SidebarItem[] }[] = [
     items: [
       { id: 'team', label: 'Equipo', icon: UsersRound, perm: 'team.manage' },
       { id: 'settings', label: 'Ajustes', icon: Settings },
+    ],
+  },
+  // Consola Clozr (super-admin de la plataforma). El item NO se gatea por
+  // `perm` (que son permisos de workspace) sino que el caller lo agrega a
+  // `hiddenNav` cuando el usuario no es super-admin. El acceso real lo
+  // enforcea el Worker en /console/* — esto es solo visibilidad.
+  {
+    title: 'Plataforma',
+    items: [
+      { id: 'console', label: 'Consola', icon: ShieldCheck },
     ],
   },
 ];

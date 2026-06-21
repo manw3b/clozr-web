@@ -101,7 +101,7 @@ export async function verifyCode(email: string, code: string): Promise<string> {
 
 /* ---------- me / workspaces ---------- */
 interface MeRaw {
-  user: { id: string; email: string; name: string | null; plan: string };
+  user: { id: string; email: string; name: string | null; plan: string; is_superadmin?: boolean };
   workspaces: Array<{
     id: string;
     name: string;
@@ -120,7 +120,13 @@ interface MeRaw {
 export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }> {
   const r = await req<MeRaw>("/me");
   return {
-    user: { id: r.user.id, email: r.user.email, name: r.user.name, plan: r.user.plan },
+    user: {
+      id: r.user.id,
+      email: r.user.email,
+      name: r.user.name,
+      plan: r.user.plan,
+      isSuperAdmin: !!r.user.is_superadmin,
+    },
     workspaces: (r.workspaces ?? []).map((w) => ({
       id: w.id,
       name: w.name,
@@ -1125,4 +1131,133 @@ export async function closeCashSession(
     },
   );
   return mapCashSession(data.session);
+}
+
+/* ---------- Consola Clozr: códigos (super-admin) + canje (owner) ---------- */
+export type ConsoleCodeKind = "license" | "discount";
+export type DiscountType = "percent" | "amount";
+
+export interface ConsoleCode {
+  id: string;
+  code: string;
+  kind: ConsoleCodeKind;
+  plan: string | null;
+  durationDays: number | null;
+  discountType: DiscountType | null;
+  discountValue: number | null;
+  maxUses: number | null;
+  uses: number;
+  expiresAt: string | null;
+  note: string | null;
+  createdAt: string | null;
+  disabledAt: string | null;
+}
+interface ConsoleCodeRaw {
+  id: string;
+  code: string;
+  kind: string;
+  plan?: string | null;
+  duration_days?: number | null;
+  discount_type?: string | null;
+  discount_value?: number | null;
+  max_uses?: number | null;
+  uses?: number | null;
+  expires_at?: string | null;
+  note?: string | null;
+  created_at?: string | null;
+  disabled_at?: string | null;
+}
+function mapConsoleCode(r: ConsoleCodeRaw): ConsoleCode {
+  return {
+    id: r.id,
+    code: r.code,
+    kind: r.kind === "discount" ? "discount" : "license",
+    plan: r.plan ?? null,
+    durationDays: r.duration_days != null ? Number(r.duration_days) : null,
+    discountType: (r.discount_type as DiscountType | null) ?? null,
+    discountValue: r.discount_value != null ? Number(r.discount_value) : null,
+    maxUses: r.max_uses != null ? Number(r.max_uses) : null,
+    uses: Number(r.uses ?? 0),
+    expiresAt: r.expires_at ?? null,
+    note: r.note ?? null,
+    createdAt: r.created_at ?? null,
+    disabledAt: r.disabled_at ?? null,
+  };
+}
+
+export async function listConsoleCodes(): Promise<ConsoleCode[]> {
+  const data = await req<{ items: ConsoleCodeRaw[] }>("/console/codes");
+  return (data.items ?? []).map(mapConsoleCode);
+}
+
+export interface NewConsoleCodeInput {
+  kind: ConsoleCodeKind;
+  plan?: "pro" | "team";
+  durationDays?: number | null;
+  discountType?: DiscountType;
+  discountValue?: number;
+  maxUses?: number | null;
+  expiresAt?: string | null;
+  note?: string | null;
+  /** Código custom opcional; si no se manda, el Worker genera uno. */
+  code?: string;
+}
+export async function createConsoleCode(input: NewConsoleCodeInput): Promise<ConsoleCode> {
+  const body: Record<string, unknown> = { kind: input.kind };
+  if (input.plan !== undefined) body.plan = input.plan;
+  if (input.durationDays != null) body.duration_days = input.durationDays;
+  if (input.discountType !== undefined) body.discount_type = input.discountType;
+  if (input.discountValue !== undefined) body.discount_value = input.discountValue;
+  if (input.maxUses != null) body.max_uses = input.maxUses;
+  if (input.expiresAt) body.expires_at = input.expiresAt;
+  if (input.note) body.note = input.note;
+  if (input.code) body.code = input.code;
+  const r = await req<{ code: ConsoleCodeRaw }>("/console/codes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return mapConsoleCode(r.code);
+}
+
+export async function updateConsoleCode(
+  id: string,
+  patch: { disabled?: boolean; note?: string | null; maxUses?: number | null; expiresAt?: string | null },
+): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (patch.disabled !== undefined) body.disabled = patch.disabled;
+  if (patch.note !== undefined) body.note = patch.note;
+  if (patch.maxUses !== undefined) body.max_uses = patch.maxUses;
+  if (patch.expiresAt !== undefined) body.expires_at = patch.expiresAt;
+  await req(`/console/codes/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export interface RedeemResult {
+  kind: ConsoleCodeKind;
+  plan?: string;
+  seats?: number;
+  licenseExpiresAt?: string | null;
+  discountType?: DiscountType;
+  discountValue?: number;
+}
+/** Canje de un código en el workspace activo (lo pega el dueño). */
+export async function redeemCode(code: string): Promise<RedeemResult> {
+  const r = await req<{
+    kind: string;
+    plan?: string;
+    seats?: number;
+    license_expires_at?: string | null;
+    discount_type?: string;
+    discount_value?: number;
+  }>(`/workspaces/${ws()}/redeem-code`, {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+  return {
+    kind: r.kind === "discount" ? "discount" : "license",
+    plan: r.plan,
+    seats: r.seats,
+    licenseExpiresAt: r.license_expires_at ?? null,
+    discountType: r.discount_type as DiscountType | undefined,
+    discountValue: r.discount_value,
+  };
 }

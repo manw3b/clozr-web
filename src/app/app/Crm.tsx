@@ -45,6 +45,7 @@ import { Inventario } from "./Inventario";
 import { MiDia } from "./MiDia";
 import { Ajustes } from "./Ajustes";
 import { Caja } from "./Caja";
+import { Consola } from "./Consola";
 import { CommandPalette } from "./CommandPalette";
 import { Clientes as ClientesView } from "./Clientes";
 import { Ventas as VentasView } from "./Ventas";
@@ -88,7 +89,8 @@ type View =
   | "tasks"
   | "reportes"
   | "team"
-  | "settings";
+  | "settings"
+  | "console";
 
 
 export default function Crm({
@@ -130,6 +132,12 @@ export default function Crm({
   // Caja restringida a managers (decisión de producto): ocultamos el item del
   // sidebar y la vista para vendedor/viewer (el server además devuelve 403).
   const isManager = activeWs.role === "owner" || activeWs.role === "admin";
+  // Items de nav ocultos: Caja para no-managers; Consola para no-super-admin.
+  // El acceso real lo enforcea el Worker (403); esto es solo visibilidad.
+  const hiddenNav = [
+    ...(isManager ? [] : ["cash"]),
+    ...(user.isSuperAdmin ? [] : ["console"]),
+  ];
 
   function handleNew(action: NewAction) {
     if (action === "cliente") { if (can("customers.write")) setModal({ kind: "customer" }); }
@@ -229,7 +237,7 @@ export default function Crm({
         onSearchClick={() => setPaletteOpen(true)}
         onNewAction={handleNew}
         onNotificationClick={(s) => setView(s as View)}
-        hiddenNav={isManager ? undefined : ["cash"]}
+        hiddenNav={hiddenNav.length ? hiddenNav : undefined}
       >
         {loading ? (
           <div className="animate-pulse text-text-dim">Cargando datos…</div>
@@ -297,6 +305,12 @@ export default function Crm({
           <Inventario key={activeWs.id} />
         ) : view === "settings" ? (
           <Ajustes key={activeWs.id} user={user} onLogout={onLogout} />
+        ) : view === "console" ? (
+          user.isSuperAdmin ? (
+            <Consola />
+          ) : (
+            <EmptyState title="Sin acceso" description="La Consola es solo para administradores de la plataforma." />
+          )
         ) : view === "cash" ? (
           isManager ? (
             <Caja key={activeWs.id} />
