@@ -850,7 +850,7 @@ function CatalogLineInput({
   }
 
   return (
-    <div ref={boxRef} className="relative flex-1">
+    <div ref={boxRef} className="relative flex-1 min-w-0">
       <input
         ref={inputRef}
         value={value}
@@ -1267,14 +1267,16 @@ function SaleModal({
                     min="1"
                     value={l.quantity}
                     onChange={(e) => setLine(i, { quantity: e.target.value })}
-                    className={`${fieldCls} w-14`}
+                    className={fieldCls}
+                    style={{ width: 56, flexShrink: 0 }}
                   />
                   <input
                     type="number"
                     value={l.unitPrice}
                     onChange={(e) => setLine(i, { unitPrice: e.target.value, priceAuto: false })}
                     placeholder="Precio"
-                    className={`${fieldCls} w-24`}
+                    className={fieldCls}
+                    style={{ width: 104, flexShrink: 0 }}
                   />
                   <button
                     onClick={() => removeLine(i)}
@@ -1293,8 +1295,8 @@ function SaleModal({
                       onChange={(e) => setLine(i, { imei: e.target.value })}
                       placeholder="IMEI / N° de serie (opcional)"
                       autoComplete="off"
-                      className={`${fieldCls} w-56`}
-                      style={{ fontSize: 12, padding: "6px 10px" }}
+                      className={fieldCls}
+                      style={{ fontSize: 12, padding: "6px 10px", width: 224, flexShrink: 0 }}
                     />
                   </div>
                 )}
