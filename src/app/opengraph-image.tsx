@@ -33,7 +33,7 @@ export default function Image() {
 
         {/* Partículas */}
         {PARTICLES.map((p, i) => (
-          <div key={i} style={{ position: "absolute", left: `${p.x}%`, top: `${p.y}%`, width: p.s, height: p.s, borderRadius: p.s, background: `rgba(244,63,94,${p.o})` }} />
+          <div key={i} style={{ position: "absolute", left: `${p.x}%`, top: `${p.y}%`, width: p.s, height: p.s, borderRadius: p.s, background: `rgba(255,59,107,${p.o})` }} />
         ))}
 
         {/* ── Izquierda: tipografía ── */}
@@ -41,7 +41,7 @@ export default function Image() {
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", flexDirection: "column", fontSize: 68, fontWeight: 800, lineHeight: 1.05, letterSpacing: -1.6 }}>
               <div style={{ display: "flex" }}>Dejá el Excel.</div>
-              <div style={{ display: "flex", color: "#F43F5E" }}>Cerrá más ventas.</div>
+              <div style={{ display: "flex", color: "#FF3B6B" }}>Cerrá más ventas.</div>
             </div>
             <div style={{ display: "flex", marginTop: 26, fontSize: 27, color: "rgba(255,255,255,0.6)" }}>
               El sistema operativo para tu negocio.
@@ -54,7 +54,7 @@ export default function Image() {
               <div style={{ display: "flex", fontSize: 31, fontWeight: 700, letterSpacing: -0.5 }}>Clozr</div>
             </div>
             <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 9, fontSize: 18, color: "rgba(255,255,255,0.45)" }}>
-              <div style={{ display: "flex", width: 16, height: 16, borderRadius: 16, border: "1.5px solid rgba(244,63,94,0.85)", backgroundImage: "radial-gradient(circle at 34% 30%, rgba(244,63,94,0.55), transparent 70%)" }} />
+              <div style={{ display: "flex", width: 16, height: 16, borderRadius: 16, border: "1.5px solid rgba(255,59,107,0.85)", backgroundImage: "radial-gradient(circle at 34% 30%, rgba(255,59,107,0.55), transparent 70%)" }} />
               <div style={{ display: "flex" }}>Hecho para negocios de LATAM</div>
             </div>
           </div>
@@ -79,11 +79,11 @@ export default function Image() {
             <div style={{ display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", fontSize: 13, color: "rgba(255,255,255,0.4)" }}>Ventas del mes</div>
               <div style={{ display: "flex", fontSize: 36, fontWeight: 800, letterSpacing: -1, marginTop: 4 }}>$98.540.000</div>
-              <div style={{ display: "flex", fontSize: 14, color: "#34D399", marginTop: 2 }}>+28% vs mes anterior</div>
+              <div style={{ display: "flex", fontSize: 14, color: "#22C55E", marginTop: 2 }}>+28% vs mes anterior</div>
             </div>
             <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-end", gap: 7, height: 66 }}>
               {BARS.map((h, i) => (
-                <div key={i} style={{ display: "flex", width: 13, height: h, borderRadius: 4, background: "linear-gradient(180deg, #F43F5E, rgba(244,63,94,0.35))" }} />
+                <div key={i} style={{ display: "flex", width: 13, height: h, borderRadius: 4, background: "linear-gradient(180deg, #FF3B6B, rgba(255,59,107,0.35))" }} />
               ))}
             </div>
             <div style={{ display: "flex", flexDirection: "row", gap: 10 }}>

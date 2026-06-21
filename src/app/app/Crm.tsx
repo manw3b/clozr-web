@@ -1492,7 +1492,7 @@ function SaleDetailModal({
               </div>
               <div className="mt-1 flex justify-between border-t border-border pt-1">
                 <span className="text-text-muted">Saldo</span>
-                <span className={`font-bold ${sale.balance > 0.01 ? "text-warning" : "text-[#10B981]"}`}>
+                <span className={`font-bold ${sale.balance > 0.01 ? "text-warning" : "text-success"}`}>
                   {money(sale.balance, "ARS")}
                 </span>
               </div>
