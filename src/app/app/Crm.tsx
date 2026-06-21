@@ -124,6 +124,9 @@ export default function Crm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const activeWs = useWorkspaceStore((s) => s.activeWorkspace) ?? workspace;
+  // Caja restringida a managers (decisión de producto): ocultamos el item del
+  // sidebar y la vista para vendedor/viewer (el server además devuelve 403).
+  const isManager = activeWs.role === "owner" || activeWs.role === "admin";
 
   function handleNew(action: NewAction) {
     if (action === "cliente") setModal({ kind: "customer" });
@@ -221,6 +224,7 @@ export default function Crm({
         onSearchClick={() => setPaletteOpen(true)}
         onNewAction={handleNew}
         onNotificationClick={(s) => setView(s as View)}
+        hiddenNav={isManager ? undefined : ["cash"]}
       >
         {loading ? (
           <div className="animate-pulse text-text-dim">Cargando datos…</div>
@@ -281,7 +285,14 @@ export default function Crm({
         ) : view === "settings" ? (
           <Ajustes key={activeWs.id} user={user} onLogout={onLogout} />
         ) : view === "cash" ? (
-          <Caja key={activeWs.id} />
+          isManager ? (
+            <Caja key={activeWs.id} />
+          ) : (
+            <EmptyState
+              title="Caja restringida"
+              description="La caja del negocio es visible solo para el dueño y los encargados."
+            />
+          )
         ) : (
           <EmptyState title="Próximamente" description="Esta vista se está portando desde la app desktop." />
         )}

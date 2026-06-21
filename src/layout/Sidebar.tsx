@@ -65,9 +65,11 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   user: { name: string; email: string };
   onLogout?: () => void;
+  /** Ids de items de nav a ocultar (p. ej. ['cash'] para roles sin acceso a Caja). */
+  hiddenNav?: string[];
 }
 
-export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user, onLogout }: SidebarProps) {
+export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user, onLogout, hiddenNav = [] }: SidebarProps) {
   return (
     <aside
       style={{
@@ -141,7 +143,12 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
           padding: `${space[4]} ${collapsed ? space[2] : space[3]}`,
         }}
       >
-        {SECTIONS.map((section, idx) => (
+        {SECTIONS.map((section, idx) => {
+          // Ocultar items vetados por rol (ej. Caja para no-managers). Si una
+          // sección queda vacía, no renderizamos su título.
+          const items = section.items.filter((it) => !hiddenNav.includes(it.id));
+          if (items.length === 0) return null;
+          return (
           <div key={idx} style={{ marginBottom: space[5] }}>
             {!collapsed && section.title && (
               <div
@@ -159,7 +166,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {section.items.map((item) => (
+              {items.map((item) => (
                 <NavButton
                   key={item.id}
                   item={item}
@@ -170,7 +177,8 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
               ))}
             </div>
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* User footer */}

@@ -15,6 +15,8 @@ interface AppShellProps {
   children: ReactNode;
   /** Right drawer opcional. Cuando se pasa, se renderiza al costado derecho. */
   drawer?: ReactNode;
+  /** Ids de nav a ocultar según rol (ej. ['cash'] para no-managers). */
+  hiddenNav?: string[];
 }
 
 /**
@@ -33,6 +35,7 @@ export function AppShell({
   onLogout,
   children,
   drawer,
+  hiddenNav,
 }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -53,6 +56,7 @@ export function AppShell({
         onToggleCollapse={() => setCollapsed((c) => !c)}
         user={user}
         onLogout={onLogout}
+        hiddenNav={hiddenNav}
       />
 
       <div
