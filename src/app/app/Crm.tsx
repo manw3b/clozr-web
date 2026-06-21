@@ -1038,6 +1038,15 @@ function SaleModal({
   const paidAmount = paidFull ? total : Number(partial) || 0;
   const balance = total - paidAmount;
 
+  // El modal está sucio si hay datos que se perderían al cerrar → click afuera
+  // hace shake (no cierra), igual que en la desktop.
+  function isDirty(): boolean {
+    if (busy) return false;
+    if (customerId) return true;
+    if (notes.trim() !== "") return true;
+    return lines.some((l) => l.description.trim() !== "" || String(l.unitPrice).trim() !== "");
+  }
+
   // Índice de productos del catálogo por nombre normalizado, para linkear el
   // ítem al catálogo (y heredar su costo → margen exacto en Reportes).
   const productByName = useMemo(() => {
@@ -1232,7 +1241,7 @@ function SaleModal({
   }
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={onClose} isDirty={isDirty} confirmCloseText="¿Cerrar y descartar la venta?">
       <div className="flex flex-col gap-3.5 p-5">
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Cliente</span>
