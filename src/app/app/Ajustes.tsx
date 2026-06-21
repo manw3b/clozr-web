@@ -780,12 +780,15 @@ function RedeemCodeBox({ wsId }: { wsId?: string }) {
     setBusy(true);
     try {
       const r = await api.redeemCode(c);
-      if (r.kind === "license") {
-        // Re-hidratar el store para que el plan nuevo se vea sin recargar.
+      if (r.kind === "license" || r.kind === "unlock") {
+        // Re-hidratar el store para reflejar plan/catálogo sin recargar.
         const me = await api.fetchMe();
         const active = me.workspaces.find((w) => w.id === wsId) ?? me.workspaces[0] ?? null;
         useWorkspaceStore.setState({ workspaces: me.workspaces, activeWorkspace: active });
-        showToast("¡Código canjeado! Tu plan fue activado.", "success");
+        showToast(
+          r.kind === "license" ? "¡Código canjeado! Tu plan fue activado." : "¡Catálogo desbloqueado!",
+          "success",
+        );
       } else {
         const label =
           r.discountType === "percent" ? `${r.discountValue}%` : formatArs(r.discountValue ?? 0);
