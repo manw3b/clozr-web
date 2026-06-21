@@ -454,14 +454,16 @@ const labelCls = "text-xs font-semibold text-text-muted";
 /* ───────── Customer modal ───────── */
 function CustomerModal({
   customer,
+  initialName,
   onClose,
   onSaved,
 }: {
   customer?: Customer;
+  initialName?: string;
   onClose: () => void;
-  onSaved: (msg: string) => void;
+  onSaved: (msg: string, createdId?: string) => void;
 }) {
-  const [name, setName] = useState(customer?.name ?? "");
+  const [name, setName] = useState(customer?.name ?? initialName ?? "");
   const [phone, setPhone] = useState(customer?.phone ?? "");
   const [email, setEmail] = useState(customer?.email ?? "");
   const [type, setType] = useState<ClientType>(customer?.type ?? "final");
@@ -473,9 +475,10 @@ function CustomerModal({
     setBusy(true);
     try {
       const data = { name: name.trim(), phone, email, type, notes };
+      let createdId: string | undefined;
       if (customer) await api.updateCustomer(customer.id, data);
-      else await api.createCustomer(data);
-      onSaved(customer ? "Cliente actualizado" : "Cliente creado");
+      else createdId = await api.createCustomer(data);
+      onSaved(customer ? "Cliente actualizado" : "Cliente creado", createdId);
     } catch {
       setBusy(false);
     }
@@ -778,11 +781,13 @@ function ClientPicker({
   value,
   onChange,
   presetName,
+  onCreateNew,
 }: {
   customers: Customer[];
   value: string;
   onChange: (id: string) => void;
   presetName?: string;
+  onCreateNew?: (name: string) => void;
 }) {
   const selectedName = value === "" ? "" : customers.find((c) => c.id === value)?.name ?? presetName ?? "";
   const [q, setQ] = useState(selectedName);
@@ -902,6 +907,19 @@ function ClientPicker({
             ))}
             {q.trim() !== "" && matches.length === 0 && (
               <div style={{ padding: "9px 12px", fontSize: 13, color: color.textDim }}>Sin clientes con ese nombre</div>
+            )}
+            {onCreateNew && q.trim() !== "" && (
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); onCreateNew(q.trim()); setOpen(false); }}
+                style={{
+                  display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "9px 12px",
+                  textAlign: "left", border: "none", borderTop: `1px solid ${color.border}`,
+                  background: "transparent", color: color.primary, fontSize: 14, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                + Crear cliente «{q.trim()}»
+              </button>
             )}
           </div>,
           document.body,
@@ -1186,6 +1204,10 @@ function SaleModal({
   const [partial, setPartial] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  // Lista local de clientes (para reflejar al instante uno creado al vuelo).
+  const [localCustomers, setLocalCustomers] = useState(customers);
+  useEffect(() => { setLocalCustomers(customers); }, [customers]);
+  const [newClientName, setNewClientName] = useState<string | null>(null);
 
   const total = lines.reduce((a, l) => a + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0), 0);
   const paidAmount = paidFull ? total : Number(partial) || 0;
@@ -1399,12 +1421,28 @@ function SaleModal({
         <div className="flex flex-col gap-1.5">
           <span className={labelCls}>Cliente</span>
           <ClientPicker
-            customers={customers}
+            customers={localCustomers}
             value={customerId}
             onChange={changeCustomer}
             presetName={preset?.customerName ?? undefined}
+            onCreateNew={(name) => setNewClientName(name)}
           />
         </div>
+
+        {newClientName !== null && (
+          <CustomerModal
+            initialName={newClientName}
+            onClose={() => setNewClientName(null)}
+            onSaved={async (_msg, createdId) => {
+              setNewClientName(null);
+              try {
+                const fresh = await api.listCustomers();
+                setLocalCustomers(fresh);
+              } catch { /* ignore */ }
+              if (createdId) changeCustomer(createdId);
+            }}
+          />
+        )}
 
         <div className="flex flex-col gap-2">
           <span className={labelCls}>Productos / ítems</span>
