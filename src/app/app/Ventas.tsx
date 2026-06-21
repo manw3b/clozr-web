@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Search, Plus, MoreHorizontal, Check, Copy, Eye, Trash2, CheckCircle2, Clock, AlertCircle, Package } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Check, Copy, Eye, Trash2, CheckCircle2, Clock, AlertCircle, Package, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Input, Select } from "@/components/Input";
@@ -21,6 +21,7 @@ import {
 import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, formatRelative, formatDateLong, formatTime } from "@/lib/format";
 import * as api from "@/lib/api";
@@ -375,6 +376,8 @@ function SaleDrawer({ sale, onClose, onChanged, canWrite }: { sale: Sale; onClos
   const { showToast } = useUIStore();
   const [detail, setDetail] = useState<SaleDetail | null>(null);
   const [payOpen, setPayOpen] = useState(false);
+  const [warrantyOpen, setWarrantyOpen] = useState(false);
+  const businessName = useWorkspaceStore((s) => s.activeWorkspace?.name) ?? "";
 
   const reload = useCallback(() => {
     api.getSale(sale.id).then(setDetail).catch(() => {});
@@ -419,13 +422,22 @@ function SaleDrawer({ sale, onClose, onChanged, canWrite }: { sale: Sale; onClos
         </header>
       }
       footer={
-        canWrite && st !== "paid" ? (
-          <div style={{ display: "flex", gap: space[2] }}>
-            <Button variant="secondary" size="md" onClick={() => setPayOpen(true)} fullWidth>
-              Registrar pago
-            </Button>
-            <Button variant="primary" size="md" iconLeft={<CheckCircle2 size={15} />} onClick={markPaid} fullWidth>
-              Marcar pagado
+        canWrite ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+            {st !== "paid" ? (
+              <div style={{ display: "flex", gap: space[2] }}>
+                <Button variant="secondary" size="md" onClick={() => setPayOpen(true)} fullWidth>
+                  Registrar pago
+                </Button>
+                <Button variant="primary" size="md" iconLeft={<CheckCircle2 size={15} />} onClick={markPaid} fullWidth>
+                  Marcar pagado
+                </Button>
+              </div>
+            ) : (
+              <div style={{ textAlign: "center", fontSize: text.sm, color: color.success, fontWeight: weight.semibold }}>✓ Venta cobrada</div>
+            )}
+            <Button variant="ghost" size="md" iconLeft={<ShieldCheck size={15} />} onClick={() => setWarrantyOpen(true)} fullWidth>
+              Enviar garantía por mail
             </Button>
           </div>
         ) : st === "paid" ? (
@@ -517,7 +529,100 @@ function SaleDrawer({ sale, onClose, onChanged, canWrite }: { sale: Sale; onClos
           }
         }}
       />
+
+      <WarrantyModal
+        open={warrantyOpen}
+        sale={sale}
+        detail={detail}
+        businessName={businessName}
+        onClose={() => setWarrantyOpen(false)}
+      />
     </Drawer>
+  );
+}
+
+function WarrantyModal({
+  open,
+  sale,
+  detail,
+  businessName,
+  onClose,
+}: {
+  open: boolean;
+  sale: Sale;
+  detail: SaleDetail | null;
+  businessName: string;
+  onClose: () => void;
+}) {
+  const { showToast } = useUIStore();
+  const [email, setEmail] = useState("");
+  const [months, setMonths] = useState("6");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setEmail("");
+      setMonths("6");
+    }
+  }, [open]);
+
+  const items = (detail?.items ?? []).map((i) => i.description).filter(Boolean).join(", ");
+  const canSend = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Enviar garantía"
+      maxWidth={420}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button
+            variant="primary"
+            disabled={!canSend}
+            loading={sending}
+            onClick={async () => {
+              setSending(true);
+              try {
+                await api.sendWarranty(sale.id, {
+                  to: email.trim(),
+                  customerName: sale.customerName || "Cliente",
+                  businessName,
+                  items,
+                  months: Number(months),
+                  startDate: new Date().toLocaleDateString("es-AR"),
+                });
+                showToast("Garantía enviada al cliente", "success");
+                onClose();
+              } catch {
+                showToast("No se pudo enviar la garantía", "error");
+              } finally {
+                setSending(false);
+              }
+            }}
+          >
+            Enviar
+          </Button>
+        </>
+      }
+    >
+      <ModalField label="Email del cliente" required>
+        <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@gmail.com" autoFocus />
+      </ModalField>
+      <ModalField label="Garantía">
+        <Select value={months} onChange={(e) => setMonths(e.target.value)}>
+          <option value="3">3 meses</option>
+          <option value="6">6 meses</option>
+          <option value="12">12 meses</option>
+        </Select>
+      </ModalField>
+      {items && (
+        <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: space[2] }}>
+          Producto: {items}
+        </div>
+      )}
+    </Modal>
   );
 }
 
