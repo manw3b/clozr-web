@@ -47,6 +47,8 @@ export interface Workspace {
   seats?: number;
   /** Estado de la suscripción: 'active' | 'trialing' | 'past_due' | 'cancelled'. */
   planStatus?: string;
+  /** Crecimiento: si este espacio está cubierto por el plan de otro, su id. null = independiente. */
+  coveredBy?: string | null;
 }
 
 /* ───────── Planes / billing (T3) ─────────
@@ -73,6 +75,8 @@ export const SEATS_UNLIMITED = 9999;
 export const BILLING_TRIAL_DAYS = 14;
 /** Precio mensual (USD) de cada empleado extra, más allá de los del plan. */
 export const EXTRA_SEAT_USD = 5;
+/** Precio mensual (USD) de cada espacio/sucursal adicional sumado al plan. */
+export const ESPACIO_USD = 10;
 /** Cobro anual = pagás 10 meses, tenés 12 (2 gratis). */
 export const ANNUAL_MONTHS_PAID = 10;
 export const ANNUAL_MONTHS_FREE = 2;

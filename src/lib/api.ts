@@ -120,6 +120,7 @@ interface MeRaw {
     seats?: number | null;
     plan_status?: string | null;
     billing_interval?: string | null;
+    covered_by?: string | null;
   }>;
 }
 export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }> {
@@ -150,6 +151,7 @@ export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }
       seats: Number(w.seats ?? 1),
       planStatus: w.plan_status ?? "active",
       billingInterval: w.billing_interval ?? "monthly",
+      coveredBy: w.covered_by ?? null,
     })),
   };
 }
@@ -1324,6 +1326,27 @@ export async function getReferralCode(): Promise<{ code: string; discountPct: nu
     method: "POST",
   });
   return { code: r.code, discountPct: Number(r.discount_pct ?? 0) };
+}
+
+/** POST /workspaces/:wid/cover — suma un espacio/sucursal (del mismo dueño) al
+ *  plan del workspace activo (el que paga). El espacio cubierto copia el plan y
+ *  no paga aparte; la suscripción del principal sube ESPACIO_USD/mes. Puede tirar
+ *  ApiError "needs_recheckout" si MP no permite el cambio de monto. */
+export async function coverWorkspace(targetWorkspaceId: string): Promise<{ covered: number; plan: string }> {
+  const r = await req<{ covered?: number; plan?: string }>(`/workspaces/${ws()}/cover`, {
+    method: "POST",
+    body: JSON.stringify({ target_workspace_id: targetWorkspaceId }),
+  });
+  return { covered: Number(r.covered ?? 0), plan: r.plan ?? "free" };
+}
+
+/** POST /workspaces/:wid/uncover — quita un espacio cubierto (vuelve a Free) y
+ *  baja el monto del plan del workspace activo. */
+export async function uncoverWorkspace(targetWorkspaceId: string): Promise<void> {
+  await req(`/workspaces/${ws()}/uncover`, {
+    method: "POST",
+    body: JSON.stringify({ target_workspace_id: targetWorkspaceId }),
+  });
 }
 
 /* ---------- Consola: panel de cuentas (workspaces) ---------- */

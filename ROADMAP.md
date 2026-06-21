@@ -3,7 +3,7 @@
 Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a la app desktop**, y de ahí en más sumar lo que aporte valor real al vendedor PyME.
 
 > Este archivo es la fuente de verdad del plan. Se actualiza a medida que avanzamos.
-> **Última actualización:** 2026-06-21 (Consola + pricing USD F1–F5 LIVE; MP validado; arranca roadmap de crecimiento)
+> **Última actualización:** 2026-06-21 (Consola + pricing USD F1–F5 LIVE; MP validado; crecimiento: anual + referidos + espacios/sucursales hechos)
 
 ---
 
@@ -65,9 +65,9 @@ Lógica de los planes (el "por qué"): monetizamos por **3 ejes** — asientos (
 
 Orden de construcción acordado:
 
-1. **Cobro anual (2 meses gratis)** — toggle mensual/anual en las tarjetas; anual = mensual×10; preapproval MP con `frequency` 12 meses; el re-pricing y el cambio de empleados respetan el intervalo (columna `billing_interval`). Mayor cash flow + en AR le ahorra al cliente 12 meses de inflación de una.
-2. **Referidos** — código self-serve por workspace; al canjearlo, **1 mes de Pro gratis** para el referido y el referidor; atribución sobre `console_code_redemptions`. ~80% reusa F1/F5 (códigos + licencia).
-3. **Espacios / sucursales adicionales** — varios espacios bajo un mismo dueño/facturación, como lever de **Team** o add-on por espacio (monetiza al multi-negocio). **Decisión de producto pendiente:** sucursal = *workspace separado* (reusa infra, **recomendado**) vs *sub-división dentro de un workspace* (más laburo, datos compartidos).
+1. ✅ **Cobro anual (2 meses gratis)** — toggle mensual/anual en las tarjetas; anual = mensual×10; preapproval MP con `frequency` 12 meses; el re-pricing y el cambio de empleados respetan el intervalo (columna `billing_interval`). Mayor cash flow + en AR le ahorra al cliente 12 meses de inflación de una.
+2. ✅ **Referidos** — código self-serve por workspace; al canjearlo, **descuento %** (20%) para el referido y el referidor; atribución sobre `console_code_redemptions`. ~80% reusa F1/F5 (códigos + licencia).
+3. ✅ **Espacios / sucursales adicionales** — **decisión:** workspaces separados (reusa infra) + **USD 10/mes por espacio extra**. Un workspace con plan pago (el "principal") **cubre** otros espacios del mismo dueño: cada uno copia el plan del principal y se suma a **esa única suscripción** de MP (no paga aparte). Backend: columna `covered_by_workspace_id`; `POST /workspaces/:wid/cover|uncover` (actualizan el monto del preapproval, `needs_recheckout` si MP rechaza); `/me` expone `covered_by`; el re-pricing incluye los espacios; el cron de degradación **libera en cascada** los cubiertos cuando el principal cae a Free. UI: sección "Sucursales y espacios" en Ajustes (sumar/quitar). Bajo riesgo: el cubierto copia el plan, no toca rutas calientes nuevas.
 4. **Descuento por volumen de empleados** — del 6º extra en adelante, precio menor (ej. USD 4).
 5. **Dunning + win-back** — mails de pago fallido (sobre el cron de gracia ya existente) + código de recuperación para los que bajaron a Free.
 6. **Repensar el techo de Free** — límite suave (sin Reportes, o tope ~100 clientes) para que el unipersonal eventualmente convierta sin espantarlo.
