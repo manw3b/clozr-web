@@ -550,26 +550,27 @@ function ConnectedSection() {
 
 /* ════════════ Precios ════════════ */
 const PLANS: {
-  name: string; price: string; tag: string; Icon: IconType; perks: string[]; cta: string; highlight: boolean;
+  name: string; monthly: number; Icon: IconType; perks: string[]; cta: string; highlight: boolean;
 }[] = [
   {
-    name: "Free", price: "Gratis", tag: "", Icon: Sparkles,
+    name: "Free", monthly: 0, Icon: Sparkles,
     perks: ["1 empleado", "Clientes, pipeline y ventas", "Caja diaria", "Para arrancar solo"],
     cta: "Crear cuenta", highlight: false,
   },
   {
-    name: "Pro", price: "US$ 20", tag: "/ mes", Icon: Zap,
+    name: "Pro", monthly: 20, Icon: Zap,
     perks: ["2 empleados incluidos", "Inventario, deudas y tareas", "Reportes del negocio", "Multi-moneda + WhatsApp", "Roles y permisos"],
     cta: "Probar 14 días", highlight: true,
   },
   {
-    name: "Team", price: "US$ 45", tag: "/ mes", Icon: Rocket,
+    name: "Team", monthly: 45, Icon: Rocket,
     perks: ["5 empleados incluidos", "Todo lo de Pro", "Clozr de noche (IA)", "Reportes avanzados", "Soporte prioritario"],
     cta: "Probar 14 días", highlight: false,
   },
 ];
 
 function Pricing() {
+  const [annual, setAnnual] = useState(false);
   return (
     <section id="precios" className="mx-auto max-w-6xl px-6 py-28">
       <div className="text-center">
@@ -580,10 +581,34 @@ function Pricing() {
         <p className="mx-auto mt-4 max-w-lg text-white/50">
           Empezá gratis. Pagás recién cuando sumás a tu equipo.
         </p>
+
+        {/* Toggle Mensual / Anual */}
+        <div className="mt-8 flex justify-center">
+          <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 p-1 text-sm">
+            <button
+              onClick={() => setAnnual(false)}
+              className={`rounded-full px-4 py-1.5 font-medium transition-colors ${!annual ? "bg-white text-[#0b0b0d]" : "text-white/55 hover:text-white"}`}
+            >
+              Mensual
+            </button>
+            <button
+              onClick={() => setAnnual(true)}
+              className={`flex items-center gap-2 rounded-full px-4 py-1.5 font-medium transition-colors ${annual ? "bg-white text-[#0b0b0d]" : "text-white/55 hover:text-white"}`}
+            >
+              Anual
+              <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-white">2 meses gratis</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="mt-14 grid gap-6 md:grid-cols-3">
-        {PLANS.map((p) => (
+        {PLANS.map((p) => {
+          const free = p.monthly === 0;
+          const price = free ? "Gratis" : annual ? `US$ ${p.monthly * 10}` : `US$ ${p.monthly}`;
+          const tag = free ? "" : annual ? "/ año" : "/ mes";
+          const save = !free && annual ? `2 meses gratis · ahorrás US$ ${p.monthly * 2}` : "";
+          return (
           <div
             key={p.name}
             className={`lp-glass lp-lift relative rounded-2xl p-7 ${
@@ -603,9 +628,10 @@ function Pricing() {
               <h3 className="text-lg font-bold text-white">{p.name}</h3>
             </div>
             <div className="mt-5 flex items-baseline gap-1.5">
-              <span className="text-3xl font-extrabold tracking-tight text-white">{p.price}</span>
-              {p.tag && <span className="text-sm text-white/40">{p.tag}</span>}
+              <span className="text-3xl font-extrabold tracking-tight text-white">{price}</span>
+              {tag && <span className="text-sm text-white/40">{tag}</span>}
             </div>
+            <div className="mt-1.5 h-4 text-xs font-medium text-primary">{save}</div>
             <ul className="mt-6 space-y-3 text-sm">
               {p.perks.map((perk) => (
                 <li key={perk} className="flex items-center gap-2.5 text-white/60">
@@ -624,7 +650,8 @@ function Pricing() {
               {p.cta}
             </Link>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <p className="mx-auto mt-8 max-w-2xl text-center text-sm text-white/35">
