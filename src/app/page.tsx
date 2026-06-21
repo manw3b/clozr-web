@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Users, Workflow, Wallet, Package, Sparkles, BarChart3, ShoppingCart,
@@ -16,6 +16,113 @@ function Logo() {
     // eslint-disable-next-line @next/next/no-img-element
     <img src="/logo-horizontal.svg" alt="Clozr" className="h-7 w-auto" />
   );
+}
+
+/* ════════════ Campo de partículas real (canvas) ════════════
+ * Red de puntos que derivan y se conectan con líneas cuando se acercan.
+ * Performante: densidad capada por área, DPR ≤2, pausa con la pestaña oculta,
+ * respeta prefers-reduced-motion (dibuja un cuadro estático) y limpia el RAF. */
+function ParticleField() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const LINK = 130;
+    let w = 0;
+    let h = 0;
+    let pts: { x: number; y: number; vx: number; vy: number }[] = [];
+    let raf = 0;
+
+    const make = (n: number) =>
+      Array.from({ length: n }, () => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.25,
+        vy: (Math.random() - 0.5) * 0.25,
+      }));
+
+    const resize = () => {
+      w = canvas.clientWidth;
+      h = canvas.clientHeight;
+      if (!w || !h) return;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const n = Math.min(110, Math.max(28, Math.floor((w * h) / 16000)));
+      if (pts.length === 0 || Math.abs(pts.length - n) > 14) pts = make(n);
+      else
+        for (const p of pts) {
+          if (p.x > w) p.x = Math.random() * w;
+          if (p.y > h) p.y = Math.random() * h;
+        }
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, w, h);
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i]!;
+        for (let j = i + 1; j < pts.length; j++) {
+          const q = pts[j]!;
+          const dx = p.x - q.x;
+          const dy = p.y - q.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < LINK * LINK) {
+            const a = (1 - Math.sqrt(d2) / LINK) * 0.18;
+            ctx.strokeStyle = `rgba(225,29,72,${a})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(q.x, q.y);
+            ctx.stroke();
+          }
+        }
+      }
+      for (const p of pts) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.4, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(225,29,72,0.5)";
+        ctx.fill();
+      }
+    };
+
+    const step = () => {
+      for (const p of pts) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > w) p.vx *= -1;
+        if (p.y < 0 || p.y > h) p.vy *= -1;
+      }
+      draw();
+      raf = requestAnimationFrame(step);
+    };
+
+    const start = () => {
+      cancelAnimationFrame(raf);
+      if (reduce) draw();
+      else raf = requestAnimationFrame(step);
+    };
+    const onVis = () => {
+      if (document.hidden) cancelAnimationFrame(raf);
+      else start();
+    };
+
+    resize();
+    start();
+    window.addEventListener("resize", resize);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
+  return <canvas ref={ref} className="lp-canvas" aria-hidden />;
 }
 
 /* ════════════ Navbar (sticky, blur al hacer scroll) ════════════ */
@@ -388,9 +495,6 @@ function ConnectedSection() {
       {/* Composición de nodos (desktop ≥lg) */}
       <div className="mt-16 hidden justify-center lg:flex">
         <div className="relative" style={{ width: BOX_W, height: BOX_H }}>
-          {/* Campo de partículas / red */}
-          <div className="lp-particles pointer-events-none absolute -inset-16" aria-hidden />
-
           {/* Conexiones + nodos luminosos */}
           <svg viewBox={`0 0 ${BOX_W} ${BOX_H}`} width={BOX_W} height={BOX_H} className="absolute inset-0 overflow-visible" fill="none">
             {NODE_SEG.map(([x1, y1, x2, y2], i) => (
@@ -547,6 +651,7 @@ export default function Home() {
   return (
     <div className="lp-root flex min-h-full flex-col">
       <div className="lp-atmos" aria-hidden />
+      <ParticleField />
 
       <SiteNav />
 
