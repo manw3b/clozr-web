@@ -13,7 +13,7 @@ import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import { roleLabel } from "@/lib/permissions";
 import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage } from "@/lib/types";
-import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, ANNUAL_MONTHS_PAID, ANNUAL_MONTHS_FREE, formatArs, formatUsd, discountTargetLabel, type PlanId, type PlanInfo } from "@/lib/types";
+import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, ESPACIO_USD, ANNUAL_MONTHS_PAID, ANNUAL_MONTHS_FREE, formatArs, formatUsd, discountTargetLabel, type PlanId, type PlanInfo } from "@/lib/types";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchDolares } from "@/lib/dolar";
 import { Stepper } from "@/components/Stepper";
@@ -349,6 +349,9 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
       {/* Referí y ganá */}
       <ReferralCard />
 
+      {/* Sucursales y espacios adicionales */}
+      <EspaciosCard />
+
       {/* Tipos de cliente */}
       <CustomerTypesCard canManage={canManage} showToast={showToast} />
 
@@ -616,6 +619,136 @@ function ReferralCard() {
           {loading ? "Generando tu código…" : "—"}
         </div>
       )}
+    </Card>
+  );
+}
+
+/* ───────── Sucursales / espacios adicionales ─────────
+ * Si el espacio activo tiene un plan pago propio, su dueño puede sumar OTROS
+ * espacios suyos (Free) a la misma suscripción por ESPACIO_USD/mes c/u. El
+ * espacio cubierto copia el plan y no paga aparte. Si el espacio activo está
+ * cubierto por otro, mostramos solo una nota. */
+function EspaciosCard() {
+  const showToast = useUIStore((s) => s.showToast);
+  const ws = useWorkspaceStore((s) => s.activeWorkspace);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const isOwner = ws?.role === "owner";
+  const planId = (ws?.plan as PlanId) ?? "free";
+  const isPaid = planId !== "free";
+  const isActive = (ws?.planStatus ?? "active") === "active";
+
+  async function refreshWs() {
+    const me = await api.fetchMe();
+    const a = me.workspaces.find((w) => w.id === ws?.id) ?? me.workspaces[0] ?? null;
+    useWorkspaceStore.setState({ workspaces: me.workspaces, activeWorkspace: a });
+  }
+
+  async function add(targetId: string) {
+    setBusyId(targetId);
+    try {
+      await api.coverWorkspace(targetId);
+      await refreshWs();
+      showToast("Espacio sumado a tu plan", "success");
+    } catch (e) {
+      const code = e instanceof api.ApiError ? e.code : "";
+      showToast(
+        code === "needs_recheckout"
+          ? "Mercado Pago necesita re-autorizar el nuevo monto. Re-suscribite desde el plan para sumar espacios."
+          : code === "exchange_unavailable"
+            ? "No pudimos obtener la cotización del dólar. Probá de nuevo."
+            : code === "plan_not_active" || code === "no_subscription"
+              ? "Tu suscripción no está activa."
+              : code === "target_is_paid"
+                ? "Ese espacio ya tiene su propio plan pago."
+                : "No pudimos sumar el espacio.",
+        "error",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function remove(targetId: string, label: string) {
+    const ok = await confirmAsync({
+      message: `¿Quitar "${label}" de tu plan? Volverá al plan Free.`,
+      tone: "danger",
+      confirmText: "Quitar",
+    });
+    if (!ok) return;
+    setBusyId(targetId);
+    try {
+      await api.uncoverWorkspace(targetId);
+      await refreshWs();
+      showToast("Espacio quitado del plan", "success");
+    } catch {
+      showToast("No pudimos quitar el espacio.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Si el espacio activo está cubierto por otro, solo informamos.
+  if (ws?.coveredBy) {
+    const principal = workspaces.find((w) => w.id === ws.coveredBy);
+    return (
+      <Card padding={5}>
+        <SectionTitle>Sucursales y espacios</SectionTitle>
+        <Hint>
+          Este espacio está incluido en el plan de{" "}
+          <strong style={{ color: color.text }}>{principal?.name ?? "tu espacio principal"}</strong> — no se cobra aparte.
+        </Hint>
+      </Card>
+    );
+  }
+
+  // Solo el dueño de un plan pago puede sumar espacios.
+  if (!isOwner || !isPaid) return null;
+
+  const others = workspaces.filter((w) => w.id !== ws?.id && w.role === "owner");
+  const covered = others.filter((w) => w.coveredBy === ws?.id);
+  const addable = others.filter((w) => !w.coveredBy && (((w.plan as PlanId) ?? "free") === "free"));
+
+  return (
+    <Card padding={5}>
+      <SectionTitle>Sucursales y espacios</SectionTitle>
+      <Hint>
+        Sumá otras sucursales o espacios tuyos a este plan por{" "}
+        <strong style={{ color: color.text }}>{formatUsd(ESPACIO_USD)}/mes</strong> cada uno. Comparten el plan{" "}
+        {PLANS[planId].name} y se cobran en la misma suscripción.
+      </Hint>
+
+      {covered.length === 0 && addable.length === 0 && (
+        <Hint>No tenés otros espacios para sumar. Creá uno desde el selector de espacios, arriba a la izquierda.</Hint>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginTop: space[3] }}>
+        {covered.map((w) => (
+          <Row key={w.id}>
+            <span style={{ fontSize: 18, lineHeight: 1 }}>{w.icon || "🏪"}</span>
+            <span style={{ flex: 1, fontSize: text.sm, color: color.text }}>{w.name}</span>
+            <Badge tone="success" variant="soft" size="sm">Incluido</Badge>
+            <Button variant="ghost" size="sm" loading={busyId === w.id} onClick={() => remove(w.id, w.name)}>
+              Quitar
+            </Button>
+          </Row>
+        ))}
+        {isActive
+          ? addable.map((w) => (
+              <Row key={w.id}>
+                <span style={{ fontSize: 18, lineHeight: 1 }}>{w.icon || "🏪"}</span>
+                <span style={{ flex: 1, fontSize: text.sm, color: color.text }}>{w.name}</span>
+                <Badge tone="neutral" size="sm">Free</Badge>
+                <Button variant="secondary" size="sm" loading={busyId === w.id} onClick={() => add(w.id)}>
+                  Sumar · +{formatUsd(ESPACIO_USD)}/mes
+                </Button>
+              </Row>
+            ))
+          : addable.length > 0 && (
+              <Hint>Reactivá tu suscripción para sumar más espacios a este plan.</Hint>
+            )}
+      </div>
     </Card>
   );
 }
