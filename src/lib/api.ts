@@ -119,6 +119,7 @@ interface MeRaw {
     plan?: string | null;
     seats?: number | null;
     plan_status?: string | null;
+    billing_interval?: string | null;
   }>;
 }
 export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }> {
@@ -148,6 +149,7 @@ export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }
       plan: w.plan ?? "free",
       seats: Number(w.seats ?? 1),
       planStatus: w.plan_status ?? "active",
+      billingInterval: w.billing_interval ?? "monthly",
     })),
   };
 }
@@ -713,10 +715,11 @@ export async function inviteMember(email: string, role: "admin" | "vendedor" | "
 export async function createBillingCheckout(
   plan: "pro" | "team",
   extraSeats = 0,
+  interval: "monthly" | "annual" = "monthly",
 ): Promise<{ initPoint: string; preapprovalId: string | null }> {
   const r = await req<{ init_point: string; preapproval_id?: string | null }>(
     `/workspaces/${ws()}/billing/checkout`,
-    { method: "POST", body: JSON.stringify({ plan, extra_seats: extraSeats }) },
+    { method: "POST", body: JSON.stringify({ plan, extra_seats: extraSeats, interval }) },
   );
   return { initPoint: r.init_point, preapprovalId: r.preapproval_id ?? null };
 }

@@ -31,6 +31,8 @@ export interface Workspace {
   unlockedCatalogs?: string[];
   /** F5: descuento activo del workspace (otorgado por código), o null. */
   discount?: { type: string; value: number; target: string } | null;
+  /** Crecimiento: intervalo de cobro de la suscripción ('monthly' | 'annual'). */
+  billingInterval?: string;
   /** Objetivo diario (monto). 0 / undefined = sin objetivo seteado. */
   dailyGoal?: number;
   dailyGoalCurrency?: string;
@@ -71,6 +73,9 @@ export const SEATS_UNLIMITED = 9999;
 export const BILLING_TRIAL_DAYS = 14;
 /** Precio mensual (USD) de cada empleado extra, más allá de los del plan. */
 export const EXTRA_SEAT_USD = 5;
+/** Cobro anual = pagás 10 meses, tenés 12 (2 gratis). */
+export const ANNUAL_MONTHS_PAID = 10;
+export const ANNUAL_MONTHS_FREE = 2;
 
 export const PLANS: Record<PlanId, PlanInfo> = {
   free: {
