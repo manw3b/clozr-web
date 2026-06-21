@@ -46,6 +46,13 @@ export function Inventario() {
   const canWrite = can("inventory.write");
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
   const appleUnlocked = (activeWorkspace?.unlockedCatalogs ?? []).includes("apple");
+  // El banner del pack Apple es un upsell → descartable por workspace.
+  const [appleBannerDismissed, setAppleBannerDismissed] = useState(false);
+  useEffect(() => {
+    const id = activeWorkspace?.id;
+    if (!id) return;
+    try { setAppleBannerDismissed(localStorage.getItem(`clozr:apple-banner:${id}`) === "1"); } catch { /* ignore */ }
+  }, [activeWorkspace?.id]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -130,8 +137,8 @@ export function Inventario() {
         <MetricCard label="Agotados" value={summary.agotados} tone={summary.agotados > 0 ? "danger" : "neutral"} />
       </div>
 
-      {/* F4 — Catálogo Apple premium (desbloqueo único) */}
-      {!appleUnlocked && canWrite && (
+      {/* F4 — Catálogo Apple premium (desbloqueo único) — upsell descartable */}
+      {!appleUnlocked && canWrite && !appleBannerDismissed && (
         <Card padding={4}>
           <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
             <div
@@ -160,6 +167,19 @@ export function Inventario() {
             <Button variant="primary" size="sm" onClick={() => setUnlockOpen(true)}>
               Desbloquear
             </Button>
+            <button
+              onClick={() => {
+                setAppleBannerDismissed(true);
+                const id = activeWorkspace?.id;
+                if (id) { try { localStorage.setItem(`clozr:apple-banner:${id}`, "1"); } catch { /* ignore */ } }
+              }}
+              aria-label="Ocultar"
+              title="Ocultar"
+              className="btn-icon muted"
+              style={{ width: 28, height: 28, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+            >
+              <span style={{ fontSize: 16, lineHeight: 1 }}>×</span>
+            </button>
           </div>
         </Card>
       )}
