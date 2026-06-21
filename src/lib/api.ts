@@ -33,7 +33,7 @@ import type {
   User,
   Workspace,
 } from "./types";
-import { SEED_STAGES } from "./types";
+import { stagesForIndustry } from "./types";
 
 export const WORKER_URL =
   process.env.NEXT_PUBLIC_WORKER_URL ?? "https://clozr-auth.pyter-import.workers.dev";
@@ -110,8 +110,10 @@ interface MeRaw {
     daily_goal?: number | null;
     daily_goal_currency?: string | null;
     daily_goal_count?: number | null;
+    industry?: string | null;
     logo_key?: string | null;
     banner_key?: string | null;
+    icon?: string | null;
     plan?: string | null;
     seats?: number | null;
     plan_status?: string | null;
@@ -135,8 +137,10 @@ export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }
       dailyGoal: Number(w.daily_goal ?? 0),
       dailyGoalCurrency: w.daily_goal_currency ?? "ARS",
       dailyGoalCount: Number(w.daily_goal_count ?? 0),
+      industry: w.industry ?? undefined,
       logoKey: w.logo_key ?? null,
       bannerKey: w.banner_key ?? null,
+      icon: w.icon ?? null,
       plan: w.plan ?? "free",
       seats: Number(w.seats ?? 1),
       planStatus: w.plan_status ?? "active",
@@ -274,13 +278,12 @@ export async function createStage(s: {
     }),
   });
 }
-/** Siembra las 7 etapas canónicas en un workspace recién creado.
- *  NO reusa los ids fijos de SEED_STAGES: en la nube `pipeline_stages.id` es
- *  PK GLOBAL (compartida entre todos los workspaces), así que ids fijos hacían
- *  chocar al 2º workspace y rompían el bootstrap. Omitimos el id y el Worker
- *  genera uno único por etapa. */
-export async function seedDefaultStages(): Promise<void> {
-  for (const s of SEED_STAGES) {
+/** Siembra el embudo del RUBRO en un workspace recién creado (F3). NO reusa
+ *  ids fijos: en la nube `pipeline_stages.id` es PK GLOBAL (compartida entre
+ *  workspaces), así que omitimos el id y el Worker genera uno único por etapa.
+ *  Cae al template "generic" si el rubro no matchea. */
+export async function seedStagesForIndustry(industry?: string | null): Promise<void> {
+  for (const s of stagesForIndustry(industry)) {
     await createStage({ name: s.name, color: s.color, order: s.order, isWon: s.isWon, isLost: s.isLost });
   }
 }
@@ -833,6 +836,7 @@ export async function deleteProduct(id: string): Promise<void> {
 export async function updateWorkspace(patch: {
   name?: string;
   industry?: string;
+  icon?: string | null;
   dailyGoal?: number;
   dailyGoalCurrency?: string;
   dailyGoalCount?: number;
@@ -840,6 +844,7 @@ export async function updateWorkspace(patch: {
   const body: Record<string, unknown> = {};
   if (patch.name !== undefined) body.name = patch.name;
   if (patch.industry !== undefined) body.industry = patch.industry;
+  if (patch.icon !== undefined) body.icon = patch.icon;
   if (patch.dailyGoal !== undefined) body.daily_goal = patch.dailyGoal;
   if (patch.dailyGoalCurrency !== undefined) body.daily_goal_currency = patch.dailyGoalCurrency;
   if (patch.dailyGoalCount !== undefined) body.daily_goal_count = patch.dailyGoalCount;

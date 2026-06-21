@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import * as api from "@/lib/api";
 import { setWorkspaceId } from "@/lib/api";
 import type { User, Workspace } from "@/lib/types";
-import { PLANS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, formatUsd, type PlanId } from "@/lib/types";
+import { PLANS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, INDUSTRY_OPTIONS, formatUsd, type PlanId } from "@/lib/types";
 
 /**
  * Onboarding guiado (multi-paso) que reemplaza el alta de un solo campo.
@@ -17,13 +17,8 @@ import { PLANS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, formatUsd, type PlanId } fr
  * El paso "tu nombre" se omite si ya lo tenemos (p.ej. login con Google).
  */
 
-const INDUSTRIES = [
-  "Celulares y tecnología",
-  "Indumentaria y calzado",
-  "Kiosco / almacén",
-  "Servicios",
-  "Otro",
-];
+// Rubros del picker: los templates (INDUSTRY_OPTIONS) + "Otro" (texto libre).
+const INDUSTRY_PICKER = [...INDUSTRY_OPTIONS, { key: "otro", label: "Otro" }];
 
 const INVITE_ROLES: { value: "vendedor" | "admin" | "viewer"; label: string }[] = [
   { value: "vendedor", label: "Vendedor" },
@@ -106,7 +101,7 @@ export default function OnboardingWizard({
       // Si ya lo creamos (volver/reintentar), no duplicar: solo actualizar.
       const ws = createdWs ?? (await api.createWorkspace(n));
       setWorkspaceId(ws.id);
-      const resolvedIndustry = industry === "Otro" ? industryOther.trim() : industry ?? "";
+      const resolvedIndustry = industry === "otro" ? industryOther.trim() : industry ?? "";
       const amount = goal ? Number(goal) : 0;
       await api.updateWorkspace({
         name: n,
@@ -117,6 +112,7 @@ export default function OnboardingWizard({
       const ready: Workspace = {
         ...ws,
         name: n,
+        industry: resolvedIndustry || undefined,
         dailyGoal: amount,
         dailyGoalCurrency: goalCur,
       };
@@ -244,13 +240,13 @@ export default function OnboardingWizard({
             <div>
               <Label>¿A qué te dedicás? <span className="font-normal text-text-dim">(opcional)</span></Label>
               <div className="flex flex-wrap gap-2">
-                {INDUSTRIES.map((it) => {
-                  const active = industry === it;
+                {INDUSTRY_PICKER.map((opt) => {
+                  const active = industry === opt.key;
                   return (
                     <button
                       type="button"
-                      key={it}
-                      onClick={() => setIndustry(it)}
+                      key={opt.key}
+                      onClick={() => setIndustry(opt.key)}
                       className={
                         "rounded-full border px-3 py-1.5 text-sm transition " +
                         (active
@@ -259,12 +255,12 @@ export default function OnboardingWizard({
                       }
                       style={active ? { background: "var(--primary-bg)" } : undefined}
                     >
-                      {it}
+                      {opt.label}
                     </button>
                   );
                 })}
               </div>
-              {industry === "Otro" && (
+              {industry === "otro" && (
                 <input
                   value={industryOther}
                   onChange={(e) => setIndustryOther(e.target.value)}

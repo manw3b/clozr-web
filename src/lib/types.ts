@@ -23,6 +23,10 @@ export interface Workspace {
   name: string;
   role: string;
   status: string;
+  /** F3: rubro del negocio (key de INDUSTRY_TEMPLATES, o texto libre si "Otro"). */
+  industry?: string;
+  /** F3: emoji/miniatura del espacio (fallback cuando no hay logo). */
+  icon?: string | null;
   /** Objetivo diario (monto). 0 / undefined = sin objetivo seteado. */
   dailyGoal?: number;
   dailyGoalCurrency?: string;
@@ -273,6 +277,103 @@ export const SEED_STAGES: Array<{
   { id: "cerrado", name: "Cerrado", color: "#10B981", order: 5, isWon: true },
   { id: "perdido", name: "Perdido", color: "#EF4444", order: 6, isLost: true },
 ];
+
+/* ───────── Templates de pipeline por rubro (F3) ─────────
+ * Al crear un workspace se siembra el embudo del rubro elegido (no ids fijos:
+ * el Worker genera uno único por etapa). Cada template tiene exactamente una
+ * etapa ganada y una perdida (requisito del pipeline). "generic" es el fallback. */
+export interface SeedStage {
+  name: string;
+  color: string;
+  order: number;
+  isWon?: boolean;
+  isLost?: boolean;
+}
+
+export const INDUSTRY_TEMPLATES: Record<string, { label: string; stages: SeedStage[] }> = {
+  generic: {
+    label: "Genérico",
+    stages: [
+      { name: "Prospecto", color: "#64748B", order: 0 },
+      { name: "Contactado", color: "#3B82F6", order: 1 },
+      { name: "Presupuestado", color: "#F59E0B", order: 2 },
+      { name: "Negociando", color: "#E11D48", order: 3 },
+      { name: "Ganado", color: "#10B981", order: 4, isWon: true },
+      { name: "Perdido", color: "#EF4444", order: 5, isLost: true },
+    ],
+  },
+  tech: {
+    label: "Celulares y tecnología",
+    stages: [
+      { name: "Consulta", color: "#64748B", order: 0 },
+      { name: "Presupuesto", color: "#3B82F6", order: 1 },
+      { name: "Seña / reserva", color: "#8B5CF6", order: 2 },
+      { name: "Vendido", color: "#10B981", order: 3, isWon: true },
+      { name: "Perdido", color: "#EF4444", order: 4, isLost: true },
+    ],
+  },
+  apparel: {
+    label: "Indumentaria y calzado",
+    stages: [
+      { name: "Interesado", color: "#64748B", order: 0 },
+      { name: "Reservado", color: "#8B5CF6", order: 1 },
+      { name: "Vendido", color: "#10B981", order: 2, isWon: true },
+      { name: "No concretó", color: "#EF4444", order: 3, isLost: true },
+    ],
+  },
+  kiosco: {
+    label: "Kiosco / almacén",
+    stages: [
+      { name: "Consulta", color: "#64748B", order: 0 },
+      { name: "Pedido", color: "#3B82F6", order: 1 },
+      { name: "Entregado", color: "#10B981", order: 2, isWon: true },
+      { name: "Cancelado", color: "#EF4444", order: 3, isLost: true },
+    ],
+  },
+  gastro: {
+    label: "Gastronomía",
+    stages: [
+      { name: "Consulta", color: "#64748B", order: 0 },
+      { name: "Reserva", color: "#8B5CF6", order: 1 },
+      { name: "Atendido", color: "#10B981", order: 2, isWon: true },
+      { name: "Cancelado", color: "#EF4444", order: 3, isLost: true },
+    ],
+  },
+  services: {
+    label: "Servicios",
+    stages: [
+      { name: "Lead", color: "#64748B", order: 0 },
+      { name: "Presupuesto", color: "#3B82F6", order: 1 },
+      { name: "Agendado", color: "#8B5CF6", order: 2 },
+      { name: "Realizado", color: "#10B981", order: 3, isWon: true },
+      { name: "Perdido", color: "#EF4444", order: 4, isLost: true },
+    ],
+  },
+  health: {
+    label: "Salud / estética",
+    stages: [
+      { name: "Consulta", color: "#64748B", order: 0 },
+      { name: "Turno agendado", color: "#8B5CF6", order: 1 },
+      { name: "Atendido", color: "#10B981", order: 2, isWon: true },
+      { name: "Cancelado", color: "#EF4444", order: 3, isLost: true },
+    ],
+  },
+};
+
+/** Rubros ofrecidos en el onboarding (key → label), en orden. */
+export const INDUSTRY_OPTIONS: Array<{ key: string; label: string }> = [
+  { key: "tech", label: "Celulares y tecnología" },
+  { key: "apparel", label: "Indumentaria y calzado" },
+  { key: "kiosco", label: "Kiosco / almacén" },
+  { key: "gastro", label: "Gastronomía" },
+  { key: "services", label: "Servicios" },
+  { key: "health", label: "Salud / estética" },
+];
+
+/** Etapas a sembrar para un rubro; cae a "generic" si la key no existe. */
+export function stagesForIndustry(key?: string | null): SeedStage[] {
+  return (key && INDUSTRY_TEMPLATES[key]?.stages) || INDUSTRY_TEMPLATES.generic.stages;
+}
 
 export const CLIENT_TYPE_LABELS: Record<ClientType, string> = {
   final: "Consumidor final",
