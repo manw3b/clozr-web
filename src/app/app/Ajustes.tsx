@@ -446,7 +446,84 @@ function PlanCard() {
         <Hint>Estás en el plan máximo. ¡Gracias por bancar Clozr! 🙌</Hint>
       )}
       {!isOwner && <Hint>Solo el dueño del espacio puede cambiar el plan.</Hint>}
+
+      {isOwner && <RedeemCodeBox wsId={ws?.id} />}
     </Card>
+  );
+}
+
+/* ───────── Canje de código (Consola Clozr) ─────────
+ * El dueño canjea un código de licencia (activa un plan gratis) o de descuento.
+ * Tras una licencia, re-hidratamos el workspaceStore con /me para reflejar el
+ * plan nuevo al instante. */
+function RedeemCodeBox({ wsId }: { wsId?: string }) {
+  const showToast = useUIStore((s) => s.showToast);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function redeemErr(e: unknown): string {
+    const c = e instanceof api.ApiError ? e.code : "";
+    const M: Record<string, string> = {
+      code_not_found: "Ese código no existe.",
+      code_disabled: "Ese código está deshabilitado.",
+      code_expired: "Ese código venció.",
+      code_exhausted: "Ese código alcanzó su límite de usos.",
+      forbidden: "Solo el dueño puede canjear códigos.",
+      missing_code: "Ingresá un código.",
+    };
+    return M[c] ?? "No se pudo canjear el código.";
+  }
+
+  async function redeem() {
+    const c = code.trim();
+    if (!c) return;
+    setBusy(true);
+    try {
+      const r = await api.redeemCode(c);
+      if (r.kind === "license") {
+        // Re-hidratar el store para que el plan nuevo se vea sin recargar.
+        const me = await api.fetchMe();
+        const active = me.workspaces.find((w) => w.id === wsId) ?? me.workspaces[0] ?? null;
+        useWorkspaceStore.setState({ workspaces: me.workspaces, activeWorkspace: active });
+        showToast("¡Código canjeado! Tu plan fue activado.", "success");
+      } else {
+        const label =
+          r.discountType === "percent" ? `${r.discountValue}%` : formatArs(r.discountValue ?? 0);
+        showToast(`Descuento válido (${label}). Se aplicará al mejorar tu plan.`, "success");
+      }
+      setCode("");
+    } catch (e) {
+      showToast(redeemErr(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: space[4], paddingTop: space[4], borderTop: `1px solid ${color.border}` }}>
+      <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, marginBottom: space[2] }}>
+        ¿Tenés un código?
+      </div>
+      <div style={{ display: "flex", gap: space[2] }}>
+        <div style={{ flex: 1 }}>
+          <Input
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                redeem();
+              }
+            }}
+            placeholder="CLOZR-XXXX-XXXX"
+            disabled={busy}
+          />
+        </div>
+        <Button variant="secondary" loading={busy} disabled={busy || !code.trim()} onClick={redeem}>
+          Canjear
+        </Button>
+      </div>
+    </div>
   );
 }
 

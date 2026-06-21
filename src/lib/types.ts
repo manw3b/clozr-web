@@ -14,6 +14,8 @@ export interface User {
   email: string;
   name: string | null;
   plan: string;
+  /** Consola Clozr: super-admin de la plataforma (gate por email en el Worker). */
+  isSuperAdmin: boolean;
 }
 
 export interface Workspace {
