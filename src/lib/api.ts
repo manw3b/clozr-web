@@ -114,6 +114,7 @@ interface MeRaw {
     logo_key?: string | null;
     banner_key?: string | null;
     icon?: string | null;
+    unlocked_catalogs?: string[] | null;
     plan?: string | null;
     seats?: number | null;
     plan_status?: string | null;
@@ -141,6 +142,7 @@ export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }
       logoKey: w.logo_key ?? null,
       bannerKey: w.banner_key ?? null,
       icon: w.icon ?? null,
+      unlockedCatalogs: Array.isArray(w.unlocked_catalogs) ? w.unlocked_catalogs : [],
       plan: w.plan ?? "free",
       seats: Number(w.seats ?? 1),
       planStatus: w.plan_status ?? "active",
@@ -1158,7 +1160,7 @@ export async function closeCashSession(
 }
 
 /* ---------- Consola Clozr: códigos (super-admin) + canje (owner) ---------- */
-export type ConsoleCodeKind = "license" | "discount";
+export type ConsoleCodeKind = "license" | "discount" | "unlock";
 export type DiscountType = "percent" | "amount";
 
 export interface ConsoleCode {
@@ -1169,6 +1171,8 @@ export interface ConsoleCode {
   durationDays: number | null;
   discountType: DiscountType | null;
   discountValue: number | null;
+  /** F4/F5: objetivo del código (ej "catalog:apple" para kind 'unlock'). */
+  target: string | null;
   maxUses: number | null;
   uses: number;
   expiresAt: string | null;
@@ -1184,6 +1188,7 @@ interface ConsoleCodeRaw {
   duration_days?: number | null;
   discount_type?: string | null;
   discount_value?: number | null;
+  target?: string | null;
   max_uses?: number | null;
   uses?: number | null;
   expires_at?: string | null;
@@ -1195,8 +1200,9 @@ function mapConsoleCode(r: ConsoleCodeRaw): ConsoleCode {
   return {
     id: r.id,
     code: r.code,
-    kind: r.kind === "discount" ? "discount" : "license",
+    kind: r.kind === "discount" ? "discount" : r.kind === "unlock" ? "unlock" : "license",
     plan: r.plan ?? null,
+    target: r.target ?? null,
     durationDays: r.duration_days != null ? Number(r.duration_days) : null,
     discountType: (r.discount_type as DiscountType | null) ?? null,
     discountValue: r.discount_value != null ? Number(r.discount_value) : null,
@@ -1220,6 +1226,8 @@ export interface NewConsoleCodeInput {
   durationDays?: number | null;
   discountType?: DiscountType;
   discountValue?: number;
+  /** Para kind 'unlock': "catalog:<key>". */
+  target?: string;
   maxUses?: number | null;
   expiresAt?: string | null;
   note?: string | null;
@@ -1232,6 +1240,7 @@ export async function createConsoleCode(input: NewConsoleCodeInput): Promise<Con
   if (input.durationDays != null) body.duration_days = input.durationDays;
   if (input.discountType !== undefined) body.discount_type = input.discountType;
   if (input.discountValue !== undefined) body.discount_value = input.discountValue;
+  if (input.target !== undefined) body.target = input.target;
   if (input.maxUses != null) body.max_uses = input.maxUses;
   if (input.expiresAt) body.expires_at = input.expiresAt;
   if (input.note) body.note = input.note;
@@ -1262,6 +1271,9 @@ export interface RedeemResult {
   licenseExpiresAt?: string | null;
   discountType?: DiscountType;
   discountValue?: number;
+  /** Para kind 'unlock'. */
+  target?: string;
+  catalog?: string;
 }
 /** Canje de un código en el workspace activo (lo pega el dueño). */
 export async function redeemCode(code: string): Promise<RedeemResult> {
@@ -1272,18 +1284,32 @@ export async function redeemCode(code: string): Promise<RedeemResult> {
     license_expires_at?: string | null;
     discount_type?: string;
     discount_value?: number;
+    target?: string;
+    catalog?: string;
   }>(`/workspaces/${ws()}/redeem-code`, {
     method: "POST",
     body: JSON.stringify({ code }),
   });
   return {
-    kind: r.kind === "discount" ? "discount" : "license",
+    kind: r.kind === "discount" ? "discount" : r.kind === "unlock" ? "unlock" : "license",
     plan: r.plan,
     seats: r.seats,
     licenseExpiresAt: r.license_expires_at ?? null,
     discountType: r.discount_type as DiscountType | undefined,
     discountValue: r.discount_value,
+    target: r.target,
+    catalog: r.catalog,
   };
+}
+
+/** POST /workspaces/:wid/catalog/checkout — pago único para desbloquear un
+ *  catálogo premium. Devuelve el init_point de Mercado Pago. */
+export async function catalogCheckout(catalog: string): Promise<{ initPoint: string }> {
+  const r = await req<{ init_point: string }>(`/workspaces/${ws()}/catalog/checkout`, {
+    method: "POST",
+    body: JSON.stringify({ catalog }),
+  });
+  return { initPoint: r.init_point };
 }
 
 /* ---------- Consola: panel de cuentas (workspaces) ---------- */

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Plus, Copy, Ban, CheckCircle2, RefreshCw, Ticket, Percent,
-  Building2, Users, Mail, CreditCard, Gift, Search,
+  Building2, Users, Mail, CreditCard, Gift, Search, Sparkles,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
@@ -15,7 +15,7 @@ import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import type { ConsoleCode, ConsoleCodeKind, ConsoleWorkspace, DiscountType } from "@/lib/api";
-import { formatArs } from "@/lib/types";
+import { formatArs, CATALOG_PACKS } from "@/lib/types";
 
 /* ── helpers ─────────────────────────────────────────────────────────── */
 
@@ -267,6 +267,10 @@ function benefitLabel(c: ConsoleCode): string {
     const plan = c.plan ? cap(c.plan) : "Pro";
     return c.durationDays ? `Plan ${plan} · ${c.durationDays} días` : `Plan ${plan} · sin vencimiento`;
   }
+  if (c.kind === "unlock") {
+    const key = (c.target ?? "").replace(/^catalog:/, "");
+    return `Desbloquea catálogo ${key || "premium"}`;
+  }
   if (c.discountType === "percent") return `${c.discountValue ?? 0}% de descuento`;
   return `${formatArs(c.discountValue ?? 0)} de descuento`;
 }
@@ -342,7 +346,7 @@ function CodesPanel() {
         <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
           {codes.map((c) => {
             const st = codeStatus(c);
-            const Icon = c.kind === "license" ? Ticket : Percent;
+            const Icon = c.kind === "license" ? Ticket : c.kind === "unlock" ? Sparkles : Percent;
             return (
               <Card key={c.id} padding={4}>
                 <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
@@ -443,6 +447,7 @@ function CreateCodeModal({
   const [durationDays, setDurationDays] = useState("");
   const [discountType, setDiscountType] = useState<DiscountType>("percent");
   const [discountValue, setDiscountValue] = useState("");
+  const [catalog, setCatalog] = useState("apple");
   const [maxUses, setMaxUses] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [note, setNote] = useState("");
@@ -457,6 +462,7 @@ function CreateCodeModal({
       setDurationDays("");
       setDiscountType("percent");
       setDiscountValue("");
+      setCatalog("apple");
       setMaxUses("");
       setExpiresAt("");
       setNote("");
@@ -487,10 +493,12 @@ function CreateCodeModal({
               plan,
               durationDays: durationDays.trim() ? Number(durationDays) : null,
             }
-          : {
-              discountType,
-              discountValue: Number(discountValue),
-            }),
+          : kind === "discount"
+            ? {
+                discountType,
+                discountValue: Number(discountValue),
+              }
+            : { target: `catalog:${catalog}` }),
         maxUses: maxUses.trim() ? Number(maxUses) : null,
         // Fin del día (UTC) de la fecha elegida — el código vale durante ese día.
         expiresAt: expiresAt.trim() ? `${expiresAt}T23:59:59Z` : null,
@@ -544,6 +552,7 @@ function CreateCodeModal({
         <div style={{ display: "flex", gap: space[2] }}>
           {kindTab("license", "Licencia", Ticket)}
           {kindTab("discount", "Descuento", Percent)}
+          {kindTab("unlock", "Desbloqueo", Sparkles)}
         </div>
 
         {kind === "license" ? (
@@ -567,7 +576,7 @@ function CreateCodeModal({
               />
             </div>
           </div>
-        ) : (
+        ) : kind === "discount" ? (
           <div style={{ display: "flex", gap: space[2] }}>
             <div style={{ flex: 1 }}>
               <div style={labelStyle}>Tipo</div>
@@ -592,6 +601,15 @@ function CreateCodeModal({
                 disabled={submitting}
               />
             </div>
+          </div>
+        ) : (
+          <div>
+            <div style={labelStyle}>Catálogo a desbloquear</div>
+            <select value={catalog} onChange={(e) => setCatalog(e.target.value)} className={selectCls} style={selectStyle}>
+              {Object.values(CATALOG_PACKS).map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+            </select>
           </div>
         )}
 

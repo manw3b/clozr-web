@@ -27,6 +27,8 @@ export interface Workspace {
   industry?: string;
   /** F3: emoji/miniatura del espacio (fallback cuando no hay logo). */
   icon?: string | null;
+  /** F4: catálogos premium desbloqueados (keys, ej ["apple"]). */
+  unlockedCatalogs?: string[];
   /** Objetivo diario (monto). 0 / undefined = sin objetivo seteado. */
   dailyGoal?: number;
   dailyGoalCurrency?: string;
@@ -119,6 +121,23 @@ export function formatArs(n: number): string {
 export function formatUsd(n: number): string {
   return `USD ${n.toLocaleString("en-US")}`;
 }
+
+/* ───────── Catálogos premium (add-on de pago único, F4) ───────── */
+export interface CatalogPack {
+  key: string;
+  label: string;
+  /** Precio del desbloqueo, una sola vez. */
+  priceUsd: number;
+  description: string;
+}
+export const CATALOG_PACKS: Record<string, CatalogPack> = {
+  apple: {
+    key: "apple",
+    label: "Catálogo Apple",
+    priceUsd: 100,
+    description: "iPhone, iPad, Mac, Watch y AirPods con imágenes, colores y capacidades — listos para cargar.",
+  },
+};
 
 /** Tipo de cliente configurable (customer_types). */
 export interface CustomerType {
