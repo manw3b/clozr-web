@@ -274,10 +274,14 @@ export async function createStage(s: {
     }),
   });
 }
-/** Siembra las 7 etapas canónicas en un workspace recién creado. */
+/** Siembra las 7 etapas canónicas en un workspace recién creado.
+ *  NO reusa los ids fijos de SEED_STAGES: en la nube `pipeline_stages.id` es
+ *  PK GLOBAL (compartida entre todos los workspaces), así que ids fijos hacían
+ *  chocar al 2º workspace y rompían el bootstrap. Omitimos el id y el Worker
+ *  genera uno único por etapa. */
 export async function seedDefaultStages(): Promise<void> {
   for (const s of SEED_STAGES) {
-    await createStage(s);
+    await createStage({ name: s.name, color: s.color, order: s.order, isWon: s.isWon, isLost: s.isLost });
   }
 }
 export async function updateStage(
