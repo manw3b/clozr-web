@@ -153,7 +153,7 @@ export default function Crm({
     try {
       let st = await api.listStages();
       if (st.length === 0) {
-        await api.seedDefaultStages();
+        await api.seedStagesForIndustry(activeWs.industry);
         st = await api.listStages();
       }
       const [cs, it, sl, ct] = await Promise.all([

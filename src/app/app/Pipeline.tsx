@@ -42,6 +42,7 @@ import {
   useContextMenu,
 } from "@/components/ContextMenu";
 import { confirmAsync } from "@/lib/confirmAsync";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useUndoableActions } from "@/store/useUndoableActions";
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import { useUIStore } from "@/store/uiStore";
@@ -133,7 +134,7 @@ export function Pipeline({
     try {
       let st = await api.listStages();
       if (st.length === 0) {
-        await api.seedDefaultStages();
+        await api.seedStagesForIndustry(useWorkspaceStore.getState().activeWorkspace?.industry);
         st = await api.listStages();
       }
       const [it, cs] = await Promise.all([api.listItems(), api.listCustomers()]);

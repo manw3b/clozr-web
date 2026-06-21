@@ -24,6 +24,9 @@ import { Stepper } from "@/components/Stepper";
  * etiquetas, etapas del pipeline, y cuenta (nombre editable). Cada bloque pega
  * a su ruta del worker. Diferido (Tauri-only): backup/restore, about/updater.
  */
+/** Emojis ofrecidos como miniatura del espacio (F3). */
+const WORKSPACE_ICONS = ["🏪", "🛒", "📱", "💻", "👕", "👟", "🍔", "☕", "💈", "💅", "🩺", "🔧", "🚗", "🎮", "📷", "🎁", "💊", "🐶", "✨", "🏠"];
+
 export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { showToast } = useUIStore();
   const { can } = usePermissions();
@@ -125,6 +128,20 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
     }
   }
 
+  /* ── Espacio: ícono / miniatura (F3) ── */
+  async function pickIcon(emoji: string | null) {
+    try {
+      await api.updateWorkspace({ icon: emoji });
+      useWorkspaceStore.setState((s) => ({
+        activeWorkspace: s.activeWorkspace ? { ...s.activeWorkspace, icon: emoji } : s.activeWorkspace,
+        workspaces: s.workspaces.map((w) => (w.id === s.activeWorkspace?.id ? { ...w, icon: emoji } : w)),
+      }));
+      showToast(emoji ? "Ícono actualizado" : "Ícono quitado", "success");
+    } catch {
+      showToast("No se pudo actualizar el ícono", "error");
+    }
+  }
+
   /* ── Métodos de pago ── */
   const [methods, setMethods] = useState<PaymentOption[]>([]);
   const [newMethod, setNewMethod] = useState("");
@@ -204,7 +221,7 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
               // eslint-disable-next-line @next/next/no-img-element
               <img src={api.assetUrl(logoKey)} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
             ) : (
-              "🏪"
+              activeWorkspace?.icon || "🏪"
             )}
           </div>
           <div style={{ flex: 1 }}>
@@ -221,6 +238,59 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
             </div>
           )}
         </div>
+
+        {/* Miniatura (emoji) — se usa cuando no hay logo */}
+        {canManage && (
+          <div style={{ marginTop: space[4] }}>
+            <Label>Ícono del negocio</Label>
+            <Hint>Se usa como miniatura cuando no subís un logo.</Hint>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: space[2], marginTop: space[2] }}>
+              {WORKSPACE_ICONS.map((emoji) => {
+                const active = (activeWorkspace?.icon ?? "") === emoji;
+                return (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => pickIcon(emoji)}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      fontSize: 18,
+                      lineHeight: 1,
+                      borderRadius: radius.md,
+                      cursor: "pointer",
+                      background: active ? color.primaryBg : color.surface2,
+                      border: `1px solid ${active ? color.primary : color.border}`,
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                );
+              })}
+              {activeWorkspace?.icon && (
+                <button
+                  type="button"
+                  onClick={() => pickIcon(null)}
+                  title="Quitar ícono"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: radius.md,
+                    cursor: "pointer",
+                    background: color.surface2,
+                    border: `1px solid ${color.border}`,
+                    color: color.textDim,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <XCircle size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Nombre */}
         <div style={{ display: "flex", gap: space[2], alignItems: "flex-end", marginTop: space[4] }}>
