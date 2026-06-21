@@ -772,6 +772,144 @@ function ThumbMini({ src }: { src?: string | null }) {
   );
 }
 
+/** Selector de cliente con buscador (input + dropdown en portal). "" = consumidor final. */
+function ClientPicker({
+  customers,
+  value,
+  onChange,
+  presetName,
+}: {
+  customers: Customer[];
+  value: string;
+  onChange: (id: string) => void;
+  presetName?: string;
+}) {
+  const selectedName = value === "" ? "" : customers.find((c) => c.id === value)?.name ?? presetName ?? "";
+  const [q, setQ] = useState(selectedName);
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const [rect, setRect] = useState<{ left: number; width: number; openUp: boolean; maxH: number; top?: number; bottom?: number } | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+
+  // Reflejar selección externa (ej. preset) en el texto del input.
+  useEffect(() => { setQ(selectedName); }, [selectedName]);
+
+  const matches = useMemo(() => {
+    const query = normName(q);
+    const list = query
+      ? customers.filter((c) => normName(c.name).includes(query) || (c.phone ? c.phone.includes(q.trim()) : false))
+      : customers;
+    return list.slice(0, 8);
+  }, [q, customers]);
+
+  // index 0 = consumidor final; luego los matches
+  const options = useMemo(
+    () => [{ id: "", name: "Consumidor final" }, ...matches.map((c) => ({ id: c.id, name: c.name }))],
+    [matches],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Node;
+      if (boxRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) { setRect(null); return; }
+    const measure = () => {
+      const el = inputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom;
+      const above = r.top;
+      const openUp = below < 260 && above > below;
+      const maxH = Math.max(120, Math.min(280, (openUp ? above : below) - 12));
+      setRect({
+        left: r.left, width: r.width, openUp, maxH,
+        top: openUp ? undefined : r.bottom + 4,
+        bottom: openUp ? window.innerHeight - r.top + 4 : undefined,
+      });
+    };
+    measure();
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+    };
+  }, [open]);
+
+  function choose(id: string, name: string) {
+    onChange(id);
+    setQ(id === "" ? "" : name);
+    setOpen(false);
+  }
+
+  return (
+    <div ref={boxRef} className="relative">
+      <input
+        ref={inputRef}
+        value={q}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); setHi(0); }}
+        onFocus={() => { setOpen(true); inputRef.current?.select(); }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setHi((h) => Math.min(h + 1, options.length - 1)); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+          else if (e.key === "Enter" && open && options[hi]) { e.preventDefault(); choose(options[hi].id, options[hi].name); }
+          else if (e.key === "Escape") { if (open) { e.preventDefault(); e.stopPropagation(); setOpen(false); } }
+        }}
+        placeholder="Consumidor final"
+        autoComplete="off"
+        className={fieldCls}
+      />
+      {open && rect &&
+        createPortal(
+          <div
+            ref={popRef}
+            role="listbox"
+            style={{
+              position: "fixed", left: rect.left, width: rect.width,
+              ...(rect.openUp ? { bottom: rect.bottom } : { top: rect.top }),
+              zIndex: 9999, maxHeight: rect.maxH, overflowY: "auto",
+              background: color.surface, border: `1px solid ${color.border}`,
+              borderRadius: radius.lg, boxShadow: shadow.lg,
+            }}
+          >
+            {options.map((o, idx) => (
+              <button
+                key={o.id || "__cf"}
+                type="button"
+                role="option"
+                aria-selected={idx === hi}
+                onMouseEnter={() => setHi(idx)}
+                onMouseDown={(e) => { e.preventDefault(); choose(o.id, o.name); }}
+                style={{
+                  display: "flex", width: "100%", alignItems: "center", gap: 8,
+                  padding: "9px 12px", textAlign: "left", border: "none", cursor: "pointer",
+                  background: idx === hi ? color.surface2 : "transparent",
+                  color: o.id === "" ? color.textMuted : color.text, fontSize: 14,
+                }}
+              >
+                {o.name}
+              </button>
+            ))}
+            {q.trim() !== "" && matches.length === 0 && (
+              <div style={{ padding: "9px 12px", fontSize: 13, color: color.textDim }}>Sin clientes con ese nombre</div>
+            )}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 /** Combobox de catálogo por ítem: input + dropdown filtrable. Elegir una
  *  opción setea descripción + precio + linkea el producto (catalogItemId). */
 function CatalogLineInput({
@@ -1258,20 +1396,15 @@ function SaleModal({
   return (
     <Modal title={title} onClose={onClose} isDirty={isDirty}>
       <div className="flex flex-col gap-3.5 p-5">
-        <label className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5">
           <span className={labelCls}>Cliente</span>
-          <select value={customerId} onChange={(e) => changeCustomer(e.target.value)} className={fieldCls}>
-            <option value="">Consumidor final</option>
-            {preset?.customerId && !customers.some((c) => c.id === preset.customerId) && (
-              <option value={preset.customerId}>{preset.customerName ?? "Cliente de la oportunidad"}</option>
-            )}
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <ClientPicker
+            customers={customers}
+            value={customerId}
+            onChange={changeCustomer}
+            presetName={preset?.customerName ?? undefined}
+          />
+        </div>
 
         <div className="flex flex-col gap-2">
           <span className={labelCls}>Productos / ítems</span>
