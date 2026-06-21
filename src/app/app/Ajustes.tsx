@@ -8,17 +8,12 @@ import { Badge } from "@/components/Badge";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
+import { roleLabel } from "@/lib/permissions";
 import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage } from "@/lib/types";
 import { PLANS, PAID_PLAN_IDS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, formatArs, type PlanId } from "@/lib/types";
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: "Dueño",
-  admin: "Encargado",
-  vendedor: "Vendedor",
-  viewer: "Solo lectura",
-};
 
 /**
  * Vista Ajustes — config del workspace con backend real (worker):
@@ -28,9 +23,10 @@ const ROLE_LABELS: Record<string, string> = {
  */
 export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
   const role = activeWorkspace?.role ?? "viewer";
-  const canManage = role === "owner" || role === "admin";
+  const canManage = can("settings.manage");
 
   /* ── Espacio: nombre ── */
   const [name, setName] = useState(activeWorkspace?.name ?? "");
@@ -328,7 +324,7 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
         </div>
         <div style={{ marginTop: space[3], display: "flex", flexDirection: "column", gap: space[2] }}>
           <InfoRow label="Email" value={user.email} />
-          <InfoRow label="Rol" value={ROLE_LABELS[role] ?? role} />
+          <InfoRow label="Rol" value={roleLabel(role)} />
         </div>
         <div style={{ marginTop: space[4] }}>
           <Button variant="secondary" iconLeft={<LogOut size={14} />} onClick={onLogout}>
@@ -471,6 +467,12 @@ function PlanStatusBadge({ status }: { status: string }) {
 }
 
 /* ════════════ Tipos de cliente ════════════ */
+/* ───────── Plan y suscripción ─────────
+ * Lee el plan actual del usuario (lo único que hoy expone el Worker vía /me).
+ * El cobro real (Mercado Pago) y el plan/asientos por workspace llegan con el
+ * backend de billing (ver clozr-handoff/BACKEND-equipos-spec.md, Tarea 3); por
+ * eso el CTA de cambio avisa "próximamente" en vez de iniciar un checkout.
+ */
 function CustomerTypesCard({ canManage, showToast }: { canManage: boolean; showToast: (m: string, t?: "success" | "error") => void }) {
   const [items, setItems] = useState<CustomerType[]>([]);
   const [name, setName] = useState("");

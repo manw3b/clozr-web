@@ -10,17 +10,12 @@ import { EmptyState } from "@/components/EmptyState";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { useUIStore } from "@/store/uiStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
+import { roleLabel } from "@/lib/permissions";
 import type { Member, User } from "@/lib/types";
 import { PLANS, SEATS_UNLIMITED, type PlanId } from "@/lib/types";
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: "Dueño",
-  admin: "Encargado",
-  vendedor: "Vendedor",
-  viewer: "Solo lectura",
-};
 
 const INVITABLE_ROLES: Array<{ value: "admin" | "vendedor" | "viewer"; label: string; desc: string }> = [
   { value: "admin", label: "Encargado", desc: "Casi todo menos cambios críticos." },
@@ -52,10 +47,10 @@ function errMsg(e: unknown, fallback: string): string {
  */
 export function Equipo({ user, onUpgrade }: { user: User; onUpgrade?: () => void }) {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
   const activeWs = useWorkspaceStore((s) => s.activeWorkspace);
-  const role = activeWs?.role ?? "viewer";
-  const canManage = role === "owner" || role === "admin";
-  const isOwner = role === "owner";
+  const canManage = can("team.manage");
+  const isOwner = can("billing.manage"); // solo el dueño puede mejorar el plan
   const planId = (activeWs?.plan as PlanId) ?? "free";
   const seats = activeWs?.seats ?? 1;
 
@@ -114,7 +109,7 @@ export function Equipo({ user, onUpgrade }: { user: User; onUpgrade?: () => void
   async function changeRole(m: Member, newRole: string) {
     try {
       await api.patchMemberRole(m.id, newRole);
-      showToast(`Rol actualizado a ${ROLE_LABELS[newRole] ?? newRole}`, "success");
+      showToast(`Rol actualizado a ${roleLabel(newRole)}`, "success");
       load();
     } catch (e) {
       showToast(errMsg(e, "No se pudo cambiar el rol"), "error");
@@ -336,7 +331,7 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
                       {isSelf && <span style={{ fontSize: text.xs, color: color.textDim, fontWeight: weight.regular }}>(vos)</span>}
                     </div>
                     <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2, display: "flex", gap: space[2], alignItems: "center" }}>
-                      <strong style={{ color: color.textMuted }}>{ROLE_LABELS[m.role] ?? m.role}</strong>
+                      <strong style={{ color: color.textMuted }}>{roleLabel(m.role)}</strong>
                       {isPending && (
                         <Badge tone="warning" variant="soft" size="sm">
                           <Mail size={10} /> Invitación pendiente

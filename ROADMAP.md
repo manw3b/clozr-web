@@ -3,12 +3,16 @@
 Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a la app desktop**, y de ahí en más sumar lo que aporte valor real al vendedor PyME.
 
 > Este archivo es la fuente de verdad del plan. Se actualiza a medida que avanzamos.
-> **Última actualización:** 2026-06-18 (post Ajustes a fondo + gestión de equipos, rumbo al lanzamiento)
+> **Última actualización:** 2026-06-20 (responsive / mobile-first de toda la app)
 
 ---
 
 ## ✅ Hecho y LIVE (www.clozr.online)
 
+- **Responsive / mobile-first** — la app entera se usa bien en celular (verificado a 390px en build de prod). Foundation: `useIsMobile()` (`src/lib/useIsMobile.ts`, breakpoint 767px) + helpers CSS en `globals.css` (`.cz-metric-grid`, `.cz-two-col`, `.cz-hero`, `.cz-noscrollbar`). Shell: sidebar → **drawer off-canvas** con hamburguesa + backdrop (`AppShell`/`Sidebar`), topbar condensado (búsqueda ícono-only, oculta el chip del dólar). Vistas: grids de métricas 4/3-col → 2-col en móvil, Mi Día apila el hero, la **DataTable** renderiza cada fila como **tarjeta** en móvil (genérico → Clientes/Ventas/Tareas/Deudas), filtros con scroll horizontal, y el **Pipeline kanban** en móvil es un carrusel: columnas ~85vw con scroll-snap (se desliza una etapa a la vez, con peek de la siguiente). **Fix incluido**: el reset `button {}` de `globals.css` estaba fuera de `@layer` y pisaba las utilidades de Tailwind → los botones de login/onboarding salían sin estilo; ahora va en `@layer base`. 100% frontend; `npm run build` verde. *Diferido: PWA (instalable + offline).*
+
+- **Onboarding guiado** — wizard multi-paso (`src/app/app/OnboardingWizard.tsx`) que reemplaza el alta de un solo campo: bienvenida → tu nombre (si falta) → tu negocio (nombre + rubro + objetivo diario) → invitar al equipo (opcional, skippable) → listo. 100% frontend sobre endpoints existentes. Saltar onboarding a mitad y volver te deja igual adentro (si el espacio ya se creó, `fetchMe` lo encuentra).
+- **Permisos reales por rol** — modelo central `can(role, perm)` en `src/lib/permissions.ts` (+ hook `usePermissions`) que reemplaza los `canManage` ad-hoc que solo existían en Equipo/Ajustes. Define permisos de **acción** para los 4 roles: **Dueño** (todo, incl. facturación y borrar espacio), **Encargado** (todo menos facturación/borrar espacio), **Vendedor** (opera clientes/ventas/caja/pipeline/tareas; no configura ni ve Reportes del negocio), **Solo lectura** (ve todo, no escribe nada). Aplicado en TODAS las vistas operativas (crear/editar/borrar gateados), el menú "Nuevo" del topbar, los atajos de teclado, el sidebar (Reportes/Equipo se ocultan por permiso) y el render de vistas en Crm. **Cierra el bug**: "Solo lectura" ya no podía editar todo. Frontend; `npm run build` verde. *Diferido (siguiente paso): enforcement server-side en el Worker y modo lectura dentro de los modales de edición.*
 - **Paridad base** — 11 vistas (Mi Día, Pipeline, Clientes, Ventas, Caja, Deudas, Inventario, Tareas, Reportes, Equipo, Ajustes) + shell completo (sidebar 3 secciones + topbar: switcher de workspace, chip de dólar, búsqueda ⌘K, notificaciones reales, menú "Nuevo").
 - **Pipeline a fondo** — kanban drag&drop, convertir oportunidad → venta, acciones en la card (WhatsApp/llamar), menú contextual (mover/ganar/perder/eliminar), filtro por prioridad.
 - **Import de clientes** — CSV / TSV / vCard (.vcf, contactos del celular), mapeo de columnas, dedupe por teléfono, alta en lote.
@@ -30,8 +34,21 @@ Norte del proyecto: que la webapp (`clozr.online`) sea **funcionalmente igual a 
 
 ## 🔜 Próximo (rumbo al lanzamiento oficial)
 
+### Plan de equipos + billing (decidido 2026-06-19)
+
+Decisiones tomadas (no re-discutir): **cobro con Mercado Pago en ARS**; **plan Free = 1 solo usuario** (invitar equipo = pago); **el Vendedor ve solo SUS datos** (clientes/ventas propias); arranque del trabajo por **permisos reales** (✅ hecho). Secuencia:
+
+1. **Permisos reales** — frontend ✅ **completo**: gating en vistas/sidebar/atajos + **modo lectura en los modales** de edición (verificado: un viewer abre una oportunidad del Pipeline y la ve con los campos deshabilitados y sin "Guardar"). Falta solo (a) enforcement **server-side** en el Worker (que rechace escrituras según rol, no solo ocultar UI) → **diseñado en `clozr-handoff/BACKEND-equipos-spec.md` (Tarea 1)**.
+2. **Vendedor "ve solo lo suyo"** (alcance de datos) — necesita **Worker** (`owner_id` + filtrado por dueño) → **diseñado en `BACKEND-equipos-spec.md` (Tarea 2)**.
+
+> **Nota de acceso:** el Worker vive en `manw3b/clozr` (`cf-worker/`), que NO está autorizado en esta sesión (confirmado: el proxy git lo rechaza). Para hacer el backend hay que agregar ese repo al entorno. Mientras tanto, las 3 tareas de backend quedaron escritas listas-para-aplicar en `clozr-handoff/BACKEND-equipos-spec.md`.
+3. **Onboarding mejorado** — ✅ hecho (`src/app/app/OnboardingWizard.tsx`). Wizard multi-paso que reemplaza el alta de un solo campo: bienvenida → tu nombre (si falta, p.ej. login por email) → tu negocio (nombre + rubro/`industry` + objetivo diario) → invitar al equipo (opcional) → listo. 100% frontend sobre endpoints existentes (`updateMyName`, `createWorkspace`, `updateWorkspace`, `inviteMember`). *Falta cuando llegue billing: el paso "elegir plan" y gatear el invitar-equipo detrás de plan pago (Free = 1).*
+4. **Billing (Mercado Pago, ARS)** — backend diseñado en `BACKEND-equipos-spec.md` (Tarea 3): suscripción recurrente + webhook que escribe flag de plan en Turso + **límite de asientos** (Free = 1; pago = N). Acá se suma el paso "elegir plan" al onboarding. *Frontend ya adelantado:* sección **Plan y suscripción** en Ajustes (`PlanCard` en `Ajustes.tsx`) que lee `user.plan` del `/me`, muestra los 3 tiers con el actual destacado y CTA de upgrade (hoy avisa "Mercado Pago llega pronto"; se cablea al checkout cuando exista el backend). Solo el dueño (`billing.manage`) ve los CTAs.
+
+### Otros
+
 - **Pre-lanzamiento:** probar onboarding end-to-end con un usuario nuevo real (registro por email → crear workspace → invitar a alguien), y avisar a los primeros usuarios de Hotmail/Outlook que miren spam (dominio recién verificado, reputación en warm-up).
-- **Candidatos post-lanzamiento:** comisión/recargo por método de pago (`modifier_pct`+`kind`, necesita 2 columnas en el worker); plantillas de WhatsApp (schema nuevo); tipos de cliente configurables en el linkeo de precios (hoy 4 fijos); tracking por IMEI con stock (`stock_items`); export de Reportes; **billing** (Mercado Pago / Lemon Squeezy). Ver "Diferido por vista".
+- **Candidatos post-lanzamiento:** comisión/recargo por método de pago (`modifier_pct`+`kind`, necesita 2 columnas en el worker); plantillas de WhatsApp (schema nuevo); tipos de cliente configurables en el linkeo de precios (hoy 4 fijos); tracking por IMEI con stock (`stock_items`); export de Reportes. Ver "Diferido por vista".
 
 ---
 

@@ -13,6 +13,7 @@ import {
   CheckSquare,
   Wallet,
   Check,
+  Menu,
 } from 'lucide-react';
 import { color, radius, space, text, weight } from '../tokens';
 import { Button } from '../components/Button';
@@ -20,9 +21,12 @@ import { Modal, ModalField } from '../components/Modal';
 import { Input } from '../components/Input';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useUIStore } from '../store/uiStore';
+import { usePermissions } from '../store/usePermissions';
+import { useIsMobile } from '../lib/useIsMobile';
 import { DollarChip } from './DollarChip';
 import * as api from '../lib/api';
 import { formatMoney } from '../lib/format';
+import type { Permission } from '../lib/permissions';
 import type { Sale, Task } from '../lib/types';
 
 export type NewAction = 'cliente' | 'venta' | 'lead' | 'tarea' | 'movimiento';
@@ -41,9 +45,12 @@ interface TopbarProps {
   onSearchClick: () => void;
   onNewAction: (action: NewAction) => void;
   onNotificationClick: (screen: NotifNavigate) => void;
+  /** En móvil: abre el drawer del sidebar (muestra la hamburguesa). */
+  onMenuClick?: () => void;
 }
 
-export function Topbar({ onSearchClick, onNewAction, onNotificationClick }: TopbarProps) {
+export function Topbar({ onSearchClick, onNewAction, onNotificationClick, onMenuClick }: TopbarProps) {
+  const isMobile = useIsMobile();
   return (
     <header
       style={{
@@ -51,28 +58,39 @@ export function Topbar({ onSearchClick, onNewAction, onNotificationClick }: Topb
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: space[4],
-        padding: `0 ${space[5]}`,
+        gap: isMobile ? space[2] : space[4],
+        padding: isMobile ? `0 ${space[3]}` : `0 ${space[5]}`,
         background: color.surface,
         borderBottom: `1px solid ${color.border}`,
         flexShrink: 0,
       }}
     >
-      {/* IZQUIERDA — Workspace switcher + cotización */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[3] }}>
+      {/* IZQUIERDA — Hamburguesa (móvil) + Workspace switcher + cotización (desktop) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
+        {onMenuClick && (
+          <button
+            onClick={onMenuClick}
+            aria-label="Abrir menú"
+            className="sidebar-item"
+            style={{ width: 36, height: 36, borderRadius: radius.md, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+          >
+            <Menu size={20} />
+          </button>
+        )}
         <WorkspaceSwitcher />
-        <span
-          style={{ width: 1, height: 22, background: color.border, display: 'inline-block' }}
-          aria-hidden
-        />
-        <DollarChip />
+        {!isMobile && (
+          <>
+            <span style={{ width: 1, height: 22, background: color.border, display: 'inline-block' }} aria-hidden />
+            <DollarChip />
+          </>
+        )}
       </div>
 
-      {/* CENTRO — Búsqueda global */}
-      <SearchTrigger onClick={onSearchClick} />
+      {/* CENTRO — Búsqueda global (compacta en móvil) */}
+      <SearchTrigger onClick={onSearchClick} compact={isMobile} />
 
       {/* DERECHA — Acciones */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexShrink: 0 }}>
         <NotificationsMenu onNavigate={onNotificationClick} />
         <NewMenu onAction={onNewAction} />
       </div>
@@ -260,16 +278,18 @@ function NotificationsMenu({ onNavigate }: { onNavigate: (s: NotifNavigate) => v
 
 /* ===== "Nuevo" dropdown menu ===== */
 
-const NEW_ITEMS: Array<{ id: NewAction; label: string; shortcut: string; Icon: typeof Users }> = [
-  { id: 'cliente', label: 'Cliente', shortcut: 'C', Icon: Users },
-  { id: 'venta', label: 'Venta', shortcut: 'V', Icon: ShoppingCart },
-  { id: 'lead', label: 'Lead', shortcut: 'L', Icon: GitBranch },
-  { id: 'tarea', label: 'Tarea', shortcut: 'T', Icon: CheckSquare },
-  { id: 'movimiento', label: 'Movimiento de caja', shortcut: 'M', Icon: Wallet },
+const NEW_ITEMS: Array<{ id: NewAction; label: string; shortcut: string; Icon: typeof Users; perm: Permission }> = [
+  { id: 'cliente', label: 'Cliente', shortcut: 'C', Icon: Users, perm: 'customers.write' },
+  { id: 'venta', label: 'Venta', shortcut: 'V', Icon: ShoppingCart, perm: 'sales.write' },
+  { id: 'lead', label: 'Lead', shortcut: 'L', Icon: GitBranch, perm: 'pipeline.write' },
+  { id: 'tarea', label: 'Tarea', shortcut: 'T', Icon: CheckSquare, perm: 'tasks.write' },
+  { id: 'movimiento', label: 'Movimiento de caja', shortcut: 'M', Icon: Wallet, perm: 'cash.write' },
 ];
 
 function NewMenu({ onAction }: { onAction: (a: NewAction) => void }) {
   const [open, setOpen] = useState(false);
+  const { can } = usePermissions();
+  const items = NEW_ITEMS.filter((item) => can(item.perm));
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -288,6 +308,8 @@ function NewMenu({ onAction }: { onAction: (a: NewAction) => void }) {
       };
     }
   }, [open]);
+
+  if (items.length === 0) return null;
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
@@ -309,7 +331,7 @@ function NewMenu({ onAction }: { onAction: (a: NewAction) => void }) {
             zIndex: 50,
           }}
         >
-          {NEW_ITEMS.map((item) => (
+          {items.map((item) => (
             <NewMenuItem
               key={item.id}
               label={item.label}
@@ -681,7 +703,7 @@ function CreateWorkspaceModal({ open, onClose }: { open: boolean; onClose: () =>
 
 /* ===== Search global trigger (Cmd+K) ===== */
 
-function SearchTrigger({ onClick }: { onClick: () => void }) {
+function SearchTrigger({ onClick, compact = false }: { onClick: () => void; compact?: boolean }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -692,6 +714,20 @@ function SearchTrigger({ onClick }: { onClick: () => void }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClick]);
+
+  // En móvil: botón ícono-only (ahorra espacio en el topbar).
+  if (compact) {
+    return (
+      <button
+        onClick={onClick}
+        aria-label="Buscar"
+        className="sidebar-item"
+        style={{ width: 36, height: 36, borderRadius: radius.md, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+      >
+        <Search size={18} strokeWidth={2.2} />
+      </button>
+    );
+  }
 
   return (
     <button

@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   clearSession,
-  createBillingCheckout,
-  createWorkspace,
   fetchMe,
   getToken,
   getWorkspaceId,
@@ -16,8 +14,8 @@ import {
   WORKER_URL,
 } from "@/lib/api";
 import type { User, Workspace } from "@/lib/types";
-import { PLANS, SEATS_UNLIMITED, formatArs, BILLING_TRIAL_DAYS, type PlanId } from "@/lib/types";
 import Crm from "./Crm";
+import OnboardingWizard from "./OnboardingWizard";
 
 type Phase = "loading" | "auth" | "workspace" | "ready";
 
@@ -130,8 +128,10 @@ export default function AppClient() {
 
   if (phase === "workspace") {
     return (
-      <WorkspaceSetup
-        onCreated={(w) => {
+      <OnboardingWizard
+        user={user!}
+        onNameChange={(name) => setUser((u) => (u ? { ...u, name } : u))}
+        onComplete={(w) => {
           setWorkspaceId(w.id);
           setActiveWs(w);
           setWorkspaces((prev) => [...prev, w]);
@@ -284,156 +284,6 @@ function AuthScreen({
         )}
 
         {error && <p className="mt-4 text-center text-sm text-danger">{error}</p>}
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────── Crear workspace + elegir plan ─────────────────── */
-function WorkspaceSetup({ onCreated }: { onCreated: (w: Workspace) => void }) {
-  const [step, setStep] = useState<"name" | "plan">("name");
-  const [name, setName] = useState("");
-  // El workspace se crea al elegir plan; lo guardamos para no duplicarlo si el
-  // checkout falla y el usuario reintenta o decide entrar en Free.
-  const [createdWs, setCreatedWs] = useState<Workspace | null>(null);
-  const [busy, setBusy] = useState<PlanId | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  function submitName(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    setError(null);
-    setStep("plan");
-  }
-
-  async function choosePlan(planId: PlanId) {
-    setBusy(planId);
-    setError(null);
-    let w = createdWs;
-    try {
-      if (!w) {
-        w = await createWorkspace(name.trim());
-        setCreatedWs(w);
-        setWorkspaceId(w.id); // el checkout resuelve el wid desde acá
-      }
-    } catch {
-      setError("No pudimos crear el espacio. Intentá de nuevo.");
-      setBusy(null);
-      return;
-    }
-    if (planId === "free") {
-      onCreated(w);
-      return;
-    }
-    try {
-      const { initPoint } = await createBillingCheckout(planId);
-      window.location.assign(initPoint); // → Mercado Pago; al volver entra al /app
-    } catch {
-      // El espacio ya quedó creado en Free; que entre igual o reintente — el
-      // plan se mejora luego desde Ajustes.
-      setError("No pudimos iniciar el pago. Entrás en Free y mejorás el plan desde Ajustes cuando quieras.");
-      setBusy(null);
-    }
-  }
-
-  if (step === "name") {
-    return (
-      <div className="grid min-h-screen place-items-center px-6">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 flex flex-col items-center gap-4 text-center">
-            <LogoMark />
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Creá tu espacio</h1>
-              <p className="mt-1 text-sm text-text-muted">
-                Es donde van a vivir tus contactos y ventas. Podés invitar a tu
-                equipo después.
-              </p>
-            </div>
-          </div>
-          <form onSubmit={submitName} className="flex flex-col gap-3">
-            <input
-              required
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Mi empresa"
-              className="rounded-lg border border-border bg-surface-2 px-4 py-3 outline-none focus:border-primary"
-            />
-            <button
-              disabled={!name.trim()}
-              className="rounded-lg bg-primary py-3 font-semibold text-white transition hover:bg-primary-hover disabled:opacity-50"
-            >
-              Continuar
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid min-h-screen place-items-center px-6 py-10">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <LogoMark />
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Elegí tu plan</h1>
-            <p className="mt-1 text-sm text-text-muted">
-              Empezá gratis o sumá a tu equipo. Lo cambiás cuando quieras.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          {(["free", "pro", "team"] as PlanId[]).map((id) => {
-            const p = PLANS[id];
-            const isPaid = id !== "free";
-            const seatsLabel =
-              p.seats >= SEATS_UNLIMITED
-                ? "Asientos ilimitados"
-                : `${p.seats} ${p.seats === 1 ? "asiento" : "asientos"}`;
-            return (
-              <div key={id} className="rounded-xl border border-border bg-surface-2 p-4">
-                <div className="flex items-baseline justify-between">
-                  <span className="font-bold">{p.name}</span>
-                  <span className="text-sm text-text-muted">
-                    {p.priceArs > 0 ? `${formatArs(p.priceArs)}/mes` : "Gratis"}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-xs text-text-dim">
-                  {seatsLabel} · {p.tagline}
-                </p>
-                <button
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => choosePlan(id)}
-                  className={
-                    isPaid
-                      ? "mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-50"
-                      : "mt-3 w-full rounded-lg border border-border-strong bg-surface py-2.5 text-sm font-semibold transition hover:bg-border-strong disabled:opacity-50"
-                  }
-                >
-                  {busy === id ? "Abriendo…" : id === "free" ? "Empezar gratis" : `Elegir ${p.name}`}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-
-        <p className="mt-4 text-center text-xs text-text-dim">
-          Los planes pagos incluyen {BILLING_TRIAL_DAYS} días de prueba y se cobran por Mercado Pago.
-        </p>
-        {error && <p className="mt-3 text-center text-sm text-danger">{error}</p>}
-        <button
-          type="button"
-          onClick={() => {
-            setStep("name");
-            setError(null);
-          }}
-          className="mt-4 w-full text-center text-sm text-text-dim hover:text-text"
-        >
-          ← Volver
-        </button>
       </div>
     </div>
   );

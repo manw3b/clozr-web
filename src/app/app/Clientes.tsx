@@ -34,6 +34,7 @@ import { ImportClientsModal } from "./ImportClientsModal";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { openWhatsApp, openTel, openMail } from "@/lib/openExternal";
 import { useUIStore } from "@/store/uiStore";
+import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, formatDateLong } from "@/lib/format";
 import * as api from "@/lib/api";
@@ -77,6 +78,9 @@ const TYPE_FILTERS: { value: string; label: string }[] = [
  */
 export function Clientes({ onNewSale }: { onNewSale: () => void }) {
   const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canWrite = can("customers.write");
+  const canSell = can("sales.write");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,9 +256,11 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
             <RowIconBtn ariaLabel="Llamar" disabled={!c.phone} onClick={() => c.phone && openTel(c.phone)}>
               <Phone size={13} strokeWidth={2.2} color="var(--text-muted)" />
             </RowIconBtn>
-            <RowIconBtn ariaLabel="Nueva venta" tone="success" onClick={onNewSale}>
-              <DollarSign size={13} strokeWidth={2.4} color="var(--success)" />
-            </RowIconBtn>
+            {canSell && (
+              <RowIconBtn ariaLabel="Nueva venta" tone="success" onClick={onNewSale}>
+                <DollarSign size={13} strokeWidth={2.4} color="var(--success)" />
+              </RowIconBtn>
+            )}
             <RowIconBtn ariaLabel="Ver detalle" onClick={() => setOpenId(c.id)}>
               <MoreHorizontal size={14} strokeWidth={2.2} color="var(--text-muted)" />
             </RowIconBtn>
@@ -262,7 +268,7 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
         ),
       },
     ],
-    [statsFor, onNewSale],
+    [statsFor, onNewSale, canSell],
   );
 
   const sortedRows = useMemo(
@@ -295,27 +301,29 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
         title="Clientes"
         subtitle={loading ? "Cargando…" : `${filtered.length} de ${customers.length} ${customers.length === 1 ? "cliente" : "clientes"}`}
         actions={
-          <>
-            <Button
-              variant="secondary"
-              size="md"
-              iconLeft={<Upload size={16} />}
-              onClick={() => setImportOpen(true)}
-            >
-              Importar
-            </Button>
-            <Button
-              variant="primary"
-              size="md"
-              iconLeft={<Plus size={16} />}
-              onClick={() => {
-                setEditing(null);
-                setFormOpen(true);
-              }}
-            >
-              Nuevo cliente
-            </Button>
-          </>
+          canWrite ? (
+            <>
+              <Button
+                variant="secondary"
+                size="md"
+                iconLeft={<Upload size={16} />}
+                onClick={() => setImportOpen(true)}
+              >
+                Importar
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                iconLeft={<Plus size={16} />}
+                onClick={() => {
+                  setEditing(null);
+                  setFormOpen(true);
+                }}
+              >
+                Nuevo cliente
+              </Button>
+            </>
+          ) : undefined
         }
       />
 
@@ -357,7 +365,9 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
               action={
                 search.trim()
                   ? { label: "Limpiar búsqueda", onClick: () => setSearch(""), variant: "secondary" }
-                  : { label: "Crear cliente", onClick: () => { setEditing(null); setFormOpen(true); }, iconLeft: <Plus size={14} /> }
+                  : canWrite
+                    ? { label: "Crear cliente", onClick: () => { setEditing(null); setFormOpen(true); }, iconLeft: <Plus size={14} /> }
+                    : undefined
               }
             />
           }
@@ -375,6 +385,8 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
             setFormOpen(true);
           }}
           onNewSale={onNewSale}
+          canWrite={canWrite}
+          canSell={canSell}
         />
       )}
 
@@ -426,13 +438,17 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
           >
             Copiar contacto
           </ContextMenuItem>
-          <ContextMenuDivider />
-          <ContextMenuItem icon={<Pencil size={14} />} onClick={() => { setEditing(ctxCustomer); setFormOpen(true); ctxMenu.close(); }}>
-            Editar
-          </ContextMenuItem>
-          <ContextMenuItem tone="danger" icon={<Trash2 size={14} />} onClick={() => { const c = ctxCustomer; ctxMenu.close(); remove(c); }}>
-            Eliminar
-          </ContextMenuItem>
+          {canWrite && (
+            <>
+              <ContextMenuDivider />
+              <ContextMenuItem icon={<Pencil size={14} />} onClick={() => { setEditing(ctxCustomer); setFormOpen(true); ctxMenu.close(); }}>
+                Editar
+              </ContextMenuItem>
+              <ContextMenuItem tone="danger" icon={<Trash2 size={14} />} onClick={() => { const c = ctxCustomer; ctxMenu.close(); remove(c); }}>
+                Eliminar
+              </ContextMenuItem>
+            </>
+          )}
         </ContextMenu>
       )}
     </div>
@@ -497,6 +513,8 @@ function ClientDrawer({
   onClose,
   onEdit,
   onNewSale,
+  canWrite,
+  canSell,
 }: {
   customer: Customer;
   sales: Sale[];
@@ -504,6 +522,8 @@ function ClientDrawer({
   onClose: () => void;
   onEdit: () => void;
   onNewSale: () => void;
+  canWrite: boolean;
+  canSell: boolean;
 }) {
   const [tab, setTab] = useState<"info" | "ventas">("info");
 
@@ -526,9 +546,11 @@ function ClientDrawer({
               </div>
             </div>
             <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-              <button onClick={onEdit} title="Editar" aria-label="Editar" className="btn-icon muted" style={{ width: 28, height: 28, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                <Pencil size={15} strokeWidth={2.2} />
-              </button>
+              {canWrite && (
+                <button onClick={onEdit} title="Editar" aria-label="Editar" className="btn-icon muted" style={{ width: 28, height: 28, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                  <Pencil size={15} strokeWidth={2.2} />
+                </button>
+              )}
               <button onClick={onClose} title="Cerrar" aria-label="Cerrar" className="btn-icon muted" style={{ width: 28, height: 28, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                 <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 300 }}>×</span>
               </button>
@@ -551,9 +573,11 @@ function ClientDrawer({
           <Button variant="secondary" size="md" iconLeft={<WhatsAppIcon size={15} color="var(--success)" />} onClick={() => customer.phone && openWhatsApp(customer.phone)} fullWidth>
             WhatsApp
           </Button>
-          <Button variant="primary" size="md" iconLeft={<Plus size={15} />} onClick={onNewSale} fullWidth>
-            Nueva venta
-          </Button>
+          {canSell && (
+            <Button variant="primary" size="md" iconLeft={<Plus size={15} />} onClick={onNewSale} fullWidth>
+              Nueva venta
+            </Button>
+          )}
         </div>
       }
     >
