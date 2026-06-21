@@ -780,6 +780,25 @@ tr.hoverable:hover td {
   filter: blur(6px);
 }
 
+/* Escena isométrica del hero: perspectiva + tilt sutil (solo ≥lg, donde se ve
+   la composición completa; en mobile queda plana y legible). Los paneles
+   flotan hacia adelante (translateZ) para dar profundidad tipo imagen de ref. */
+.lp-scene-wrap { perspective: 2000px; }
+.lp-scene { transform-style: preserve-3d; }
+@media (min-width: 1024px) {
+  .lp-scene {
+    transform: rotateX(8deg) rotateY(-2.5deg);
+    transform-origin: 50% 38%;
+  }
+}
+@keyframes lp-float-pop {
+  0%, 100% { transform: translateZ(55px) translateY(0); }
+  50% { transform: translateZ(55px) translateY(-10px); }
+}
+.lp-pop { animation: lp-float-pop 6s ease-in-out infinite; }
+.lp-pop-2 { animation: lp-float-pop 7.6s ease-in-out infinite; }
+/* Sin animación: dejamos el pop fijo (mantiene la profundidad). */
 @media (prefers-reduced-motion: reduce) {
   .lp-rise, .lp-float, .lp-float-2, .lp-pulse, .lp-dash, .lp-flowline { animation: none; }
+  .lp-pop, .lp-pop-2 { animation: none; transform: translateZ(55px); }
 }
