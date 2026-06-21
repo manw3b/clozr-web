@@ -8,9 +8,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Clozr — El CRM simple para tu equipo de ventas",
+  title: "Clozr — El sistema operativo para tu negocio",
   description:
-    "Dejá el Excel. Seguí tus contactos, oportunidades y ventas en un solo lugar. En español, pensado para equipos de venta de LATAM.",
+    "Dejá el Excel. Clientes, ventas, caja e inventario en un solo lugar. En español, hecho en LATAM con calidad internacional.",
 };
 
 export default function RootLayout({

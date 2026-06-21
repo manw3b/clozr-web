@@ -660,3 +660,91 @@ tr.hoverable:hover td {
 .dt-sort-btn.sorted {
   color: var(--text);
 }
+
+/* =============================================================================
+   Landing pública (src/app/page.tsx) — atmósfera cinematográfica + premium.
+   Prefijo .lp-* para no colisionar con la app. La app NO usa estas clases.
+   Paleta propia (grafito/carbón), distinta del navy de la app, con rojo de
+   acento muy medido. Animaciones suaves (fade/scale/translate), sin rebotes.
+   ============================================================================= */
+.lp-root {
+  position: relative;
+  background: #0b0b0d;
+  color: #f5f5f7;
+  isolation: isolate;
+  overflow-x: clip;
+}
+/* Atmósfera: radiales muy sutiles + glow rojo de acento, fija detrás de todo. */
+.lp-atmos {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 540px at 50% -10%, rgba(225, 29, 72, 0.13), transparent 60%),
+    radial-gradient(760px 760px at 10% 16%, rgba(30, 30, 36, 0.9), transparent 60%),
+    radial-gradient(820px 620px at 90% 10%, rgba(225, 29, 72, 0.05), transparent 55%),
+    radial-gradient(1100px 820px at 50% 116%, rgba(22, 22, 27, 0.95), transparent 62%),
+    #0b0b0d;
+}
+/* Vidrio sutil reutilizable. */
+.lp-glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.018));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.lp-glow { box-shadow: 0 0 50px rgba(225, 29, 72, 0.08); }
+.lp-shadow { box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5); }
+
+/* Lift en hover (cards). 220ms, sin rebote. */
+.lp-lift {
+  transition: transform 220ms var(--ease), box-shadow 220ms var(--ease), border-color 220ms var(--ease);
+  will-change: transform;
+}
+.lp-lift:hover {
+  transform: translateY(-4px);
+  border-color: rgba(225, 29, 72, 0.35);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25), 0 0 50px rgba(225, 29, 72, 0.08);
+}
+
+/* Navbar: borde + blur aparecen al hacer scroll (macOS / Arc). */
+.lp-nav {
+  transition: background 250ms var(--ease), border-color 250ms var(--ease);
+  border-bottom: 1px solid transparent;
+}
+.lp-nav.scrolled {
+  background: rgba(11, 11, 13, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Entrada suave (hero), con stagger vía animation-delay inline. */
+@keyframes lp-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.lp-rise { animation: lp-rise 700ms var(--ease) both; }
+
+/* Flotación ambiental de las cards del hero. */
+@keyframes lp-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.lp-float { animation: lp-float 6s ease-in-out infinite; }
+.lp-float-2 { animation: lp-float 7.5s ease-in-out infinite; }
+
+/* Pulso de nodos / glows. */
+@keyframes lp-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.9; } }
+.lp-pulse { animation: lp-pulse 3.2s ease-in-out infinite; }
+
+/* Flujo sobre conexiones (líneas SVG). */
+@keyframes lp-dash { to { stroke-dashoffset: -1000; } }
+.lp-dash { stroke-dasharray: 5 9; animation: lp-dash 26s linear infinite; }
+
+/* Barra de flujo con barrido de luz roja. */
+@keyframes lp-sweep { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.lp-flowline {
+  background: linear-gradient(90deg, transparent, rgba(225, 29, 72, 0.65), transparent);
+  background-size: 200% 100%;
+  animation: lp-sweep 3.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-rise, .lp-float, .lp-float-2, .lp-pulse, .lp-dash, .lp-flowline { animation: none; }
+}
