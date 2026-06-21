@@ -258,7 +258,7 @@ function HeroWindow() {
                 <div key={m.label} className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
                   <div className="text-[10px] text-white/40">{m.label}</div>
                   <div className="mt-1 text-[15px] font-bold text-white">{m.value}</div>
-                  <div className="text-[10px] font-medium text-[#10B981]">
+                  <div className="text-[10px] font-medium text-[#22C55E]">
                     {m.delta} <span className="text-white/30">vs mes ant.</span>
                   </div>
                   <Spark className="mt-1.5 h-5 w-full" />
@@ -319,9 +319,9 @@ function HeroWindow() {
         <span className="text-xs font-semibold text-white">Caja</span>
         <div className="mt-2 text-[10px] text-white/40">Saldo disponible</div>
         <div className="text-lg font-bold text-white">$ 34.850.000</div>
-        <div className="text-[10px] font-medium text-[#10B981]">+15% vs mes ant.</div>
+        <div className="text-[10px] font-medium text-[#22C55E]">+15% vs mes ant.</div>
         <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2 text-[10px]">
-          <span className="text-[#10B981]">↑ Ingresos</span>
+          <span className="text-[#22C55E]">↑ Ingresos</span>
           <span className="text-white/60">$ 4.250.000</span>
         </div>
       </div>
@@ -471,7 +471,7 @@ function NodeCard({ title, sub, stat, unit, delta, Icon }: {
           <div className="text-xl font-bold leading-none text-white">{stat}</div>
           <div className="mt-1 text-[10px] text-white/40">{unit}</div>
         </div>
-        <span className="text-[10px] font-medium text-[#10B981]">{delta}</span>
+        <span className="text-[10px] font-medium text-[#22C55E]">{delta}</span>
       </div>
       <Spark className="mt-2.5 h-5 w-full" />
     </div>
