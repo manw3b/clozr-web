@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Plus, Trash2, LogOut, Upload, Trophy, XCircle, CreditCard } from "lucide-react";
+import { Plus, Trash2, LogOut, Upload, Trophy, XCircle, Check } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -13,7 +13,7 @@ import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import { roleLabel } from "@/lib/permissions";
 import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage } from "@/lib/types";
-import { PLANS, PAID_PLAN_IDS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, formatArs, type PlanId } from "@/lib/types";
+import { PLANS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, formatArs, type PlanId } from "@/lib/types";
 
 /**
  * Vista Ajustes — config del workspace con backend real (worker):
@@ -337,18 +337,17 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
 }
 
 /* ════════════ Plan y facturación (billing T3) ════════════ */
+const PLAN_ORDER: PlanId[] = ["free", "pro", "team"];
+
 function PlanCard() {
   const showToast = useUIStore((s) => s.showToast);
+  const { can } = usePermissions();
   const ws = useWorkspaceStore((s) => s.activeWorkspace);
-  const isOwner = ws?.role === "owner";
+  const canBilling = can("billing.manage");
   const planId = (ws?.plan as PlanId) ?? "free";
-  const current = PLANS[planId] ?? PLANS.free;
   const status = ws?.planStatus ?? "active";
-  const seats = ws?.seats ?? current.seats;
+  const currentIdx = PLAN_ORDER.indexOf(planId);
   const [busy, setBusy] = useState<PlanId | null>(null);
-
-  // Planes a los que se puede subir (más caros que el actual).
-  const upgrades = PAID_PLAN_IDS.filter((p) => PLANS[p].priceArs > current.priceArs);
 
   async function upgrade(target: "pro" | "team") {
     setBusy(target);
@@ -371,81 +370,106 @@ function PlanCard() {
 
   return (
     <Card padding={5}>
-      <SectionTitle>Plan y facturación</SectionTitle>
-
-      {/* Plan actual */}
-      <div style={{ display: "flex", alignItems: "center", gap: space[3], marginTop: space[3] }}>
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: radius.md,
-            flexShrink: 0,
-            background: color.primaryBg,
-            color: color.primary,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <CreditCard size={20} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-            <span style={{ fontSize: text.md, fontWeight: weight.semibold, color: color.text }}>
-              Plan {current.name}
-            </span>
-            <PlanStatusBadge status={status} />
-          </div>
-          <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>
-            {current.priceArs > 0 ? `${formatArs(current.priceArs)}/mes · ` : "Gratis · "}
-            {seats >= SEATS_UNLIMITED ? "asientos ilimitados" : `${seats} ${seats === 1 ? "asiento" : "asientos"}`}
-          </div>
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+        <SectionTitle>Plan y facturación</SectionTitle>
+        <PlanStatusBadge status={status} />
       </div>
+      <Hint>
+        Elegí el plan que acompañe a tu equipo. Pago mensual por Mercado Pago · {BILLING_TRIAL_DAYS} días de prueba ·
+        cancelás cuando quieras.
+      </Hint>
 
-      {/* Upgrades — solo el dueño gestiona el plan (billing.manage) */}
-      {isOwner && upgrades.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginTop: space[4] }}>
-          {upgrades.map((p) => {
-            const plan = PLANS[p];
-            return (
-              <div
-                key={p}
+      {/* Tabla de planes (3 columnas, responsive). Precios destacados. */}
+      <div
+        className="cz-metric-grid"
+        style={{ ["--cz-cols"]: 3, marginTop: space[4], alignItems: "stretch" } as React.CSSProperties}
+      >
+        {PLAN_ORDER.map((id, i) => {
+          const p = PLANS[id];
+          const isCurrent = id === planId;
+          const isUpgrade = i > currentIdx;
+          const recommended = id === "pro" && !isCurrent;
+          return (
+            <div
+              key={id}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: space[3],
+                padding: space[4],
+                borderRadius: radius.lg,
+                background: isCurrent ? color.primaryBg : color.surface2,
+                border: `1px solid ${isCurrent || recommended ? color.primary : color.border}`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2] }}>
+                <span style={{ fontSize: text.md, fontWeight: weight.bold, color: color.text }}>{p.name}</span>
+                {isCurrent ? (
+                  <Badge tone="primary" size="sm">Actual</Badge>
+                ) : recommended ? (
+                  <Badge tone="primary" variant="soft" size="sm">Recomendado</Badge>
+                ) : null}
+              </div>
+
+              {/* Precio destacado */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span style={{ fontSize: text["2xl"], fontWeight: weight.black, color: color.text, lineHeight: 1 }}>
+                  {p.priceArs > 0 ? formatArs(p.priceArs) : "Gratis"}
+                </span>
+                {p.priceArs > 0 && <span style={{ fontSize: text.sm, color: color.textDim }}>/mes</span>}
+              </div>
+
+              <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted }}>
+                {p.seats >= SEATS_UNLIMITED
+                  ? "Asientos ilimitados"
+                  : `${p.seats} ${p.seats === 1 ? "asiento" : "asientos"}`}
+              </div>
+
+              <ul
                 style={{
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
                   display: "flex",
-                  alignItems: "center",
-                  gap: space[3],
-                  padding: space[3],
-                  borderRadius: radius.md,
-                  background: color.surface2,
-                  border: `1px solid ${color.border}`,
+                  flexDirection: "column",
+                  gap: space[1],
+                  flex: 1,
                 }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>
-                    {plan.name} · {formatArs(plan.priceArs)}/mes
-                  </div>
-                  <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>
-                    {plan.seats >= SEATS_UNLIMITED ? "Asientos ilimitados" : `${plan.seats} asientos`} · {plan.tagline}
-                  </div>
-                </div>
-                <Button variant="primary" size="sm" loading={busy === p} onClick={() => upgrade(p)}>
-                  Mejorar
-                </Button>
-              </div>
-            );
-          })}
-          <Hint>
-            Pago mensual por Mercado Pago · {BILLING_TRIAL_DAYS} días de prueba · cancelás cuando quieras.
-          </Hint>
-        </div>
-      )}
+                {p.features.map((f) => (
+                  <li key={f} style={{ display: "flex", gap: 6, fontSize: text.xs, color: color.textMuted }}>
+                    <Check size={14} color={color.success} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
 
-      {isOwner && upgrades.length === 0 && (
-        <Hint>Estás en el plan máximo. ¡Gracias por bancar Clozr! 🙌</Hint>
-      )}
-      {!isOwner && <Hint>Solo el dueño del espacio puede cambiar el plan.</Hint>}
+              {isCurrent ? (
+                <Button variant="secondary" size="sm" fullWidth disabled>
+                  Tu plan actual
+                </Button>
+              ) : isUpgrade ? (
+                <Button
+                  variant={recommended ? "primary" : "secondary"}
+                  size="sm"
+                  fullWidth
+                  loading={busy === id}
+                  disabled={!canBilling || busy !== null}
+                  onClick={() => upgrade(id as "pro" | "team")}
+                >
+                  Mejorar a {p.name}
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" fullWidth disabled>
+                  Incluido
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {!canBilling && <Hint>Solo el dueño del espacio puede cambiar el plan.</Hint>}
     </Card>
   );
 }
