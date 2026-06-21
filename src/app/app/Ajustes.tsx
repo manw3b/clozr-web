@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Plus, Trash2, LogOut, Upload, Trophy, XCircle, CreditCard } from "lucide-react";
+import { Plus, Trash2, LogOut, Upload, Trophy, XCircle, Check, Zap, Rocket, Sparkles, Gift } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -13,7 +13,8 @@ import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import { roleLabel } from "@/lib/permissions";
 import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage } from "@/lib/types";
-import { PLANS, PAID_PLAN_IDS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, formatArs, type PlanId } from "@/lib/types";
+import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, formatArs, type PlanId, type PlanInfo } from "@/lib/types";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 /**
  * Vista Ajustes — config del workspace con backend real (worker):
@@ -337,18 +338,21 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
 }
 
 /* ════════════ Plan y facturación (billing T3) ════════════ */
+const PLAN_ORDER: PlanId[] = ["free", "pro", "team"];
+const TIER_ICON: Record<PlanId, typeof Zap> = { free: Sparkles, pro: Zap, team: Rocket };
+
 function PlanCard() {
   const showToast = useUIStore((s) => s.showToast);
   const ws = useWorkspaceStore((s) => s.activeWorkspace);
+  const isMobile = useIsMobile();
   const isOwner = ws?.role === "owner";
   const planId = (ws?.plan as PlanId) ?? "free";
   const current = PLANS[planId] ?? PLANS.free;
   const status = ws?.planStatus ?? "active";
-  const seats = ws?.seats ?? current.seats;
   const [busy, setBusy] = useState<PlanId | null>(null);
 
-  // Planes a los que se puede subir (más caros que el actual).
-  const upgrades = PAID_PLAN_IDS.filter((p) => PLANS[p].priceArs > current.priceArs);
+  // El próximo escalón pago: lo destacamos como "Recomendado".
+  const recommendedId = PAID_PLAN_IDS.find((p) => PLANS[p].priceArs > current.priceArs) ?? null;
 
   async function upgrade(target: "pro" | "team") {
     setBusy(target);
@@ -373,82 +377,160 @@ function PlanCard() {
     <Card padding={5}>
       <SectionTitle>Plan y facturación</SectionTitle>
 
-      {/* Plan actual */}
-      <div style={{ display: "flex", alignItems: "center", gap: space[3], marginTop: space[3] }}>
+      {/* Tarjetas de planes (Free / Pro / Team) */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+          gap: space[3],
+          marginTop: space[4],
+        }}
+      >
+        {PLAN_ORDER.map((id) => (
+          <PlanTier
+            key={id}
+            plan={PLANS[id]}
+            isCurrent={id === planId}
+            isRecommended={id === recommendedId}
+            currentPrice={current.priceArs}
+            currentStatus={status}
+            isOwner={!!isOwner}
+            busy={busy === id}
+            onUpgrade={() => upgrade(id as "pro" | "team")}
+          />
+        ))}
+      </div>
+
+      <div style={{ marginTop: space[3] }}>
+        {isOwner && recommendedId && (
+          <Hint>Pago mensual por Mercado Pago · {BILLING_TRIAL_DAYS} días de prueba · cancelás cuando quieras.</Hint>
+        )}
+        {isOwner && !recommendedId && (
+          <Hint>Estás en el plan máximo. ¡Gracias por bancar Clozr! 🙌</Hint>
+        )}
+        {!isOwner && <Hint>Solo el dueño del espacio puede cambiar el plan.</Hint>}
+      </div>
+
+      {isOwner && <RedeemCodeBox wsId={ws?.id} />}
+    </Card>
+  );
+}
+
+/** Una tarjeta de plan en la grilla de pricing. */
+function PlanTier({
+  plan,
+  isCurrent,
+  isRecommended,
+  currentPrice,
+  currentStatus,
+  isOwner,
+  busy,
+  onUpgrade,
+}: {
+  plan: PlanInfo;
+  isCurrent: boolean;
+  isRecommended: boolean;
+  currentPrice: number;
+  currentStatus: string;
+  isOwner: boolean;
+  busy: boolean;
+  onUpgrade: () => void;
+}) {
+  const Icon = TIER_ICON[plan.id];
+  const isUpgrade = plan.priceArs > currentPrice;
+  const isLower = plan.priceArs < currentPrice;
+  const accent = isCurrent || isRecommended;
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        gap: space[3],
+        padding: space[4],
+        borderRadius: radius.lg,
+        background: isCurrent ? color.primaryBg : color.surface2,
+        border: `1px solid ${accent ? color.primary : color.border}`,
+        height: "100%",
+      }}
+    >
+      {/* Cinta "Recomendado" */}
+      {isRecommended && !isCurrent && (
+        <div style={{ position: "absolute", top: space[3], right: space[3] }}>
+          <Badge tone="primary" variant="solid" size="sm">Recomendado</Badge>
+        </div>
+      )}
+
+      {/* Header: icono + nombre + chip "Tu plan" */}
+      <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
         <div
           style={{
-            width: 40,
-            height: 40,
+            width: 32,
+            height: 32,
             borderRadius: radius.md,
             flexShrink: 0,
-            background: color.primaryBg,
-            color: color.primary,
+            background: accent ? color.primary : color.surface,
+            color: accent ? "#FFFFFF" : color.textMuted,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <CreditCard size={20} />
+          <Icon size={16} />
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-            <span style={{ fontSize: text.md, fontWeight: weight.semibold, color: color.text }}>
-              Plan {current.name}
-            </span>
-            <PlanStatusBadge status={status} />
-          </div>
-          <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>
-            {current.priceArs > 0 ? `${formatArs(current.priceArs)}/mes · ` : "Gratis · "}
-            {seats >= SEATS_UNLIMITED ? "asientos ilimitados" : `${seats} ${seats === 1 ? "asiento" : "asientos"}`}
-          </div>
-        </div>
+        <span style={{ fontSize: text.md, fontWeight: weight.bold, color: color.text }}>{plan.name}</span>
+        {isCurrent && <Badge tone="primary" variant="soft" size="sm">Tu plan</Badge>}
       </div>
 
-      {/* Upgrades — solo el dueño gestiona el plan (billing.manage) */}
-      {isOwner && upgrades.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginTop: space[4] }}>
-          {upgrades.map((p) => {
-            const plan = PLANS[p];
-            return (
-              <div
-                key={p}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: space[3],
-                  padding: space[3],
-                  borderRadius: radius.md,
-                  background: color.surface2,
-                  border: `1px solid ${color.border}`,
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>
-                    {plan.name} · {formatArs(plan.priceArs)}/mes
-                  </div>
-                  <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>
-                    {plan.seats >= SEATS_UNLIMITED ? "Asientos ilimitados" : `${plan.seats} asientos`} · {plan.tagline}
-                  </div>
-                </div>
-                <Button variant="primary" size="sm" loading={busy === p} onClick={() => upgrade(p)}>
-                  Mejorar
-                </Button>
-              </div>
-            );
-          })}
-          <Hint>
-            Pago mensual por Mercado Pago · {BILLING_TRIAL_DAYS} días de prueba · cancelás cuando quieras.
-          </Hint>
+      {/* Precio */}
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+          <span style={{ fontSize: text.xl, fontWeight: weight.bold, color: color.text }}>
+            {plan.priceArs > 0 ? formatArs(plan.priceArs) : "Gratis"}
+          </span>
+          {plan.priceArs > 0 && <span style={{ fontSize: text.xs, color: color.textDim }}>/mes</span>}
         </div>
-      )}
+        <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>{plan.tagline}</div>
+      </div>
 
-      {isOwner && upgrades.length === 0 && (
-        <Hint>Estás en el plan máximo. ¡Gracias por bancar Clozr! 🙌</Hint>
-      )}
-      {!isOwner && <Hint>Solo el dueño del espacio puede cambiar el plan.</Hint>}
+      {/* Features */}
+      <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+        {plan.features.map((f, i) => (
+          <div
+            key={i}
+            style={{ display: "flex", alignItems: "center", gap: space[2], fontSize: text.xs, color: color.textMuted }}
+          >
+            <Check size={14} color={color.success} style={{ flexShrink: 0 }} />
+            {f}
+          </div>
+        ))}
+      </div>
 
-      {isOwner && <RedeemCodeBox wsId={ws?.id} />}
-    </Card>
+      {/* CTA al fondo */}
+      <div style={{ marginTop: "auto", paddingTop: space[2] }}>
+        {isCurrent ? (
+          <>
+            <Button variant="secondary" size="sm" fullWidth disabled>
+              Plan actual
+            </Button>
+            {currentStatus !== "active" && (
+              <div style={{ marginTop: space[2], display: "flex", justifyContent: "center" }}>
+                <PlanStatusBadge status={currentStatus} />
+              </div>
+            )}
+          </>
+        ) : isUpgrade && isOwner ? (
+          <Button variant="primary" size="sm" fullWidth loading={busy} onClick={onUpgrade}>
+            Mejorar
+          </Button>
+        ) : isLower ? (
+          <Button variant="ghost" size="sm" fullWidth disabled>
+            Incluido
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -501,8 +583,8 @@ function RedeemCodeBox({ wsId }: { wsId?: string }) {
 
   return (
     <div style={{ marginTop: space[4], paddingTop: space[4], borderTop: `1px solid ${color.border}` }}>
-      <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, marginBottom: space[2] }}>
-        ¿Tenés un código?
+      <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, marginBottom: space[2], display: "flex", alignItems: "center", gap: space[1] }}>
+        <Gift size={13} /> ¿Tenés un código?
       </div>
       <div style={{ display: "flex", gap: space[2] }}>
         <div style={{ flex: 1 }}>
