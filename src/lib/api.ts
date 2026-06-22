@@ -1455,6 +1455,48 @@ export async function catalogCheckout(catalog: string): Promise<{ initPoint: str
   return { initPoint: r.init_point };
 }
 
+/* ---------- IA de Clozr (chat con microtransacciones) ---------- */
+export interface AiWallet {
+  credits: number;
+  freeUsed: number;
+  freeLimit: number;
+}
+export interface AiStatus extends AiWallet {
+  enabled: boolean;
+}
+export interface AiChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function aiStatus(): Promise<AiStatus> {
+  const r = await req<Partial<AiStatus>>(`/workspaces/${ws()}/ai`);
+  return {
+    credits: r.credits ?? 0,
+    freeUsed: r.freeUsed ?? 0,
+    freeLimit: r.freeLimit ?? 1,
+    enabled: r.enabled ?? false,
+  };
+}
+
+/** Manda la conversación y devuelve la respuesta + la billetera actualizada.
+ *  Si no quedan mensajes, el Worker responde 402 y `req` lanza ApiError("no_credits"). */
+export async function aiChat(messages: AiChatMessage[]): Promise<{ reply: string; wallet: AiWallet }> {
+  const r = await req<{ reply: string; wallet: AiWallet }>(`/workspaces/${ws()}/ai/chat`, {
+    method: "POST",
+    body: JSON.stringify({ messages }),
+  });
+  return r;
+}
+
+export async function aiCheckout(pack: string): Promise<{ initPoint: string }> {
+  const r = await req<{ init_point: string }>(`/workspaces/${ws()}/ai/checkout`, {
+    method: "POST",
+    body: JSON.stringify({ pack }),
+  });
+  return { initPoint: r.init_point };
+}
+
 /** POST /workspaces/:wid/referral — código de referido del workspace (se crea
  *  si no existe). Al canjearlo, referido y referidor reciben el descuento. */
 export async function getReferralCode(): Promise<{ code: string; discountPct: number }> {

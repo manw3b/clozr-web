@@ -48,6 +48,7 @@ import { Ajustes } from "./Ajustes";
 import { Caja } from "./Caja";
 import { Consola } from "./Consola";
 import { CommandPalette } from "./CommandPalette";
+import { ClozrAi } from "./ClozrAi";
 import { Clientes as ClientesView } from "./Clientes";
 import { Ventas as VentasView } from "./Ventas";
 import { Pipeline as PipelineView } from "./Pipeline";
@@ -406,6 +407,7 @@ export default function Crm({
         onOpenSale={(id) => setModal({ kind: "saleDetail", id })}
         onOpenItem={(id) => setModal({ kind: "item", id })}
       />
+      <ClozrAi />
     </>
   );
 }

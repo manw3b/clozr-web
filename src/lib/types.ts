@@ -150,6 +150,30 @@ export const CATALOG_PACKS: Record<string, CatalogPack> = {
   },
 };
 
+/* ───────── IA de Clozr (microtransacciones por mensaje) ───────── */
+/** Mensajes gratis por workspace antes de tener que comprar un pack. */
+export const AI_FREE_LIMIT = 1;
+
+export interface AiPack {
+  key: string;
+  label: string;
+  /** Mensajes que otorga (1 crédito = 1 mensaje). */
+  credits: number;
+  /** Precio del pack (pago único). */
+  priceUsd: number;
+  blurb: string;
+  /** Resaltar como recomendado. */
+  popular?: boolean;
+}
+
+/** Packs de mensajes — mantener en sync con AI_PACKS del Worker. */
+export const AI_PACKS: AiPack[] = [
+  { key: "starter", label: "Starter", credits: 25, priceUsd: 2.99, blurb: "Para probarla a fondo" },
+  { key: "plus", label: "Plus", credits: 100, priceUsd: 10.99, blurb: "El más elegido", popular: true },
+  { key: "pro", label: "Pro", credits: 300, priceUsd: 29.99, blurb: "Para uso diario" },
+  { key: "power", label: "Power", credits: 1000, priceUsd: 94.99, blurb: "Máximo volumen" },
+];
+
 /* ───────── Descuentos apuntados (F5) ───────── */
 /** A qué puede apuntar un código de descuento (Consola). */
 export const DISCOUNT_TARGETS: Array<{ key: string; label: string }> = [
