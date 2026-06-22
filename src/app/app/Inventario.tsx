@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Search, Package, Pencil, Trash2, ChevronDown, LayoutGrid } from "lucide-react";
+import { Plus, Search, Package, Pencil, Trash2, ChevronDown, LayoutGrid, ClipboardPaste } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card, MetricCard } from "@/components/Card";
@@ -50,6 +50,7 @@ export function Inventario() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [adding, setAdding] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const ctxMenu = useContextMenu();
   const [ctxProduct, setCtxProduct] = useState<Product | null>(null);
 
@@ -102,7 +103,11 @@ export function Inventario() {
         subtitle={loading ? "Cargando…" : `${summary.total} producto${summary.total === 1 ? "" : "s"} en el catálogo`}
         actions={
           canWrite ? (
-            <AddProductMenu onApple={() => setPickerOpen(true)} onManual={() => setAdding(true)} />
+            <AddProductMenu
+              onApple={() => setPickerOpen(true)}
+              onManual={() => setAdding(true)}
+              onBulk={() => setBulkOpen(true)}
+            />
           ) : undefined
         }
       />
@@ -142,7 +147,7 @@ export function Inventario() {
             title={products.length === 0 ? "Sin productos" : "Nada con esos filtros"}
             description={
               products.length === 0
-                ? "Agregá tu primer producto al catálogo."
+                ? "Cargá un producto a mano, elegí del catálogo Apple, o importá todo en bloque desde Excel."
                 : "Probá cambiar la búsqueda o el filtro."
             }
             action={
@@ -231,6 +236,8 @@ export function Inventario() {
         }}
       />
 
+      <BulkImportModal open={bulkOpen} onClose={() => setBulkOpen(false)} onImported={load} />
+
       <ProductModal
         open={adding || editing !== null}
         product={editing}
@@ -277,7 +284,15 @@ export function Inventario() {
 
 /* ───────── Menú "Agregar producto": catálogo visual o carga manual ───────── */
 
-function AddProductMenu({ onApple, onManual }: { onApple: () => void; onManual: () => void }) {
+function AddProductMenu({
+  onApple,
+  onManual,
+  onBulk,
+}: {
+  onApple: () => void;
+  onManual: () => void;
+  onBulk: () => void;
+}) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   return (
@@ -308,6 +323,15 @@ function AddProductMenu({ onApple, onManual }: { onApple: () => void; onManual: 
           onClick={() => {
             setOpen(false);
             onManual();
+          }}
+        />
+        <MenuRow
+          icon={<ClipboardPaste size={16} />}
+          title="Importar en bloque"
+          subtitle="Pegá tu catálogo desde Excel"
+          onClick={() => {
+            setOpen(false);
+            onBulk();
           }}
         />
       </Popover>
@@ -351,6 +375,259 @@ function MenuRow({
         <span style={{ display: "block", fontSize: text.xs, color: color.textDim }}>{subtitle}</span>
       </span>
     </button>
+  );
+}
+
+/* ───────── Importar en bloque (pegar desde Excel / Sheets) ───────── */
+
+type BulkRow = {
+  name: string;
+  price: number | null;
+  cost: number | null;
+  stock: number | null;
+  sku: string;
+  category: string;
+  valid: boolean;
+};
+
+type BulkField = "name" | "price" | "cost" | "stock" | "sku" | "category";
+
+// Encabezados reconocidos (es/en) → campo. Permite pegar con la primera fila
+// como títulos y en cualquier orden de columnas.
+const BULK_HEADERS: Record<string, BulkField> = {
+  nombre: "name", name: "name", producto: "name", descripcion: "name", detalle: "name", articulo: "name",
+  precio: "price", price: "price", pvp: "price", venta: "price",
+  costo: "cost", cost: "cost", compra: "cost",
+  stock: "stock", cantidad: "stock", unidades: "stock", qty: "stock", cant: "stock",
+  sku: "sku", codigo: "sku", code: "sku",
+  categoria: "category", category: "category", rubro: "category", tipo: "category",
+};
+
+// Sin encabezado, asumimos este orden de columnas.
+const BULK_ORDER: BulkField[] = ["name", "price", "cost", "stock", "sku", "category"];
+
+function bulkNorm(s: string): string {
+  // sin acentos para matchear encabezados (categoría, código, descripción…)
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[áàä]/g, "a")
+    .replace(/[éèë]/g, "e")
+    .replace(/[íìï]/g, "i")
+    .replace(/[óòö]/g, "o")
+    .replace(/[úùü]/g, "u");
+}
+
+// Parsea números tolerando símbolos y formato es-AR ("$ 1.500,50" → 1500.5).
+function bulkNum(s: string): number | null {
+  const t = s.replace(/[^0-9.,-]/g, "");
+  if (!t) return null;
+  let norm = t;
+  if (t.includes(",") && t.includes(".")) norm = t.replace(/\./g, "").replace(",", ".");
+  else if (t.includes(",")) norm = t.replace(",", ".");
+  const n = Number(norm);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseBulk(raw: string): BulkRow[] {
+  const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length === 0) return [];
+  // Excel/Sheets pegan con TAB; si no hay tabs, probamos punto y coma o coma.
+  const delim = lines.some((l) => l.includes("\t")) ? "\t" : lines.some((l) => l.includes(";")) ? ";" : ",";
+  const grid = lines.map((l) => l.split(delim).map((c) => c.trim()));
+
+  // ¿La primera fila es encabezado? Si alguna celda matchea "nombre" o "precio".
+  const first = grid[0];
+  const mapped = first.map((c) => BULK_HEADERS[bulkNorm(c)] ?? null);
+  const hasHeader = mapped.includes("name") || mapped.includes("price");
+  const colMap: Array<BulkField | null> = hasHeader ? mapped : BULK_ORDER.slice(0, Math.max(first.length, 1));
+  const dataRows = hasHeader ? grid.slice(1) : grid;
+
+  const idx = (f: BulkField) => colMap.indexOf(f);
+  return dataRows.map((cells) => {
+    const cell = (f: BulkField) => {
+      const i = idx(f);
+      return i >= 0 && i < cells.length ? cells[i] : "";
+    };
+    const name = cell("name").trim();
+    return {
+      name,
+      price: bulkNum(cell("price")),
+      cost: bulkNum(cell("cost")),
+      stock: bulkNum(cell("stock")),
+      sku: cell("sku").trim(),
+      category: cell("category").trim(),
+      valid: name.length > 0,
+    };
+  });
+}
+
+function BulkImportModal({
+  open,
+  onClose,
+  onImported,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const { showToast } = useUIStore();
+  const [raw, setRaw] = useState("");
+  const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setRaw("");
+      setImporting(false);
+    }
+  }, [open]);
+
+  const parsed = useMemo(() => parseBulk(raw), [raw]);
+  const valid = useMemo(() => parsed.filter((r) => r.valid), [parsed]);
+  const ignored = parsed.length - valid.length;
+
+  async function run() {
+    if (valid.length === 0) return;
+    setImporting(true);
+    try {
+      const res = await api.bulkImportProducts(
+        valid.map((r) => ({
+          name: r.name,
+          price: r.price ?? 0,
+          cost: r.cost,
+          // Con stock en la fila → llevamos control; sin stock → producto sin tracking.
+          trackStock: r.stock != null,
+          stock: r.stock ?? 0,
+          sku: r.sku || null,
+          category: r.category || null,
+        })),
+      );
+      showToast(
+        res.skipped > 0
+          ? `${res.imported} importados · ${res.skipped} ya existían`
+          : `${res.imported} ${res.imported === 1 ? "producto importado" : "productos importados"}`,
+        "success",
+      );
+      onImported();
+      onClose();
+    } catch {
+      showToast("No se pudo importar. Revisá el formato.", "error");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  const th: React.CSSProperties = {
+    textAlign: "left",
+    padding: "6px 8px",
+    fontWeight: weight.semibold,
+    color: color.textMuted,
+    position: "sticky",
+    top: 0,
+    background: color.surface2,
+    borderBottom: `1px solid ${color.border}`,
+    whiteSpace: "nowrap",
+  };
+  const td: React.CSSProperties = {
+    padding: "5px 8px",
+    borderBottom: `1px solid ${color.border}`,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    maxWidth: 160,
+    color: color.textMuted,
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      isDirty={() => raw.trim().length > 0}
+      confirmCloseText="¿Cerrar y descartar lo pegado?"
+      title="Importar en bloque"
+      subtitle="Pegá tu catálogo desde Excel o Google Sheets — una fila por producto."
+      maxWidth={760}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={run} disabled={valid.length === 0} loading={importing}>
+            {valid.length > 0 ? `Importar ${valid.length} ${valid.length === 1 ? "producto" : "productos"}` : "Importar"}
+          </Button>
+        </>
+      }
+    >
+      <div style={{ fontSize: text.xs, color: color.textDim, marginBottom: space[2], lineHeight: 1.5 }}>
+        Columnas:{" "}
+        <strong style={{ color: color.textMuted }}>Nombre, Precio, Costo, Stock, SKU, Categoría</strong>. Si la primera
+        fila tiene encabezados los detectamos solos. Solo el nombre es obligatorio.
+      </div>
+      <textarea
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        placeholder={"iPhone 13 128GB\t650000\t520000\t3\niPhone 14 Pro\t1100000\t900000\t1\nFunda silicona\t12000\t6000\t20"}
+        rows={6}
+        autoFocus
+        style={{
+          width: "100%",
+          resize: "vertical",
+          minHeight: 120,
+          background: color.surface2,
+          border: `1px solid ${color.border}`,
+          borderRadius: radius.md,
+          padding: "8px 10px",
+          color: color.text,
+          fontSize: text.sm,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          lineHeight: 1.5,
+        }}
+      />
+
+      {parsed.length > 0 && (
+        <div style={{ marginTop: space[3] }}>
+          <div style={{ fontSize: text.xs, color: color.textMuted, marginBottom: 6 }}>
+            {valid.length} {valid.length === 1 ? "producto listo" : "productos listos"}
+            {ignored > 0
+              ? ` · ${ignored} fila${ignored === 1 ? "" : "s"} sin nombre se ignora${ignored === 1 ? "" : "n"}`
+              : ""}
+          </div>
+          <div style={{ maxHeight: 240, overflow: "auto", border: `1px solid ${color.border}`, borderRadius: radius.md }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: text.xs }}>
+              <thead>
+                <tr>
+                  <th style={th}>Nombre</th>
+                  <th style={th}>Precio</th>
+                  <th style={th}>Costo</th>
+                  <th style={th}>Stock</th>
+                  <th style={th}>SKU</th>
+                  <th style={th}>Categoría</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parsed.slice(0, 100).map((r, i) => (
+                  <tr key={i} style={{ opacity: r.valid ? 1 : 0.45 }}>
+                    <td style={{ ...td, color: color.text }}>
+                      {r.name || <span style={{ color: color.danger }}>— sin nombre —</span>}
+                    </td>
+                    <td style={td}>{r.price != null ? formatMoney(r.price, "ARS") : "—"}</td>
+                    <td style={td}>{r.cost != null ? formatMoney(r.cost, "ARS") : "—"}</td>
+                    <td style={td}>{r.stock != null ? r.stock : "—"}</td>
+                    <td style={td}>{r.sku || "—"}</td>
+                    <td style={td}>{r.category || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {parsed.length > 100 && (
+            <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 4 }}>
+              …y {parsed.length - 100} fila{parsed.length - 100 === 1 ? "" : "s"} más (se importan todas)
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }
 

@@ -858,6 +858,19 @@ export async function createProduct(input: ProductInput): Promise<string> {
   });
   return r.id;
 }
+
+/** Importa varios productos de una (migración de catálogo). El Worker
+ *  inserta con dedup por id e informa cuántos entraron / se omitieron. */
+export async function bulkImportProducts(
+  items: ProductInput[],
+): Promise<{ imported: number; skipped: number; errors: Array<{ id: string; error: string }> }> {
+  const body = { items: items.map((p) => ({ currency: "ARS", ...productBody(p) })) };
+  const r = await req<{ imported?: number; skipped?: number; errors?: Array<{ id: string; error: string }> }>(
+    `/workspaces/${ws()}/catalog/import`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return { imported: r.imported ?? 0, skipped: r.skipped ?? 0, errors: r.errors ?? [] };
+}
 export async function updateProduct(id: string, patch: ProductInput): Promise<void> {
   await req(`/workspaces/${ws()}/catalog/${id}`, { method: "PATCH", body: JSON.stringify(productBody(patch)) });
 }
