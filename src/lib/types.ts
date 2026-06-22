@@ -195,6 +195,12 @@ export const AI_PACKS: AiPack[] = [
   { key: "power", label: "Power", credits: 1000, priceUsd: 94.99, blurb: "Máximo volumen" },
 ];
 
+/** ¿El workspace tiene IA? Feature de suscripción: requiere plan pago (Pro o
+ *  Team) con la suscripción activa. Las 3 acciones de regalo van incluidas. */
+export function hasAiPlan(ws?: { plan?: string; planStatus?: string } | null): boolean {
+  return !!ws && (ws.plan === "pro" || ws.plan === "team") && ws.planStatus === "active";
+}
+
 /* ───────── Descuentos apuntados (F5) ───────── */
 /** A qué puede apuntar un código de descuento (Consola). */
 export const DISCOUNT_TARGETS: Array<{ key: string; label: string }> = [

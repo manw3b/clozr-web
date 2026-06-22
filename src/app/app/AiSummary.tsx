@@ -5,9 +5,10 @@ import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/Button";
 import { ClozrAiIcon } from "@/components/ClozrAiIcon";
 import { useUIStore } from "@/store/uiStore";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
-import { CLIENT_TYPE_LABELS } from "@/lib/types";
+import { CLIENT_TYPE_LABELS, hasAiPlan } from "@/lib/types";
 import type { Customer, Sale } from "@/lib/types";
 import * as api from "@/lib/api";
 import { AiPaywall } from "./AiSuggestions";
@@ -27,6 +28,7 @@ export function AiSummary({
   stats: { purchases: number; debt: number };
 }) {
   const { showToast } = useUIStore();
+  const ws = useWorkspaceStore((s) => s.activeWorkspace);
   const [briefing, setBriefing] = useState("");
   const [busy, setBusy] = useState(false);
   const [noCredits, setNoCredits] = useState(false);
@@ -77,6 +79,8 @@ export function AiSummary({
       setBuying(null);
     }
   }
+
+  if (!hasAiPlan(ws)) return null; // IA solo para suscripciones pagas activas
 
   if (noCredits) {
     return (

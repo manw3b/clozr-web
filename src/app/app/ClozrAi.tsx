@@ -7,8 +7,9 @@ import { ClozrAiIcon } from "@/components/ClozrAiIcon";
 import { Button } from "@/components/Button";
 import { useUIStore } from "@/store/uiStore";
 import { useAiStore } from "@/store/aiStore";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
-import { AI_PACKS, AI_FREE_LIMIT, formatUsd } from "@/lib/types";
+import { AI_PACKS, AI_FREE_LIMIT, formatUsd, hasAiPlan } from "@/lib/types";
 import * as api from "@/lib/api";
 
 const EXAMPLES = [
@@ -28,6 +29,7 @@ export function ClozrAi() {
   const openAi = useAiStore((s) => s.openAi);
   const closeAi = useAiStore((s) => s.closeAi);
   const consumePendingQuery = useAiStore((s) => s.consumePendingQuery);
+  const ws = useWorkspaceStore((s) => s.activeWorkspace);
   const [status, setStatus] = useState<api.AiStatus | null>(null);
   const [messages, setMessages] = useState<api.AiChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -100,6 +102,8 @@ export function ClozrAi() {
       setBuying(null);
     }
   }
+
+  if (!hasAiPlan(ws)) return null; // IA solo para suscripciones pagas activas
 
   return (
     <>

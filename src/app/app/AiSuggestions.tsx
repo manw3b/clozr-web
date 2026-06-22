@@ -5,9 +5,10 @@ import { Copy, RotateCcw, Lock } from "lucide-react";
 import { Button } from "@/components/Button";
 import { ClozrAiIcon } from "@/components/ClozrAiIcon";
 import { useUIStore } from "@/store/uiStore";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { openWhatsApp } from "@/lib/openExternal";
-import { AI_GEN_KINDS, AI_TONES, AI_PACKS, CLIENT_TYPE_LABELS, formatUsd } from "@/lib/types";
+import { AI_GEN_KINDS, AI_TONES, AI_PACKS, CLIENT_TYPE_LABELS, formatUsd, hasAiPlan } from "@/lib/types";
 import type { Customer } from "@/lib/types";
 import * as api from "@/lib/api";
 
@@ -19,6 +20,7 @@ import * as api from "@/lib/api";
  */
 export function AiSuggestions({ customer }: { customer: Customer }) {
   const { showToast } = useUIStore();
+  const ws = useWorkspaceStore((s) => s.activeWorkspace);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [noCredits, setNoCredits] = useState(false);
@@ -76,6 +78,8 @@ export function AiSuggestions({ customer }: { customer: Customer }) {
       setBuying(null);
     }
   }
+
+  if (!hasAiPlan(ws)) return null; // IA solo para suscripciones pagas activas
 
   return (
     <div>

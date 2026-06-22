@@ -5,6 +5,8 @@ import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
 import { ClozrAiIcon } from "@/components/ClozrAiIcon";
 import { useAiStore } from "@/store/aiStore";
+import { useWorkspaceStore } from "@/store/workspaceStore";
+import { hasAiPlan } from "@/lib/types";
 import type { Customer, PipelineItem, Product, Sale } from "@/lib/types";
 
 interface Entry {
@@ -55,6 +57,7 @@ export function CommandPalette({
   onOpenItem: (id: string) => void;
 }) {
   const openAi = useAiStore((s) => s.openAi);
+  const ws = useWorkspaceStore((s) => s.activeWorkspace);
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const [data, setData] = useState<{
@@ -127,20 +130,22 @@ export function CommandPalette({
         .forEach((p) =>
           out.push({ id: `prod-${p.id}`, label: p.name, sub: "Producto", icon: <Package size={15} />, run: () => onNavigate("inventory") }),
         );
-      // Lenguaje natural → IA de Clozr (Raycast for business).
-      out.push({
-        id: "ai-ask",
-        label: `Preguntá a la IA: "${query.trim()}"`,
-        sub: "IA de Clozr",
-        icon: <ClozrAiIcon size={15} style={{ color: color.primary }} />,
-        run: () => {
-          onClose();
-          openAi(query.trim());
-        },
-      });
+      // Lenguaje natural → IA de Clozr (solo con plan pago activo).
+      if (hasAiPlan(ws)) {
+        out.push({
+          id: "ai-ask",
+          label: `Preguntá a la IA: "${query.trim()}"`,
+          sub: "IA de Clozr",
+          icon: <ClozrAiIcon size={15} style={{ color: color.primary }} />,
+          run: () => {
+            onClose();
+            openAi(query.trim());
+          },
+        });
+      }
     }
     return out;
-  }, [query, data, onNavigate, onOpenCustomer, onOpenSale, onOpenItem, onClose, openAi]);
+  }, [query, data, ws, onNavigate, onOpenCustomer, onOpenSale, onOpenItem, onClose, openAi]);
 
   useEffect(() => {
     setSel(0);
