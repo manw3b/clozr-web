@@ -1208,8 +1208,41 @@ function SaleModal({
   const [localCustomers, setLocalCustomers] = useState(customers);
   useEffect(() => { setLocalCustomers(customers); }, [customers]);
   const [newClientName, setNewClientName] = useState<string | null>(null);
+  // IMEIs por producto del catálogo (cache lazy). Un producto es "serializado"
+  // si tiene unidades cargadas → en la venta se ELIGE cuál sale (no texto libre)
+  // y la cantidad queda fija en 1 (cada equipo es una unidad).
+  const [imeisByItem, setImeisByItem] = useState<Record<string, api.CatalogImei[]>>({});
+  const imeisRequested = useRef<Set<string>>(new Set());
+  const linkedItemIds = useMemo(
+    () => Array.from(new Set(lines.map((l) => l.catalogItemId).filter(Boolean) as string[])),
+    [lines],
+  );
+  useEffect(() => {
+    const missing = linkedItemIds.filter((id) => !imeisRequested.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach((id) => imeisRequested.current.add(id));
+    let cancelled = false;
+    Promise.all(
+      missing.map((id) =>
+        api.listCatalogImeis(id).then((list) => [id, list] as const).catch(() => [id, [] as api.CatalogImei[]] as const),
+      ),
+    ).then((entries) => {
+      if (cancelled) return;
+      setImeisByItem((prev) => {
+        const next = { ...prev };
+        for (const [id, list] of entries) next[id] = list;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [linkedItemIds]);
+  // ¿La línea vende una unidad serializada? (producto con IMEIs cargados)
+  const isSerialLine = (l: SaleLine) => !!(l.catalogItemId && imeisByItem[l.catalogItemId]?.length);
 
-  const total = lines.reduce((a, l) => a + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0), 0);
+  const total = lines.reduce(
+    (a, l) => a + (isSerialLine(l) ? 1 : Number(l.quantity) || 0) * (Number(l.unitPrice) || 0),
+    0,
+  );
   const paidAmount = paidFull ? total : Number(partial) || 0;
   const balance = total - paidAmount;
 
@@ -1329,6 +1362,21 @@ function SaleModal({
   function removeLine(i: number) {
     setLines((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
+  // Unidades disponibles de un producto serializado para una línea: sin vender y
+  // no elegidas en OTRA línea del mismo producto. Devuelve null si el producto
+  // no es serializado (sin IMEIs cargados) → la línea usa IMEI de texto libre.
+  function availableUnitsFor(lineIdx: number): api.CatalogImei[] | null {
+    const l = lines[lineIdx];
+    if (!l?.catalogItemId) return null;
+    const all = imeisByItem[l.catalogItemId];
+    if (!all || all.length === 0) return null;
+    const chosenElsewhere = new Set(
+      lines
+        .filter((x, idx) => idx !== lineIdx && x.catalogItemId === l.catalogItemId && x.imei)
+        .map((x) => x.imei as string),
+    );
+    return all.filter((u) => !u.soldAt && !chosenElsewhere.has(u.imei));
+  }
 
   // Estado de linkeo de una línea: linkeada con costo (→ margen), linkeada sin
   // costo cargado, o texto libre. Define el chip y la cobertura del margen.
@@ -1398,8 +1446,9 @@ function SaleModal({
         items: validLines.map((l) => ({
           description: l.description.trim(),
           // validLines garantiza quantity > 0 — sin el ||1 que coerce vacío→1
-          // (eso divergía el total mostrado del persistido).
-          quantity: Number(l.quantity),
+          // (eso divergía el total mostrado del persistido). Serializado = 1
+          // unidad por IMEI elegido.
+          quantity: isSerialLine(l) ? 1 : Number(l.quantity),
           unitPrice: Number(l.unitPrice) || 0,
           catalogItemId: l.catalogItemId ?? null,
           imei: l.imei?.trim() || null,
@@ -1448,6 +1497,8 @@ function SaleModal({
           <span className={labelCls}>Productos / ítems</span>
           {lines.map((l, i) => {
             const st = lineStatus(l);
+            const units = availableUnitsFor(i);
+            const serial = units !== null;
             return (
               <div key={i} className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
@@ -1460,10 +1511,12 @@ function SaleModal({
                   <input
                     type="number"
                     min="1"
-                    value={l.quantity}
+                    value={serial ? "1" : l.quantity}
                     onChange={(e) => setLine(i, { quantity: e.target.value })}
+                    disabled={serial}
+                    title={serial ? "Cada equipo es una unidad" : undefined}
                     className={fieldCls}
-                    style={{ width: 56, flexShrink: 0 }}
+                    style={{ width: 56, flexShrink: 0, opacity: serial ? 0.6 : undefined }}
                   />
                   <input
                     type="number"
@@ -1485,14 +1538,44 @@ function SaleModal({
                   <div className="flex flex-wrap items-center gap-2">
                     <LineStatusChip status={st} />
                     <span className="flex-1" />
-                    <input
-                      value={l.imei ?? ""}
-                      onChange={(e) => setLine(i, { imei: e.target.value })}
-                      placeholder="IMEI / N° de serie (opcional)"
-                      autoComplete="off"
-                      className={fieldCls}
-                      style={{ fontSize: 12, padding: "6px 10px", width: 224, flexShrink: 0 }}
-                    />
+                    {serial ? (
+                      // Producto serializado → elegir la unidad exacta que sale.
+                      (() => {
+                        const noStock = units!.length === 0 && !l.imei;
+                        return (
+                          <select
+                            value={l.imei ?? ""}
+                            onChange={(e) => setLine(i, { imei: e.target.value || undefined, quantity: "1" })}
+                            disabled={noStock}
+                            className={fieldCls}
+                            style={{
+                              fontSize: 12,
+                              padding: "6px 10px",
+                              width: 224,
+                              flexShrink: 0,
+                              color: l.imei ? undefined : color.textDim,
+                            }}
+                          >
+                            <option value="">{noStock ? "Sin unidades en stock" : "Elegí el equipo (IMEI)…"}</option>
+                            {units!.map((u) => (
+                              <option key={u.id} value={u.imei}>
+                                {u.imei}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })()
+                    ) : (
+                      // Producto no serializado → IMEI / N° de serie libre (opcional).
+                      <input
+                        value={l.imei ?? ""}
+                        onChange={(e) => setLine(i, { imei: e.target.value })}
+                        placeholder="IMEI / N° de serie (opcional)"
+                        autoComplete="off"
+                        className={fieldCls}
+                        style={{ fontSize: 12, padding: "6px 10px", width: 224, flexShrink: 0 }}
+                      />
+                    )}
                   </div>
                 )}
               </div>
