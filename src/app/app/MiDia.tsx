@@ -54,8 +54,6 @@ export function MiDia({
   const canContact = can("customers.write");
   const activeWs = useWorkspaceStore((s) => s.activeWorkspace);
   const blue = useBlueRate();
-  // Equivalente en dólares (al blue) de un monto en pesos — para el dual USD/ARS.
-  const usd = (ars: number): string | null => (blue && blue > 0 ? formatMoney(Math.round(ars / blue), "USD") : null);
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -66,6 +64,7 @@ export function MiDia({
   const [loading, setLoading] = useState(true);
   const [goalEditing, setGoalEditing] = useState(false);
   const [goalInput, setGoalInput] = useState("");
+  const [scoreOpen, setScoreOpen] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -196,9 +195,7 @@ export function MiDia({
     api.recordContact(customer.id, kind).catch(() => {});
   }
 
-  async function saveGoal() {
-    const amount = Math.max(0, Number(goalInput) || 0);
-    setGoalEditing(false);
+  async function applyGoal(amount: number) {
     if (!activeWs) return;
     const wid = activeWs.id;
     const prev = activeWs.dailyGoal ?? 0;
@@ -219,10 +216,90 @@ export function MiDia({
     }
   }
 
+  async function saveGoal() {
+    setGoalEditing(false);
+    await applyGoal(Math.max(0, Number(goalInput) || 0));
+  }
+
   function startEditGoal() {
     setGoalInput(dailyGoal > 0 ? String(dailyGoal) : "");
     setGoalEditing(true);
   }
+
+  /* ── Moneda dual: US$ primario, $ARS secundario (los montos se guardan en ARS). ── */
+  function dual(ars: number): { main: string; sub: string | null } {
+    if (blue && blue > 0) return { main: formatMoney(Math.round(ars / blue), "USD"), sub: formatMoney(ars, "ARS") };
+    return { main: formatMoney(ars, "ARS"), sub: null };
+  }
+
+  /* ── Ventas por día → comparativa vs ayer + sparkline 7d + promedio. ── */
+  const dailyMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of sales) {
+      const dt = s.createdAt ?? s.saleDate;
+      if (!dt) continue;
+      const k = toLocalISODate(new Date(dt));
+      m.set(k, (m.get(k) ?? 0) + s.total);
+    }
+    return m;
+  }, [sales]);
+  const last7 = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => dailyMap.get(toLocalISODate(new Date(nowMs - (6 - i) * 86_400_000))) ?? 0),
+    [dailyMap, nowMs],
+  );
+  const yesterdayTotal = last7[5] ?? 0;
+  const vsYesterday = yesterdayTotal > 0 ? ((todayTotal - yesterdayTotal) / yesterdayTotal) * 100 : null;
+
+  /* ── Racha de días cumpliendo el objetivo (no penaliza el día en curso). ── */
+  const streak = useMemo(() => {
+    if (dailyGoal <= 0) return 0;
+    let n = 0;
+    const start = (dailyMap.get(todayKey) ?? 0) >= dailyGoal ? 0 : 1;
+    for (let i = start; i < 366; i++) {
+      if ((dailyMap.get(toLocalISODate(new Date(nowMs - i * 86_400_000))) ?? 0) >= dailyGoal) n++;
+      else break;
+    }
+    return n;
+  }, [dailyMap, dailyGoal, todayKey, nowMs]);
+
+  /* ── Proyección del mes (a este ritmo). ── */
+  const monthProj = useMemo(() => {
+    const ym = todayKey.slice(0, 7);
+    let mtd = 0;
+    for (const [k, v] of dailyMap) if (k.slice(0, 7) === ym) mtd += v;
+    const dom = now.getDate();
+    const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    return dom > 0 ? (mtd / dom) * dim : 0;
+  }, [dailyMap, todayKey, now]);
+
+  /* ── Objetivo sugerido (si no hay uno): promedio reciente, redondeado lindo. ── */
+  const suggestedGoal = useMemo(() => {
+    const nonZero = last7.filter((v) => v > 0);
+    const base = nonZero.length ? nonZero.reduce((a, b) => a + b, 0) / nonZero.length : Math.max(...last7, 0);
+    if (base <= 0) return 0;
+    if (blue && blue > 0) return Math.max(1, Math.round(base / blue / 10) * 10) * blue; // redondeo en US$
+    return Math.max(1000, Math.round(base / 1000) * 1000);
+  }, [last7, blue]);
+
+  /* ── Foco del día: la acción más importante de hoy. ── */
+  const foco = useMemo(() => {
+    const topCol = collections.slice().sort((a, b) => b.balance - a.balance)[0];
+    if (topCol) return { icon: "💰", text: `Cobrá ${dual(topCol.balance).main} a ${topCol.customerName || "un cliente"}`, cta: "Ver deudas", to: "deudas" };
+    if (pendingFollowups[0]) return { icon: "⚡", text: `Seguí a ${pendingFollowups[0].customerName || "un lead"}`, cta: "Ir al pipeline", to: "pipeline" };
+    if (pendingTasks[0]) return { icon: "✅", text: `Tarea pendiente: ${pendingTasks[0].title}`, cta: "Ver tareas", to: "tasks" };
+    if (inactiveClients[0]) return { icon: "🕓", text: `Reactivá a ${inactiveClients[0].customer.name} (sin contacto hace ${inactiveClients[0].days} días)`, cta: "Ver clientes", to: "customers" };
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collections, pendingFollowups, pendingTasks, inactiveClients, blue]);
+
+  /* ── Checklist del score (los 4 criterios). ── */
+  const routinesAll = tasks.filter((t) => t.type === "rutina");
+  const scoreItems = [
+    { label: "Registrá una venta", done: todaySales.length >= 1 },
+    { label: "Completá tus rutinas", done: routinesAll.length === 0 || routinesAll.every((t) => t.completed) },
+    { label: "Registrá un movimiento de caja", done: cashMovements.some((m) => m.movedAt && toLocalISODate(new Date(m.movedAt)) === todayKey) },
+    { label: "Completá un seguimiento", done: followups.some((f) => f.completedAt && toLocalISODate(new Date(f.completedAt)) === todayKey) },
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[5] }}>
@@ -391,47 +468,118 @@ export function MiDia({
                       <Pencil size={12} />
                     </button>
                   )}
+                  {streak >= 2 && (
+                    <span style={{ fontSize: text.xs, fontWeight: weight.bold, color: color.primary, background: color.primaryBg, padding: "1px 7px", borderRadius: 999 }}>
+                      🔥 {streak} días
+                    </span>
+                  )}
                   <span style={{ marginLeft: "auto", fontSize: text.sm, fontWeight: weight.semibold, color: goalProgress >= 100 ? color.success : color.text }}>
                     {goalProgress.toFixed(0)}%
                   </span>
                 </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: space[2], marginBottom: 6, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: space[2], marginBottom: 2, flexWrap: "wrap" }}>
                   <span style={{ fontSize: text["2xl"], fontWeight: weight.bold, color: color.text, letterSpacing: "-0.5px", lineHeight: 1 }}>
-                    {formatMoney(todayTotal)}
+                    {dual(todayTotal).main}
                   </span>
                   <span style={{ fontSize: text.sm, color: color.textMuted, fontWeight: weight.medium }}>
-                    de {formatMoney(dailyGoal)}
+                    de {dual(dailyGoal).main}
                   </span>
-                  {usd(todayTotal) && (
-                    <span style={{ fontSize: text.xs, color: color.textDim }}>
-                      · {usd(todayTotal)} de {usd(dailyGoal)}
-                    </span>
-                  )}
                 </div>
+                {dual(todayTotal).sub && (
+                  <div style={{ fontSize: text.xs, color: color.textDim, marginBottom: 6 }}>
+                    {dual(todayTotal).sub} de {dual(dailyGoal).sub}
+                  </div>
+                )}
                 <ProgressBar pct={goalProgress} />
                 <div style={{ marginTop: 6, fontSize: text.xs, color: goalProgress >= 100 ? color.success : color.textMuted }}>
                   {goalProgress >= 100
                     ? "¡Objetivo cumplido! 🎯"
-                    : `Faltan ${formatMoney(goalRemaining)} para el objetivo`}
+                    : `Faltan ${dual(goalRemaining).main} para el objetivo`}
+                  {monthProj > 0 && (
+                    <span style={{ color: color.textDim }}> · a este ritmo: {dual(monthProj).main} este mes</span>
+                  )}
                 </div>
               </div>
             ) : canManageSettings ? (
-              <Button variant="secondary" size="sm" iconLeft={<Target size={14} />} onClick={startEditGoal}>
-                Configurar objetivo del día
-              </Button>
+              suggestedGoal > 0 ? (
+                <div style={{ display: "flex", alignItems: "center", gap: space[3], padding: `${space[2]} ${space[3]}`, background: color.primaryBg, border: `1px dashed ${color.primary}`, borderRadius: radius.md, flexWrap: "wrap" }}>
+                  <Target size={16} color={color.primary} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: text.sm, color: color.text, fontWeight: weight.medium }}>
+                      Objetivo sugerido: <strong>{dual(suggestedGoal).main}</strong>
+                    </span>
+                    <span style={{ fontSize: text.xs, color: color.textDim }}> /día · tu promedio</span>
+                  </div>
+                  <Button variant="primary" size="sm" onClick={() => applyGoal(Math.round(suggestedGoal))}>Usar</Button>
+                  <Button variant="ghost" size="sm" onClick={startEditGoal}>Otro</Button>
+                </div>
+              ) : (
+                <Button variant="secondary" size="sm" iconLeft={<Target size={14} />} onClick={startEditGoal}>
+                  Configurar objetivo del día
+                </Button>
+              )
             ) : null}
           </div>
 
+          {/* COMPARATIVA + TENDENCIA 7 DÍAS */}
+          <div style={{ display: "flex", alignItems: "center", gap: space[3], marginBottom: space[4], maxWidth: 460, flexWrap: "wrap" }}>
+            {vsYesterday != null && (
+              <span style={{ fontSize: text.xs, color: color.textMuted }}>
+                Hoy vs ayer{" "}
+                <strong style={{ color: vsYesterday >= 0 ? color.success : color.danger }}>
+                  {vsYesterday >= 0 ? "+" : ""}
+                  {vsYesterday.toFixed(0)}%
+                </strong>
+              </span>
+            )}
+            <div style={{ flex: 1, minWidth: 120 }}>
+              <Sparkline data={last7} />
+            </div>
+            <span style={{ fontSize: 10, color: color.textDim, textTransform: "uppercase", letterSpacing: "0.5px" }}>7 días</span>
+          </div>
+
           <div style={{ display: "flex", justifyContent: "space-between", gap: space[6], flexWrap: "wrap", width: "100%", maxWidth: 460 }}>
-            <HeroStat label="Ventas de hoy" value={`${todaySales.length}`} hint={formatMoney(todayTotal)} sub={usd(todayTotal)} />
+            <HeroStat label="Ventas de hoy" value={dual(todayTotal).main} hint={`${todaySales.length} ${todaySales.length === 1 ? "venta" : "ventas"}`} sub={dual(todayTotal).sub} />
             <HeroStat
               label="Por cobrar"
-              value={formatMoney(porCobrar)}
-              sub={porCobrar > 0 ? usd(porCobrar) : null}
+              value={dual(porCobrar).main}
+              sub={porCobrar > 0 ? dual(porCobrar).sub : null}
               tone={porCobrar > 0 ? "warning" : "neutral"}
             />
             <HeroStat label="Tareas pendientes" value={`${pendingTasks.length}`} />
           </div>
+
+          {/* FOCO DEL DÍA — la acción más importante de hoy */}
+          {foco && (
+            <button
+              onClick={() => onNavigate(foco.to)}
+              style={{
+                marginTop: space[4],
+                width: "100%",
+                maxWidth: 460,
+                display: "flex",
+                alignItems: "center",
+                gap: space[3],
+                padding: space[3],
+                background: color.surface2,
+                border: `1px solid ${color.border}`,
+                borderRadius: radius.md,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <span style={{ fontSize: 18, flexShrink: 0 }}>{foco.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: weight.semibold, color: color.textDim, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Foco del día
+                </div>
+                <div style={{ fontSize: text.sm, color: color.text, fontWeight: weight.medium, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {foco.text}
+                </div>
+              </div>
+              <span style={{ fontSize: text.xs, color: color.primary, fontWeight: weight.semibold, flexShrink: 0 }}>{foco.cta} →</span>
+            </button>
+          )}
         </div>
 
         <div
@@ -444,7 +592,50 @@ export function MiDia({
             gap: space[4],
           }}
         >
-          <ScoreRing score={score} />
+          <button
+            onClick={() => setScoreOpen((v) => !v)}
+            title="Ver cómo subir tu score"
+            style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+          >
+            <ScoreRing score={score} />
+          </button>
+          {scoreOpen && (
+            <div
+              style={{
+                width: 210,
+                background: color.surface,
+                border: `1px solid ${color.borderStrong}`,
+                borderRadius: radius.md,
+                padding: space[3],
+                display: "flex",
+                flexDirection: "column",
+                gap: space[2],
+                boxShadow: "var(--shadow-lg)",
+              }}
+            >
+              <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted }}>Cómo subir tu score</div>
+              {scoreItems.map((it) => (
+                <div key={it.label} style={{ display: "flex", alignItems: "center", gap: space[2], fontSize: text.xs, color: it.done ? color.textDim : color.text }}>
+                  <span
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 5,
+                      flexShrink: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: it.done ? color.success : "transparent",
+                      border: `1.5px solid ${it.done ? color.success : color.borderStrong}`,
+                    }}
+                  >
+                    {it.done && <Check size={11} color="#fff" strokeWidth={3} />}
+                  </span>
+                  <span style={{ textDecoration: it.done ? "line-through" : "none" }}>{it.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {canSell && (
             <Button variant="primary" size="lg" iconLeft={<Plus size={18} />} onClick={onNewSale}>
               Nueva venta
@@ -765,6 +956,25 @@ function RowIconBtn({
     >
       {children}
     </button>
+  );
+}
+
+function Sparkline({ data }: { data: number[] }) {
+  const max = Math.max(...data, 1);
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 28 }}>
+      {data.map((v, i) => {
+        const h = Math.max(2, Math.round((v / max) * 28));
+        const isToday = i === data.length - 1;
+        return (
+          <div
+            key={i}
+            title={formatMoney(v)}
+            style={{ flex: 1, height: h, borderRadius: 2, background: isToday ? color.primary : color.border }}
+          />
+        );
+      })}
+    </div>
   );
 }
 
