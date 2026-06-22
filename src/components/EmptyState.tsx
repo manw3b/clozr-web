@@ -18,6 +18,8 @@ interface EmptyStateProps {
     label: string;
     onClick: () => void;
   };
+  /** CTA custom (ej: un menú/split-button). Si se pasa, reemplaza action/secondaryAction. */
+  actionNode?: ReactNode;
   /** Tamaño del bloque. compact = inline en cards, full = pantalla completa */
   size?: 'compact' | 'full';
 }
@@ -34,6 +36,7 @@ export function EmptyState({
   description,
   action,
   secondaryAction,
+  actionNode,
   size = 'full',
 }: EmptyStateProps) {
   const isFull = size === 'full';
@@ -92,7 +95,9 @@ export function EmptyState({
         )}
       </div>
 
-      {(action || secondaryAction) && (
+      {actionNode && <div style={{ marginTop: space[2] }}>{actionNode}</div>}
+
+      {!actionNode && (action || secondaryAction) && (
         <div style={{ display: 'flex', gap: space[2], marginTop: space[2] }}>
           {action && (
             <Button

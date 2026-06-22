@@ -147,18 +147,17 @@ export function Inventario() {
             title={products.length === 0 ? "Sin productos" : "Nada con esos filtros"}
             description={
               products.length === 0
-                ? "Cargá un producto a mano, elegí del catálogo Apple, o importá todo en bloque desde Excel."
+                ? "Elegí del catálogo, cargá uno a mano o importá todo en bloque."
                 : "Probá cambiar la búsqueda o el filtro."
             }
-            action={
-              products.length === 0 && canWrite
-                ? { label: "Catálogo Apple", iconLeft: <LayoutGrid size={14} />, onClick: () => setPickerOpen(true) }
-                : undefined
-            }
-            secondaryAction={
-              products.length === 0 && canWrite
-                ? { label: "Carga manual", onClick: () => setAdding(true) }
-                : undefined
+            actionNode={
+              products.length === 0 && canWrite ? (
+                <AddProductMenu
+                  onApple={() => setPickerOpen(true)}
+                  onManual={() => setAdding(true)}
+                  onBulk={() => setBulkOpen(true)}
+                />
+              ) : undefined
             }
           />
         ) : (
