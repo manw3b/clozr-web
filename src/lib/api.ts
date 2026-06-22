@@ -654,6 +654,7 @@ interface TaskRaw {
   notes?: string | null;
   due_at?: string | null;
   completed?: number | null;
+  assigned_to?: string | null;
   template_id?: string | null;
   customer_id?: string | null;
   created_at?: string | null;
@@ -666,6 +667,7 @@ function mapTask(r: TaskRaw): Task {
     notes: r.notes ?? undefined,
     dueAt: r.due_at ?? undefined,
     completed: r.completed === 1,
+    assignedTo: r.assigned_to ?? undefined,
     templateId: r.template_id ?? undefined,
     customerId: r.customer_id ?? undefined,
     createdAt: r.created_at ?? undefined,
@@ -681,10 +683,16 @@ export async function createTask(input: {
   title: string;
   type: TaskType;
   dueAt?: string | null;
+  assignedTo?: string | null;
 }): Promise<string> {
   const r = await req<{ id: string }>(`/workspaces/${ws()}/tasks`, {
     method: "POST",
-    body: JSON.stringify({ title: input.title, type: input.type, due_at: input.dueAt ?? null }),
+    body: JSON.stringify({
+      title: input.title,
+      type: input.type,
+      due_at: input.dueAt ?? null,
+      assigned_to: input.assignedTo ?? null,
+    }),
   });
   return r.id;
 }

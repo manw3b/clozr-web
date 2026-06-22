@@ -18,7 +18,7 @@ import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { color, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
-import type { Task, TaskType } from "@/lib/types";
+import type { Task, TaskType, Member } from "@/lib/types";
 import { NewTaskModal } from "./NewTaskModal";
 
 type FilterStatus = "todas" | "pendientes" | "completadas";
@@ -41,6 +41,19 @@ export function Tareas() {
   const [openForm, setOpenForm] = useState(false);
   const ctxMenu = useContextMenu();
   const [ctxTask, setCtxTask] = useState<Task | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+
+  useEffect(() => {
+    api.listMembers().then(setMembers).catch(() => {});
+  }, []);
+  // Mapa user_id → nombre para mostrar el responsable de cada tarea.
+  const memberName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const x of members) if (x.userId) m.set(x.userId, x.userName ?? x.email);
+    return m;
+  }, [members]);
+  // Solo mostramos la columna "Asignada a" si hay equipo (más de un miembro real).
+  const hasTeam = members.filter((m) => m.userId).length >= 2;
 
   const load = useCallback(() => {
     setLoading(true);
@@ -164,6 +177,23 @@ export function Tareas() {
         </Badge>
       ),
     },
+    ...(hasTeam
+      ? ([
+          {
+            id: "assigned",
+            header: "Asignada a",
+            width: "160px",
+            cell: (t: Task) =>
+              t.assignedTo ? (
+                <span style={{ fontSize: text.sm, color: color.textMuted }}>
+                  {memberName.get(t.assignedTo) ?? "Otro miembro"}
+                </span>
+              ) : (
+                <span style={{ color: color.textDim }}>—</span>
+              ),
+          },
+        ] as ColumnDef<Task>[])
+      : []),
     {
       id: "due_at",
       header: "Vence",

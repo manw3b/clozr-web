@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, ModalField } from "@/components/Modal";
 import { Button } from "@/components/Button";
 import { Input, Select } from "@/components/Input";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { useUIStore } from "@/store/uiStore";
 import * as api from "@/lib/api";
-import type { TaskType } from "@/lib/types";
+import type { TaskType, Member } from "@/lib/types";
 
 /**
  * Modal "Nueva tarea". Port web del de la desktop: misma UI, pero crea via
@@ -24,22 +24,33 @@ export function NewTaskModal({
   const [title, setTitle] = useState("");
   const [type, setType] = useState<TaskType>("puntual");
   const [dueAt, setDueAt] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
+  const [members, setMembers] = useState<Member[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // Miembros a los que se puede asignar: solo los que ya entraron (tienen user_id).
+  useEffect(() => {
+    if (!open) return;
+    api.listMembers().then(setMembers).catch(() => {});
+  }, [open]);
+  const assignable = members.filter((m) => m.userId && m.status === "active");
+
   const canSubmit = title.trim().length >= 2;
-  const isDirty = () => title.trim().length > 0 || dueAt.trim().length > 0 || type !== "puntual";
+  const isDirty = () =>
+    title.trim().length > 0 || dueAt.trim().length > 0 || type !== "puntual" || assignedTo !== "";
 
   function reset() {
     setTitle("");
     setDueAt("");
     setType("puntual");
+    setAssignedTo("");
   }
 
   async function submit() {
     if (!canSubmit) return;
     setSaving(true);
     try {
-      await api.createTask({ title: title.trim(), type, dueAt: dueAt || null });
+      await api.createTask({ title: title.trim(), type, dueAt: dueAt || null, assignedTo: assignedTo || null });
       showToast("Tarea creada", "success");
       reset();
       onCreated();
@@ -84,6 +95,18 @@ export function NewTaskModal({
           <option value="rutina">Rutina (se reinicia diariamente)</option>
         </Select>
       </ModalField>
+      {assignable.length >= 2 && (
+        <ModalField label="Asignar a" hint="Opcional">
+          <Select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
+            <option value="">Sin asignar</option>
+            {assignable.map((m) => (
+              <option key={m.id} value={m.userId ?? ""}>
+                {m.userName ?? m.email}
+              </option>
+            ))}
+          </Select>
+        </ModalField>
+      )}
       {type === "puntual" && (
         <ModalField label="Vencimiento" hint="Opcional">
           <DateTimePicker value={dueAt} onChange={setDueAt} placeholder="Elegir fecha y hora" />

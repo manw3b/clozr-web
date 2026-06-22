@@ -255,6 +255,8 @@ export interface Task {
   notes?: string | null;
   dueAt?: string | null;
   completed: boolean;
+  /** user_id del miembro asignado (responsable de la tarea). */
+  assignedTo?: string | null;
   /** Si viene de un template (ej. 'ai-triage' = sugerida por la IA matutina). */
   templateId?: string | null;
   customerId?: string | null;
