@@ -22,6 +22,7 @@ import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { useBlueRate } from "@/store/dollarStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, greetByHour, greetText, formatDateLong, toLocalISODate, displayName } from "@/lib/format";
 import { openWhatsApp, openTel } from "@/lib/openExternal";
@@ -52,6 +53,9 @@ export function MiDia({
   const canManageSettings = can("settings.manage");
   const canContact = can("customers.write");
   const activeWs = useWorkspaceStore((s) => s.activeWorkspace);
+  const blue = useBlueRate();
+  // Equivalente en dólares (al blue) de un monto en pesos — para el dual USD/ARS.
+  const usd = (ars: number): string | null => (blue && blue > 0 ? formatMoney(Math.round(ars / blue), "USD") : null);
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -263,17 +267,55 @@ export function MiDia({
           }}
         />
         <div style={{ position: "relative", zIndex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: weight.semibold,
-              color: color.textDim,
-              textTransform: "uppercase",
-              letterSpacing: "0.8px",
-              marginBottom: space[2],
-            }}
-          >
-            {formatDateLong(now.toISOString())}
+          <div style={{ display: "flex", alignItems: "center", gap: space[3], marginBottom: space[2] }}>
+            {activeWs?.logoKey && (
+              <span
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: radius.md,
+                  overflow: "hidden",
+                  background: color.surface2,
+                  border: `1px solid ${color.border}`,
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={api.assetUrl(activeWs.logoKey)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </span>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+              {activeWs?.name && (
+                <span
+                  style={{
+                    fontSize: text.sm,
+                    fontWeight: weight.bold,
+                    color: color.text,
+                    lineHeight: 1.1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {activeWs.name}
+                </span>
+              )}
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: weight.semibold,
+                  color: color.textDim,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.8px",
+                  marginTop: 2,
+                }}
+              >
+                {formatDateLong(now.toISOString())}
+              </span>
+            </div>
           </div>
           <h1
             style={{
@@ -337,26 +379,33 @@ export function MiDia({
             ) : dailyGoal > 0 ? (
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: 6 }}>
-                  <span style={{ fontSize: text.xs, color: color.textMuted, fontWeight: weight.semibold }}>
+                  <span style={{ fontSize: text.xs, color: color.textMuted, fontWeight: weight.semibold, textTransform: "uppercase", letterSpacing: "0.4px" }}>
                     Objetivo del día
-                  </span>
-                  <span style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>
-                    {formatMoney(todayTotal)} de {formatMoney(dailyGoal)}
                   </span>
                   {canManageSettings && (
                     <button
                       onClick={startEditGoal}
                       aria-label="Editar objetivo"
-                      style={{
-                        background: "transparent",
-                        color: color.textDim,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        padding: 2,
-                      }}
+                      style={{ background: "transparent", color: color.textDim, cursor: "pointer", display: "inline-flex", padding: 2 }}
                     >
                       <Pencil size={12} />
                     </button>
+                  )}
+                  <span style={{ marginLeft: "auto", fontSize: text.sm, fontWeight: weight.semibold, color: goalProgress >= 100 ? color.success : color.text }}>
+                    {goalProgress.toFixed(0)}%
+                  </span>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: space[2], marginBottom: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: text["2xl"], fontWeight: weight.bold, color: color.text, letterSpacing: "-0.5px", lineHeight: 1 }}>
+                    {formatMoney(todayTotal)}
+                  </span>
+                  <span style={{ fontSize: text.sm, color: color.textMuted, fontWeight: weight.medium }}>
+                    de {formatMoney(dailyGoal)}
+                  </span>
+                  {usd(todayTotal) && (
+                    <span style={{ fontSize: text.xs, color: color.textDim }}>
+                      · {usd(todayTotal)} de {usd(dailyGoal)}
+                    </span>
                   )}
                 </div>
                 <ProgressBar pct={goalProgress} />
@@ -374,10 +423,11 @@ export function MiDia({
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", gap: space[6], flexWrap: "wrap", width: "100%", maxWidth: 460 }}>
-            <HeroStat label="Ventas de hoy" value={`${todaySales.length}`} hint={formatMoney(todayTotal)} />
+            <HeroStat label="Ventas de hoy" value={`${todaySales.length}`} hint={formatMoney(todayTotal)} sub={usd(todayTotal)} />
             <HeroStat
               label="Por cobrar"
               value={formatMoney(porCobrar)}
+              sub={porCobrar > 0 ? usd(porCobrar) : null}
               tone={porCobrar > 0 ? "warning" : "neutral"}
             />
             <HeroStat label="Tareas pendientes" value={`${pendingTasks.length}`} />
@@ -718,7 +768,7 @@ function RowIconBtn({
   );
 }
 
-function HeroStat({ label, value, hint, tone = "neutral" }: { label: string; value: string; hint?: string; tone?: "neutral" | "warning" }) {
+function HeroStat({ label, value, hint, sub, tone = "neutral" }: { label: string; value: string; hint?: string; sub?: string | null; tone?: "neutral" | "warning" }) {
   return (
     <div>
       <div style={{ fontSize: text.xs, color: color.textMuted, fontWeight: weight.medium, marginBottom: 2 }}>
@@ -736,6 +786,7 @@ function HeroStat({ label, value, hint, tone = "neutral" }: { label: string; val
         {value}
       </div>
       {hint && <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: 2 }}>{hint}</div>}
+      {sub && <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 1 }}>{sub}</div>}
     </div>
   );
 }
