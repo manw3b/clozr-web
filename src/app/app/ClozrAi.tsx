@@ -6,6 +6,7 @@ import { Drawer } from "@/components/Drawer";
 import { ClozrAiIcon } from "@/components/ClozrAiIcon";
 import { Button } from "@/components/Button";
 import { useUIStore } from "@/store/uiStore";
+import { useAiStore } from "@/store/aiStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { AI_PACKS, AI_FREE_LIMIT, formatUsd } from "@/lib/types";
 import * as api from "@/lib/api";
@@ -23,7 +24,10 @@ const EXAMPLES = [
  */
 export function ClozrAi() {
   const { showToast } = useUIStore();
-  const [open, setOpen] = useState(false);
+  const open = useAiStore((s) => s.open);
+  const openAi = useAiStore((s) => s.openAi);
+  const closeAi = useAiStore((s) => s.closeAi);
+  const consumePendingQuery = useAiStore((s) => s.consumePendingQuery);
   const [status, setStatus] = useState<api.AiStatus | null>(null);
   const [messages, setMessages] = useState<api.AiChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -35,6 +39,12 @@ export function ClozrAi() {
   useEffect(() => {
     if (!open) return;
     api.aiStatus().then(setStatus).catch(() => {});
+    const q = consumePendingQuery(); // ⌘K: pregunta natural → autoenviar
+    if (q) {
+      setShowPlans(false);
+      void send(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -96,7 +106,7 @@ export function ClozrAi() {
       {/* Lanzador flotante */}
       {!open && (
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => openAi()}
           aria-label="Abrir IA de Clozr"
           style={{
             position: "fixed",
@@ -122,7 +132,7 @@ export function ClozrAi() {
         </button>
       )}
 
-      <Drawer open={open} onClose={() => setOpen(false)} title="IA de Clozr" subtitle="Tu asistente para cerrar ventas" width="440px">
+      <Drawer open={open} onClose={closeAi} title="IA de Clozr" subtitle="Tu asistente para cerrar ventas" width="440px">
         <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
           {/* Chip de saldo + acceso a planes */}
           <div
