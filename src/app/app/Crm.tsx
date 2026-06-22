@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as api from "@/lib/api";
+import { displayName } from "@/lib/format";
 import { color, radius, shadow } from "@/tokens";
 import {
   CLIENT_TYPE_LABELS,
   CLIENT_TYPES,
   PAYMENT_METHOD_LABELS,
-  PAYMENT_METHODS,
+  PAYMENT_METHODS_MANUAL,
   PRIORITIES,
   PRIORITY_LABELS,
   SOURCE_LABELS,
@@ -47,6 +48,7 @@ import { Ajustes } from "./Ajustes";
 import { Caja } from "./Caja";
 import { Consola } from "./Consola";
 import { CommandPalette } from "./CommandPalette";
+import { ClozrAi } from "./ClozrAi";
 import { Clientes as ClientesView } from "./Clientes";
 import { Ventas as VentasView } from "./Ventas";
 import { Pipeline as PipelineView } from "./Pipeline";
@@ -232,7 +234,7 @@ export default function Crm({
         active={view}
         onNavigate={(id) => setView(id as View)}
         workspace={{ name: activeWs.name }}
-        user={{ name: user.name ?? user.email, email: user.email }}
+        user={{ name: displayName(user), email: user.email }}
         onLogout={onLogout}
         onSearchClick={() => setPaletteOpen(true)}
         onNewAction={handleNew}
@@ -349,7 +351,7 @@ export default function Crm({
         <SaleModal
           customers={customers}
           catalog={catalog}
-          sellerName={user.name ?? user.email}
+          sellerName={displayName(user)}
           preset={modal.preset}
           title={modal.fromItemId ? "Convertir en venta" : "Nueva venta"}
           onClose={() => setModal(null)}
@@ -405,6 +407,7 @@ export default function Crm({
         onOpenSale={(id) => setModal({ kind: "saleDetail", id })}
         onOpenItem={(id) => setModal({ kind: "item", id })}
       />
+      <ClozrAi />
     </>
   );
 }
@@ -1204,14 +1207,61 @@ function SaleModal({
   const [partial, setPartial] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  // Plan canje: equipo usado recibido como parte de pago.
+  const [tradeInOpen, setTradeInOpen] = useState(false);
+  const [tiDesc, setTiDesc] = useState("");
+  const [tiImei, setTiImei] = useState("");
+  const [tiCondition, setTiCondition] = useState("");
+  const [tiValue, setTiValue] = useState("");
   // Lista local de clientes (para reflejar al instante uno creado al vuelo).
   const [localCustomers, setLocalCustomers] = useState(customers);
   useEffect(() => { setLocalCustomers(customers); }, [customers]);
   const [newClientName, setNewClientName] = useState<string | null>(null);
+  // IMEIs por producto del catálogo (cache lazy). Un producto es "serializado"
+  // si tiene unidades cargadas → en la venta se ELIGE cuál sale (no texto libre)
+  // y la cantidad queda fija en 1 (cada equipo es una unidad).
+  const [imeisByItem, setImeisByItem] = useState<Record<string, api.CatalogImei[]>>({});
+  const imeisRequested = useRef<Set<string>>(new Set());
+  const linkedItemIds = useMemo(
+    () => Array.from(new Set(lines.map((l) => l.catalogItemId).filter(Boolean) as string[])),
+    [lines],
+  );
+  useEffect(() => {
+    const missing = linkedItemIds.filter((id) => !imeisRequested.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach((id) => imeisRequested.current.add(id));
+    let cancelled = false;
+    Promise.all(
+      missing.map((id) =>
+        api.listCatalogImeis(id).then((list) => [id, list] as const).catch(() => [id, [] as api.CatalogImei[]] as const),
+      ),
+    ).then((entries) => {
+      if (cancelled) return;
+      setImeisByItem((prev) => {
+        const next = { ...prev };
+        for (const [id, list] of entries) next[id] = list;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [linkedItemIds]);
+  // ¿La línea vende una unidad serializada? (producto con IMEIs cargados)
+  const isSerialLine = (l: SaleLine) => !!(l.catalogItemId && imeisByItem[l.catalogItemId]?.length);
 
-  const total = lines.reduce((a, l) => a + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0), 0);
-  const paidAmount = paidFull ? total : Number(partial) || 0;
+  const total = lines.reduce(
+    (a, l) => a + (isSerialLine(l) ? 1 : Number(l.quantity) || 0) * (Number(l.unitPrice) || 0),
+    0,
+  );
+  // Plan canje: el equipo recibido vale `tradeInValue`, cuenta como pago (baja
+  // el saldo) y entra al stock como unidad usada al cerrar la venta.
+  const tradeInValue = tradeInOpen ? Math.max(0, Number(tiValue) || 0) : 0;
+  const due = Math.max(0, total - tradeInValue); // lo que queda a pagar
+  const cashPaid = paidFull ? due : Math.max(0, Number(partial) || 0);
+  const paidAmount = tradeInValue + cashPaid; // total cobrado (canje + efectivo/otro)
   const balance = total - paidAmount;
+  // El canje está "activo" si se empezó a cargar; si es así exige modelo + valor.
+  const tradeInActive = tradeInOpen && (tiDesc.trim() !== "" || tiValue.trim() !== "");
+  const tradeInOk = !tradeInActive || (tiDesc.trim() !== "" && tradeInValue > 0);
 
   // El modal está sucio si hay datos que se perderían al cerrar → click afuera
   // hace shake (no cierra), igual que en la desktop.
@@ -1219,6 +1269,7 @@ function SaleModal({
     if (busy) return false;
     if (customerId) return true;
     if (notes.trim() !== "") return true;
+    if (tradeInActive || tiImei.trim() !== "" || tiCondition.trim() !== "") return true;
     return lines.some((l) => l.description.trim() !== "" || String(l.unitPrice).trim() !== "");
   }
 
@@ -1329,6 +1380,21 @@ function SaleModal({
   function removeLine(i: number) {
     setLines((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
+  // Unidades disponibles de un producto serializado para una línea: sin vender y
+  // no elegidas en OTRA línea del mismo producto. Devuelve null si el producto
+  // no es serializado (sin IMEIs cargados) → la línea usa IMEI de texto libre.
+  function availableUnitsFor(lineIdx: number): api.CatalogImei[] | null {
+    const l = lines[lineIdx];
+    if (!l?.catalogItemId) return null;
+    const all = imeisByItem[l.catalogItemId];
+    if (!all || all.length === 0) return null;
+    const chosenElsewhere = new Set(
+      lines
+        .filter((x, idx) => idx !== lineIdx && x.catalogItemId === l.catalogItemId && x.imei)
+        .map((x) => x.imei as string),
+    );
+    return all.filter((u) => !u.soldAt && !chosenElsewhere.has(u.imei));
+  }
 
   // Estado de linkeo de una línea: linkeada con costo (→ margen), linkeada sin
   // costo cargado, o texto libre. Define el chip y la cobertura del margen.
@@ -1376,7 +1442,7 @@ function SaleModal({
   const validLines = lines.filter(
     (l) => l.description.trim() && Number(l.unitPrice) > 0 && Number(l.quantity) > 0,
   );
-  const canSave = validLines.length > 0 && total > 0 && !busy;
+  const canSave = validLines.length > 0 && total > 0 && tradeInOk && !busy;
 
   async function save() {
     if (!canSave) return;
@@ -1388,7 +1454,9 @@ function SaleModal({
     const finalCustomerId = cust?.id ?? (isPresetCust ? customerId : undefined);
     const finalCustomerName =
       cust?.name || (isPresetCust ? preset?.customerName : "") || "Consumidor final";
-    const payments = paidAmount > 0 ? [{ method, amount: paidAmount, currency: "ARS" as Currency }] : [];
+    const payments: Array<{ method: string; amount: number; currency: Currency }> = [];
+    if (tradeInValue > 0) payments.push({ method: "canje", amount: tradeInValue, currency: "ARS" });
+    if (cashPaid > 0) payments.push({ method, amount: cashPaid, currency: "ARS" });
     try {
       await api.createSale({
         customerId: finalCustomerId,
@@ -1398,8 +1466,9 @@ function SaleModal({
         items: validLines.map((l) => ({
           description: l.description.trim(),
           // validLines garantiza quantity > 0 — sin el ||1 que coerce vacío→1
-          // (eso divergía el total mostrado del persistido).
-          quantity: Number(l.quantity),
+          // (eso divergía el total mostrado del persistido). Serializado = 1
+          // unidad por IMEI elegido.
+          quantity: isSerialLine(l) ? 1 : Number(l.quantity),
           unitPrice: Number(l.unitPrice) || 0,
           catalogItemId: l.catalogItemId ?? null,
           imei: l.imei?.trim() || null,
@@ -1408,6 +1477,15 @@ function SaleModal({
           unitCost: l.catalogItemId ? productById.get(l.catalogItemId)?.cost ?? null : null,
         })),
         payments,
+        tradeIn:
+          tradeInActive && tiDesc.trim() && tradeInValue > 0
+            ? {
+                description: tiDesc.trim(),
+                imei: tiImei.trim() || undefined,
+                value: tradeInValue,
+                condition: tiCondition.trim() || undefined,
+              }
+            : undefined,
       });
       onSaved("Venta registrada");
     } catch {
@@ -1448,6 +1526,8 @@ function SaleModal({
           <span className={labelCls}>Productos / ítems</span>
           {lines.map((l, i) => {
             const st = lineStatus(l);
+            const units = availableUnitsFor(i);
+            const serial = units !== null;
             return (
               <div key={i} className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
@@ -1460,10 +1540,12 @@ function SaleModal({
                   <input
                     type="number"
                     min="1"
-                    value={l.quantity}
+                    value={serial ? "1" : l.quantity}
                     onChange={(e) => setLine(i, { quantity: e.target.value })}
+                    disabled={serial}
+                    title={serial ? "Cada equipo es una unidad" : undefined}
                     className={fieldCls}
-                    style={{ width: 56, flexShrink: 0 }}
+                    style={{ width: 56, flexShrink: 0, opacity: serial ? 0.6 : undefined }}
                   />
                   <input
                     type="number"
@@ -1485,14 +1567,44 @@ function SaleModal({
                   <div className="flex flex-wrap items-center gap-2">
                     <LineStatusChip status={st} />
                     <span className="flex-1" />
-                    <input
-                      value={l.imei ?? ""}
-                      onChange={(e) => setLine(i, { imei: e.target.value })}
-                      placeholder="IMEI / N° de serie (opcional)"
-                      autoComplete="off"
-                      className={fieldCls}
-                      style={{ fontSize: 12, padding: "6px 10px", width: 224, flexShrink: 0 }}
-                    />
+                    {serial ? (
+                      // Producto serializado → elegir la unidad exacta que sale.
+                      (() => {
+                        const noStock = units!.length === 0 && !l.imei;
+                        return (
+                          <select
+                            value={l.imei ?? ""}
+                            onChange={(e) => setLine(i, { imei: e.target.value || undefined, quantity: "1" })}
+                            disabled={noStock}
+                            className={fieldCls}
+                            style={{
+                              fontSize: 12,
+                              padding: "6px 10px",
+                              width: 224,
+                              flexShrink: 0,
+                              color: l.imei ? undefined : color.textDim,
+                            }}
+                          >
+                            <option value="">{noStock ? "Sin unidades en stock" : "Elegí el equipo (IMEI)…"}</option>
+                            {units!.map((u) => (
+                              <option key={u.id} value={u.imei}>
+                                {u.imei}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })()
+                    ) : (
+                      // Producto no serializado → IMEI / N° de serie libre (opcional).
+                      <input
+                        value={l.imei ?? ""}
+                        onChange={(e) => setLine(i, { imei: e.target.value })}
+                        placeholder="IMEI / N° de serie (opcional)"
+                        autoComplete="off"
+                        className={fieldCls}
+                        style={{ fontSize: 12, padding: "6px 10px", width: 224, flexShrink: 0 }}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -1503,11 +1615,87 @@ function SaleModal({
           </button>
         </div>
 
+        {/* Plan canje: recibir un equipo usado como parte de pago */}
+        {!tradeInOpen ? (
+          <button
+            onClick={() => setTradeInOpen(true)}
+            className="-mt-1 w-full rounded-lg border border-dashed border-border-strong py-2 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
+          >
+            ↔ Plan canje · recibo un equipo en parte de pago
+          </button>
+        ) : (
+          <div className="rounded-xl border border-border bg-surface-2 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-semibold">Plan canje · equipo recibido</span>
+              <button
+                onClick={() => {
+                  setTradeInOpen(false);
+                  setTiDesc("");
+                  setTiImei("");
+                  setTiCondition("");
+                  setTiValue("");
+                }}
+                className="text-lg leading-none text-text-dim hover:text-danger"
+                aria-label="Quitar plan canje"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              <input
+                value={tiDesc}
+                onChange={(e) => setTiDesc(e.target.value)}
+                placeholder="Equipo recibido (ej: iPhone 12 128GB)"
+                className={fieldCls}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  value={tiImei}
+                  onChange={(e) => setTiImei(e.target.value)}
+                  placeholder="IMEI / N° de serie"
+                  autoComplete="off"
+                  className={fieldCls}
+                />
+                <input
+                  value={tiCondition}
+                  onChange={(e) => setTiCondition(e.target.value)}
+                  placeholder="Estado (ej: batería 89%)"
+                  className={fieldCls}
+                />
+              </div>
+              <input
+                type="number"
+                value={tiValue}
+                onChange={(e) => setTiValue(e.target.value)}
+                placeholder="Valor de toma ($)"
+                className={fieldCls}
+              />
+              <span className="text-xs text-text-dim">
+                Entra al stock como unidad usada (costo {money(tradeInValue, "ARS")}) y se descuenta del total.
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-xl bg-surface-2 p-4">
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-text-muted">Total</span>
             <span className="text-xl font-extrabold tracking-tight">{money(total, "ARS")}</span>
           </div>
+          {tradeInValue > 0 && (
+            <>
+              <div className="mt-1.5 flex items-baseline justify-between text-sm">
+                <span className="text-text-muted">Plan canje</span>
+                <span className="font-semibold" style={{ color: color.success }}>
+                  − {money(tradeInValue, "ARS")}
+                </span>
+              </div>
+              <div className="mt-1.5 flex items-baseline justify-between border-t border-border pt-2">
+                <span className="text-sm font-medium text-text-muted">A pagar</span>
+                <span className="text-lg font-extrabold tracking-tight">{money(due, "ARS")}</span>
+              </div>
+            </>
+          )}
           {coverage.hasCosted && (
             <div
               className="mt-2 flex justify-between text-sm"
@@ -1529,7 +1717,7 @@ function SaleModal({
           <label className="flex flex-col gap-1.5">
             <span className={labelCls}>Método de pago</span>
             <select value={method} onChange={(e) => setMethod(e.target.value)} className={fieldCls}>
-              {PAYMENT_METHODS.map((m) => (
+              {PAYMENT_METHODS_MANUAL.map((m) => (
                 <option key={m} value={m}>
                   {PAYMENT_METHOD_LABELS[m]}
                 </option>
@@ -1718,7 +1906,7 @@ function SaleDetailModal({
                 <div className={`${labelCls} mb-2`}>Registrar un pago</div>
                 <div className="flex items-end gap-2">
                   <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className={`${fieldCls} flex-1`}>
-                    {PAYMENT_METHODS.map((m) => (
+                    {PAYMENT_METHODS_MANUAL.map((m) => (
                       <option key={m} value={m}>
                         {PAYMENT_METHOD_LABELS[m]}
                       </option>

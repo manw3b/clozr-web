@@ -3,6 +3,8 @@ import { Search, ArrowRight, Users, ShoppingCart, GitBranch, Package, CornerDown
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
+import { ClozrAiIcon } from "@/components/ClozrAiIcon";
+import { useAiStore } from "@/store/aiStore";
 import type { Customer, PipelineItem, Product, Sale } from "@/lib/types";
 
 interface Entry {
@@ -52,6 +54,7 @@ export function CommandPalette({
   onOpenSale: (id: string) => void;
   onOpenItem: (id: string) => void;
 }) {
+  const openAi = useAiStore((s) => s.openAi);
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const [data, setData] = useState<{
@@ -124,9 +127,20 @@ export function CommandPalette({
         .forEach((p) =>
           out.push({ id: `prod-${p.id}`, label: p.name, sub: "Producto", icon: <Package size={15} />, run: () => onNavigate("inventory") }),
         );
+      // Lenguaje natural → IA de Clozr (Raycast for business).
+      out.push({
+        id: "ai-ask",
+        label: `Preguntá a la IA: "${query.trim()}"`,
+        sub: "IA de Clozr",
+        icon: <ClozrAiIcon size={15} style={{ color: color.primary }} />,
+        run: () => {
+          onClose();
+          openAi(query.trim());
+        },
+      });
     }
     return out;
-  }, [query, data, onNavigate, onOpenCustomer, onOpenSale, onOpenItem]);
+  }, [query, data, onNavigate, onOpenCustomer, onOpenSale, onOpenItem, onClose, openAi]);
 
   useEffect(() => {
     setSel(0);
@@ -193,7 +207,7 @@ export function CommandPalette({
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar clientes, ventas, productos, oportunidades…"
+            placeholder="Buscá algo o preguntale a la IA…"
             style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: color.text, fontSize: text.md }}
           />
           <kbd style={{ fontSize: text.xs, color: color.textMuted, padding: "2px 6px", background: color.bg, border: `1px solid ${color.border}`, borderRadius: radius.sm, fontFamily: "inherit" }}>

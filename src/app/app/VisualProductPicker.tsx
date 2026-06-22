@@ -49,6 +49,9 @@ export function VisualProductPicker({
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
   const [quantity, setQuantity] = useState("1");
+  // Carga por IMEI: para iPhones (equipos serializados) el stock = nº de IMEIs.
+  const [serialized, setSerialized] = useState(false);
+  const [imeiText, setImeiText] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -58,9 +61,25 @@ export function VisualProductPicker({
       setPrice("");
       setCost("");
       setQuantity("1");
+      setSerialized(false);
+      setImeiText("");
       setBusy(false);
     }
   }, [open]);
+
+  // Al llegar a confirmar, por defecto "por IMEI" si es un iPhone.
+  const isPhone = picked.category?.id === "cat-iphone";
+  useEffect(() => {
+    if (step === "confirm") setSerialized(isPhone);
+  }, [step, isPhone]);
+
+  const imeiCount = useMemo(
+    () =>
+      serialized
+        ? new Set(imeiText.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean)).size
+        : 0,
+    [serialized, imeiText],
+  );
 
   const colors = picked.model?.colors ?? [];
   const storages = picked.model?.storages ?? [];
@@ -117,16 +136,25 @@ export function VisualProductPicker({
     if (!picked.category || !picked.model) return;
     setBusy(true);
     try {
-      await api.createProduct({
+      const imeis = serialized
+        ? Array.from(new Set(imeiText.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean)))
+        : [];
+      const id = await api.createProduct({
         name: finalName,
         category: picked.category.name,
         price: price ? Number(price) : 0,
         cost: cost ? Number(cost) : null,
         trackStock: true,
-        stock: Math.max(0, Number(quantity) || 0),
+        stock: serialized ? imeis.length : Math.max(0, Number(quantity) || 0),
         imagePath: finalImage ?? null,
       });
-      showToast("Producto creado", "success");
+      if (serialized && imeis.length > 0) {
+        await api.addCatalogImeis(id, imeis);
+      }
+      showToast(
+        serialized && imeis.length ? `Producto creado · ${imeis.length} unidades` : "Producto creado",
+        "success",
+      );
       onCreated();
       onClose();
     } catch {
@@ -276,17 +304,54 @@ export function VisualProductPicker({
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: space[3] }}>
+          <div style={{ display: "grid", gridTemplateColumns: serialized ? "1fr 1fr" : "1fr 1fr 120px", gap: space[3] }}>
             <ModalField label="Precio (ARS)">
               <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" autoFocus />
             </ModalField>
             <ModalField label="Costo (ARS)" hint="Opcional">
               <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" />
             </ModalField>
-            <ModalField label="Stock">
-              <Input type="number" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="1" />
-            </ModalField>
+            {!serialized && (
+              <ModalField label="Stock">
+                <Input type="number" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="1" />
+              </ModalField>
+            )}
           </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: space[2], cursor: "pointer" }}>
+            <input type="checkbox" checked={serialized} onChange={(e) => setSerialized(e.target.checked)} />
+            <span style={{ fontSize: text.sm, color: color.text }}>
+              Cargar por IMEI / N° de serie{" "}
+              <span style={{ color: color.textDim }}>· cada equipo es una unidad</span>
+            </span>
+          </label>
+
+          {serialized && (
+            <div>
+              <textarea
+                value={imeiText}
+                onChange={(e) => setImeiText(e.target.value)}
+                placeholder={"Pegá un IMEI por línea\n352099001761481\n352099001761482"}
+                rows={4}
+                style={{
+                  width: "100%",
+                  resize: "vertical",
+                  minHeight: 88,
+                  background: color.surface2,
+                  border: `1px solid ${color.border}`,
+                  borderRadius: radius.md,
+                  padding: "8px 10px",
+                  color: color.text,
+                  fontSize: text.sm,
+                  fontFamily: "inherit",
+                  lineHeight: 1.5,
+                }}
+              />
+              <div style={{ marginTop: space[1], fontSize: text.xs, color: color.textMuted }}>
+                {imeiCount} {imeiCount === 1 ? "unidad" : "unidades"} · el stock se calcula de los IMEIs cargados
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Modal>

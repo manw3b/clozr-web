@@ -150,6 +150,51 @@ export const CATALOG_PACKS: Record<string, CatalogPack> = {
   },
 };
 
+/* ───────── IA de Clozr (microtransacciones por acción) ───────── */
+/** Acciones gratis por workspace (trial) antes de tener que comprar un pack. */
+export const AI_FREE_LIMIT = 3;
+
+/** Tipos de mensaje que la IA puede generar desde la ficha del cliente.
+ *  Las keys deben coincidir con GEN_KINDS del Worker. */
+export const AI_GEN_KINDS: Array<{ key: string; label: string }> = [
+  { key: "primer_contacto", label: "Primer contacto" },
+  { key: "seguimiento", label: "Seguimiento" },
+  { key: "reactivacion", label: "Reactivar" },
+  { key: "agradecimiento", label: "Agradecer" },
+  { key: "cobranza", label: "Cobranza" },
+  { key: "upselling", label: "Ofrecer más" },
+];
+
+/** Tonos para reescribir. Keys = TONES del Worker. */
+export const AI_TONES: Array<{ key: string; label: string }> = [
+  { key: "mas_corto", label: "Más corto" },
+  { key: "mas_vendedor", label: "Más vendedor" },
+  { key: "mas_amigable", label: "Más amigable" },
+  { key: "mas_formal", label: "Más formal" },
+  { key: "mas_argentino", label: "Más argentino" },
+  { key: "mas_directo", label: "Más directo" },
+];
+
+export interface AiPack {
+  key: string;
+  label: string;
+  /** Mensajes que otorga (1 crédito = 1 mensaje). */
+  credits: number;
+  /** Precio del pack (pago único). */
+  priceUsd: number;
+  blurb: string;
+  /** Resaltar como recomendado. */
+  popular?: boolean;
+}
+
+/** Packs de mensajes — mantener en sync con AI_PACKS del Worker. */
+export const AI_PACKS: AiPack[] = [
+  { key: "starter", label: "Starter", credits: 25, priceUsd: 2.99, blurb: "Para probarla a fondo" },
+  { key: "plus", label: "Plus", credits: 100, priceUsd: 10.99, blurb: "El más elegido", popular: true },
+  { key: "pro", label: "Pro", credits: 300, priceUsd: 29.99, blurb: "Para uso diario" },
+  { key: "power", label: "Power", credits: 1000, priceUsd: 94.99, blurb: "Máximo volumen" },
+];
+
 /* ───────── Descuentos apuntados (F5) ───────── */
 /** A qué puede apuntar un código de descuento (Consola). */
 export const DISCOUNT_TARGETS: Array<{ key: string; label: string }> = [
@@ -454,6 +499,7 @@ export type PaymentMethod =
   | "tarjeta"
   | "mercadopago"
   | "cuenta-corriente"
+  | "canje"
   | "otro";
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
@@ -462,9 +508,13 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   tarjeta: "Tarjeta",
   mercadopago: "Mercado Pago",
   "cuenta-corriente": "Cuenta corriente",
+  canje: "Plan canje",
   otro: "Otro",
 };
 export const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
+// "canje" se setea solo desde el Plan canje de una venta — no es un método que
+// se elija a mano, así que se excluye de los selectores de cobro.
+export const PAYMENT_METHODS_MANUAL = PAYMENT_METHODS.filter((m) => m !== "canje");
 
 export interface SaleItem {
   id: string;

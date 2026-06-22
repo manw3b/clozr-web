@@ -23,10 +23,11 @@ import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
-import { formatMoney, greetByHour, greetText, formatDateLong, toLocalISODate } from "@/lib/format";
+import { formatMoney, greetByHour, greetText, formatDateLong, toLocalISODate, displayName } from "@/lib/format";
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import * as api from "@/lib/api";
 import type { CashMovement, Customer, Followup, Sale, Task, User } from "@/lib/types";
+import { ClozrToday } from "./ClozrToday";
 
 /**
  * Vista Mi Día (v2) — home/agregador. Hero con saludo + objetivo del día
@@ -92,7 +93,7 @@ export function MiDia({
   const nowMs = now.getTime();
   const greeting = greetText(greetByHour(now.getHours()));
   const todayKey = toLocalISODate(now);
-  const userName = user.name ?? user.email.split("@")[0];
+  const userName = displayName(user);
 
   const pendingTasks = useMemo(() => tasks.filter((t) => !t.completed), [tasks]);
   const todaySales = useMemo(
@@ -221,6 +222,19 @@ export function MiDia({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[5] }}>
+      <ClozrToday
+        stats={{
+          followups: pendingFollowups.length,
+          collections: collections.length,
+          collectionsAmount: collections.reduce((a, s) => a + s.balance, 0),
+          inactive: inactiveClients.length,
+          tasks: pendingTasks.length,
+          todaySales: todaySales.length,
+        }}
+        candidates={inactiveClients.map((x) => x.customer.name).slice(0, 4)}
+        onNavigate={onNavigate}
+      />
+
       {/* HERO */}
       <div
         className="cz-hero"
@@ -359,7 +373,7 @@ export function MiDia({
             ) : null}
           </div>
 
-          <div style={{ display: "flex", gap: space[6], flexWrap: "wrap" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: space[6], flexWrap: "wrap", width: "100%", maxWidth: 460 }}>
             <HeroStat label="Ventas de hoy" value={`${todaySales.length}`} hint={formatMoney(todayTotal)} />
             <HeroStat
               label="Por cobrar"

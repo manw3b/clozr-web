@@ -489,6 +489,10 @@ export interface NewSaleInput {
   notes?: string;
   items: Array<{ description: string; quantity: number; unitPrice: number; catalogItemId?: string | null; imei?: string | null; unitCost?: number | null }>;
   payments: Array<{ method: string; amount: number; currency: Currency }>;
+  /** Plan canje: equipo usado recibido como parte de pago. Se crea como una
+   *  unidad de catálogo (costo = valor de toma) al cerrar la venta. El crédito
+   *  va aparte, como un pago con method "canje" en `payments`. */
+  tradeIn?: { description: string; imei?: string; value: number; condition?: string; category?: string };
 }
 
 export async function createSale(input: NewSaleInput): Promise<string> {
@@ -535,6 +539,15 @@ export async function createSale(input: NewSaleInput): Promise<string> {
         amount: p.amount,
         currency: p.currency,
       })),
+      trade_in: input.tradeIn
+        ? {
+            description: input.tradeIn.description,
+            imei: input.tradeIn.imei ?? null,
+            value: input.tradeIn.value,
+            condition: input.tradeIn.condition ?? null,
+            category: input.tradeIn.category ?? null,
+          }
+        : undefined,
     }),
   });
   return r.id;
@@ -845,11 +858,123 @@ export async function createProduct(input: ProductInput): Promise<string> {
   });
   return r.id;
 }
+
+/** Importa varios productos de una (migración de catálogo). El Worker
+ *  inserta con dedup por id e informa cuántos entraron / se omitieron. */
+export async function bulkImportProducts(
+  items: ProductInput[],
+): Promise<{ imported: number; skipped: number; errors: Array<{ id: string; error: string }> }> {
+  const body = { items: items.map((p) => ({ currency: "ARS", ...productBody(p) })) };
+  const r = await req<{ imported?: number; skipped?: number; errors?: Array<{ id: string; error: string }> }>(
+    `/workspaces/${ws()}/catalog/import`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return { imported: r.imported ?? 0, skipped: r.skipped ?? 0, errors: r.errors ?? [] };
+}
 export async function updateProduct(id: string, patch: ProductInput): Promise<void> {
   await req(`/workspaces/${ws()}/catalog/${id}`, { method: "PATCH", body: JSON.stringify(productBody(patch)) });
 }
 export async function deleteProduct(id: string): Promise<void> {
   await req(`/workspaces/${ws()}/catalog/${id}`, { method: "DELETE" });
+}
+
+/* ---------- IMEIs / N° de serie por producto (unidades serializadas) ----------
+ * Cada unidad de un producto serializado (ej: iPhone) es única. El stock del
+ * producto = cantidad de IMEIs sin vender. El Worker recalcula el stock al
+ * agregar/borrar y marca `track_stock=1` automáticamente. */
+export interface CatalogImei {
+  id: string;
+  imei: string;
+  soldAt: string | null;
+  saleId: string | null;
+  createdAt: string | null;
+}
+interface CatalogImeiRaw {
+  id: string;
+  imei: string;
+  sold_at?: string | null;
+  sale_id?: string | null;
+  created_at?: string | null;
+}
+function mapImei(r: CatalogImeiRaw): CatalogImei {
+  return {
+    id: r.id,
+    imei: r.imei,
+    soldAt: r.sold_at ?? null,
+    saleId: r.sale_id ?? null,
+    createdAt: r.created_at ?? null,
+  };
+}
+export async function listCatalogImeis(itemId: string): Promise<CatalogImei[]> {
+  const data = await req<{ imeis: CatalogImeiRaw[] }>(`/workspaces/${ws()}/catalog/${itemId}/imeis`);
+  return (data.imeis ?? []).map(mapImei);
+}
+/** Agrega IMEIs (dedup contra los existentes en el server). Devuelve la lista
+ *  completa actualizada + cuántos se agregaron / saltaron + el nuevo stock. */
+export async function addCatalogImeis(
+  itemId: string,
+  imeis: string[],
+): Promise<{ added: number; skipped: number; stock: number; imeis: CatalogImei[] }> {
+  const r = await req<{ added?: number; skipped?: number; stock?: number; imeis?: CatalogImeiRaw[] }>(
+    `/workspaces/${ws()}/catalog/${itemId}/imeis`,
+    { method: "POST", body: JSON.stringify({ imeis }) },
+  );
+  return {
+    added: Number(r.added ?? 0),
+    skipped: Number(r.skipped ?? 0),
+    stock: Number(r.stock ?? 0),
+    imeis: (r.imeis ?? []).map(mapImei),
+  };
+}
+/** Borra un IMEI. Tira ApiError "already_sold" (409) si la unidad ya se vendió. */
+export async function deleteCatalogImei(itemId: string, imeiId: string): Promise<{ stock: number }> {
+  const r = await req<{ stock?: number }>(`/workspaces/${ws()}/catalog/${itemId}/imeis/${imeiId}`, {
+    method: "DELETE",
+  });
+  return { stock: Number(r.stock ?? 0) };
+}
+
+/* ---------- Refurbish interno: reparaciones / repuestos por unidad ----------
+ * Cada reparación se SUMA al `cost` del producto (costo real del equipo), así
+ * el margen de la venta y los reportes quedan bien sin tocar nada más. Las
+ * funciones devuelven el nuevo `cost` total para sincronizar la UI. */
+export interface CatalogRepair {
+  id: string;
+  description: string;
+  cost: number;
+  createdAt: string | null;
+}
+interface CatalogRepairRaw {
+  id: string;
+  description: string;
+  cost?: number | null;
+  created_at?: string | null;
+}
+function mapRepair(r: CatalogRepairRaw): CatalogRepair {
+  return { id: r.id, description: r.description, cost: Number(r.cost ?? 0), createdAt: r.created_at ?? null };
+}
+export async function listCatalogRepairs(itemId: string): Promise<CatalogRepair[]> {
+  const data = await req<{ repairs: CatalogRepairRaw[] }>(`/workspaces/${ws()}/catalog/${itemId}/repairs`);
+  return (data.repairs ?? []).map(mapRepair);
+}
+export async function addCatalogRepair(
+  itemId: string,
+  input: { description: string; cost: number },
+): Promise<{ cost: number; repair: CatalogRepair }> {
+  const r = await req<{ cost?: number; repair?: CatalogRepairRaw }>(
+    `/workspaces/${ws()}/catalog/${itemId}/repairs`,
+    { method: "POST", body: JSON.stringify({ description: input.description, cost: input.cost }) },
+  );
+  return {
+    cost: Number(r.cost ?? 0),
+    repair: r.repair ? mapRepair(r.repair) : { id: "", description: input.description, cost: input.cost, createdAt: null },
+  };
+}
+export async function deleteCatalogRepair(itemId: string, repairId: string): Promise<{ cost: number }> {
+  const r = await req<{ cost?: number }>(`/workspaces/${ws()}/catalog/${itemId}/repairs/${repairId}`, {
+    method: "DELETE",
+  });
+  return { cost: Number(r.cost ?? 0) };
 }
 
 /* ---------- workspace settings ---------- */
@@ -1326,6 +1451,65 @@ export async function catalogCheckout(catalog: string): Promise<{ initPoint: str
   const r = await req<{ init_point: string }>(`/workspaces/${ws()}/catalog/checkout`, {
     method: "POST",
     body: JSON.stringify({ catalog }),
+  });
+  return { initPoint: r.init_point };
+}
+
+/* ---------- IA de Clozr (chat con microtransacciones) ---------- */
+export interface AiWallet {
+  credits: number;
+  freeUsed: number;
+  freeLimit: number;
+}
+export interface AiStatus extends AiWallet {
+  enabled: boolean;
+}
+export interface AiChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function aiStatus(): Promise<AiStatus> {
+  const r = await req<Partial<AiStatus>>(`/workspaces/${ws()}/ai`);
+  return {
+    credits: r.credits ?? 0,
+    freeUsed: r.freeUsed ?? 0,
+    freeLimit: r.freeLimit ?? 1,
+    enabled: r.enabled ?? false,
+  };
+}
+
+/** Manda la conversación y devuelve la respuesta + la billetera actualizada.
+ *  Si no quedan mensajes, el Worker responde 402 y `req` lanza ApiError("no_credits"). */
+export async function aiChat(messages: AiChatMessage[]): Promise<{ reply: string; wallet: AiWallet }> {
+  const r = await req<{ reply: string; wallet: AiWallet }>(`/workspaces/${ws()}/ai/chat`, {
+    method: "POST",
+    body: JSON.stringify({ messages }),
+  });
+  return r;
+}
+
+export interface AiActionParams {
+  action: "generate" | "rewrite" | "summary" | "daybrief";
+  kind?: string; // para generate
+  tone?: string; // para rewrite
+  text?: string; // para rewrite
+  context?: Record<string, unknown>; // datos del cliente (generate / summary)
+}
+
+/** Acción contextual (Pro AI): generar o reescribir. Devuelve el texto + saldo.
+ *  Sin saldo → el Worker responde 402 y `req` lanza ApiError("no_credits"). */
+export async function aiAction(params: AiActionParams): Promise<{ text: string; wallet: AiWallet }> {
+  return req<{ text: string; wallet: AiWallet }>(`/workspaces/${ws()}/ai/action`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export async function aiCheckout(pack: string): Promise<{ initPoint: string }> {
+  const r = await req<{ init_point: string }>(`/workspaces/${ws()}/ai/checkout`, {
+    method: "POST",
+    body: JSON.stringify({ pack }),
   });
   return { initPoint: r.init_point };
 }

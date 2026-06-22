@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Search, Package, Pencil, Trash2, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Search, Package, Pencil, Trash2, ChevronDown, LayoutGrid, ClipboardPaste, Lock } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card, MetricCard } from "@/components/Card";
@@ -8,6 +8,7 @@ import { Input } from "@/components/Input";
 import { Tabs } from "@/components/Tabs";
 import { Modal, ModalField } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
+import { Popover } from "@/components/Popover";
 import {
   ContextMenu,
   ContextMenuItem,
@@ -17,8 +18,8 @@ import {
 } from "@/components/ContextMenu";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
-import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useUndoableActions } from "@/store/useUndoableActions";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import { fetchDolares } from "@/lib/dolar";
@@ -45,14 +46,9 @@ export function Inventario() {
   const { can } = usePermissions();
   const canWrite = can("inventory.write");
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
+  // El catálogo Apple es un add-on pago: solo los workspaces que lo
+  // desbloquearon ven el picker visual; el resto carga manual o lo abona.
   const appleUnlocked = (activeWorkspace?.unlockedCatalogs ?? []).includes("apple");
-  // El banner del pack Apple es un upsell → descartable por workspace.
-  const [appleBannerDismissed, setAppleBannerDismissed] = useState(false);
-  useEffect(() => {
-    const id = activeWorkspace?.id;
-    if (!id) return;
-    try { setAppleBannerDismissed(localStorage.getItem(`clozr:apple-banner:${id}`) === "1"); } catch { /* ignore */ }
-  }, [activeWorkspace?.id]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -60,9 +56,10 @@ export function Inventario() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [adding, setAdding] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
 
-  // Re-hidrata el store tras desbloquear el catálogo (para reflejar el estado).
+  // Re-hidrata el workspace tras desbloquear el catálogo (refleja el estado).
   async function refreshWs() {
     const me = await api.fetchMe();
     const active = me.workspaces.find((w) => w.id === activeWorkspace?.id) ?? me.workspaces[0] ?? null;
@@ -120,13 +117,13 @@ export function Inventario() {
         subtitle={loading ? "Cargando…" : `${summary.total} producto${summary.total === 1 ? "" : "s"} en el catálogo`}
         actions={
           canWrite ? (
-            <Button
-              variant="primary"
-              iconLeft={<Plus size={16} />}
-              onClick={() => (appleUnlocked ? setPickerOpen(true) : setAdding(true))}
-            >
-              Agregar producto
-            </Button>
+            <AddProductMenu
+              appleUnlocked={appleUnlocked}
+              onApple={() => setPickerOpen(true)}
+              onUnlock={() => setUnlockOpen(true)}
+              onManual={() => setAdding(true)}
+              onBulk={() => setBulkOpen(true)}
+            />
           ) : undefined
         }
       />
@@ -136,53 +133,6 @@ export function Inventario() {
         <MetricCard label="Con stock" value={summary.conStock} tone="success" />
         <MetricCard label="Agotados" value={summary.agotados} tone={summary.agotados > 0 ? "danger" : "neutral"} />
       </div>
-
-      {/* F4 — Catálogo Apple premium (desbloqueo único) — upsell descartable */}
-      {!appleUnlocked && canWrite && !appleBannerDismissed && (
-        <Card padding={4}>
-          <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: radius.md,
-                flexShrink: 0,
-                background: color.primaryBg,
-                color: color.primary,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Sparkles size={20} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>
-                Catálogo Apple — cargá productos en segundos
-              </div>
-              <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>
-                {CATALOG_PACKS.apple.description} Desbloqueo único de {formatUsd(CATALOG_PACKS.apple.priceUsd)}.
-              </div>
-            </div>
-            <Button variant="primary" size="sm" onClick={() => setUnlockOpen(true)}>
-              Desbloquear
-            </Button>
-            <button
-              onClick={() => {
-                setAppleBannerDismissed(true);
-                const id = activeWorkspace?.id;
-                if (id) { try { localStorage.setItem(`clozr:apple-banner:${id}`, "1"); } catch { /* ignore */ } }
-              }}
-              aria-label="Ocultar"
-              title="Ocultar"
-              className="btn-icon muted"
-              style={{ width: 28, height: 28, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-            >
-              <span style={{ fontSize: 16, lineHeight: 1 }}>×</span>
-            </button>
-          </div>
-        </Card>
-      )}
 
       <div style={{ display: "flex", alignItems: "center", gap: space[3], flexWrap: "wrap" }}>
         <Tabs
@@ -213,13 +163,19 @@ export function Inventario() {
             title={products.length === 0 ? "Sin productos" : "Nada con esos filtros"}
             description={
               products.length === 0
-                ? "Agregá tu primer producto al catálogo."
+                ? "Elegí del catálogo, cargá uno a mano o importá todo en bloque."
                 : "Probá cambiar la búsqueda o el filtro."
             }
-            action={
-              products.length === 0 && canWrite
-                ? { label: "Agregar producto", iconLeft: <Plus size={14} />, onClick: () => setPickerOpen(true) }
-                : undefined
+            actionNode={
+              products.length === 0 && canWrite ? (
+                <AddProductMenu
+                  appleUnlocked={appleUnlocked}
+                  onApple={() => setPickerOpen(true)}
+                  onUnlock={() => setUnlockOpen(true)}
+                  onManual={() => setAdding(true)}
+                  onBulk={() => setBulkOpen(true)}
+                />
+              ) : undefined
             }
           />
         ) : (
@@ -297,6 +253,8 @@ export function Inventario() {
         }}
       />
 
+      <BulkImportModal open={bulkOpen} onClose={() => setBulkOpen(false)} onImported={load} />
+
       <UnlockCatalogModal
         open={unlockOpen}
         onClose={() => setUnlockOpen(false)}
@@ -351,7 +309,378 @@ export function Inventario() {
   );
 }
 
-/* ───────── Desbloqueo de catálogo premium (F4) ───────── */
+/* ───────── Menú "Agregar producto": catálogo visual o carga manual ───────── */
+
+function AddProductMenu({
+  appleUnlocked,
+  onApple,
+  onUnlock,
+  onManual,
+  onBulk,
+}: {
+  appleUnlocked: boolean;
+  onApple: () => void;
+  onUnlock: () => void;
+  onManual: () => void;
+  onBulk: () => void;
+}) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+
+  const appleRow = (
+    <MenuRow
+      key="apple"
+      icon={<LayoutGrid size={16} />}
+      title="Catálogo Apple"
+      subtitle={appleUnlocked ? "Elegí modelo, color y capacidad" : "Premium · desbloquear catálogo"}
+      locked={!appleUnlocked}
+      onClick={() => {
+        setOpen(false);
+        appleUnlocked ? onApple() : onUnlock();
+      }}
+    />
+  );
+  const manualRow = (
+    <MenuRow
+      key="manual"
+      icon={<Pencil size={16} />}
+      title="Carga manual"
+      subtitle="Cargá cualquier producto a mano"
+      onClick={() => {
+        setOpen(false);
+        onManual();
+      }}
+    />
+  );
+  const bulkRow = (
+    <MenuRow
+      key="bulk"
+      icon={<ClipboardPaste size={16} />}
+      title="Importar en bloque"
+      subtitle="Pegá tu catálogo desde Excel"
+      onClick={() => {
+        setOpen(false);
+        onBulk();
+      }}
+    />
+  );
+
+  return (
+    <>
+      <Button
+        ref={triggerRef}
+        variant="primary"
+        iconLeft={<Plus size={16} />}
+        iconRight={<ChevronDown size={14} />}
+        onClick={() => setOpen((v) => !v)}
+      >
+        Agregar producto
+      </Button>
+      <Popover open={open} onClose={() => setOpen(false)} triggerRef={triggerRef} width={272} align="end">
+        {/* Multi-rubro: manual e importar son universales. El catálogo Apple
+            es un add-on; si no está desbloqueado va último, como upsell. */}
+        {appleUnlocked ? [appleRow, manualRow, bulkRow] : [manualRow, bulkRow, appleRow]}
+      </Popover>
+    </>
+  );
+}
+
+function MenuRow({
+  icon,
+  title,
+  subtitle,
+  onClick,
+  locked = false,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+  locked?: boolean;
+}) {
+  return (
+    <button
+      role="menuitem"
+      onClick={onClick}
+      onMouseEnter={(e) => (e.currentTarget.style.background = color.surface2)}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: space[3],
+        width: "100%",
+        textAlign: "left",
+        padding: "8px 10px",
+        background: "transparent",
+        border: "none",
+        borderRadius: radius.sm,
+        cursor: "pointer",
+      }}
+    >
+      <span style={{ display: "inline-flex", color: color.textMuted, flexShrink: 0 }}>{icon}</span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: text.sm, fontWeight: weight.medium, color: color.text }}>{title}</span>
+        <span style={{ display: "block", fontSize: text.xs, color: color.textDim }}>{subtitle}</span>
+      </span>
+      {locked && <Lock size={13} style={{ color: color.textDim, flexShrink: 0 }} />}
+    </button>
+  );
+}
+
+/* ───────── Importar en bloque (pegar desde Excel / Sheets) ───────── */
+
+type BulkRow = {
+  name: string;
+  price: number | null;
+  cost: number | null;
+  stock: number | null;
+  sku: string;
+  category: string;
+  valid: boolean;
+};
+
+type BulkField = "name" | "price" | "cost" | "stock" | "sku" | "category";
+
+// Encabezados reconocidos (es/en) → campo. Permite pegar con la primera fila
+// como títulos y en cualquier orden de columnas.
+const BULK_HEADERS: Record<string, BulkField> = {
+  nombre: "name", name: "name", producto: "name", descripcion: "name", detalle: "name", articulo: "name",
+  precio: "price", price: "price", pvp: "price", venta: "price",
+  costo: "cost", cost: "cost", compra: "cost",
+  stock: "stock", cantidad: "stock", unidades: "stock", qty: "stock", cant: "stock",
+  sku: "sku", codigo: "sku", code: "sku",
+  categoria: "category", category: "category", rubro: "category", tipo: "category",
+};
+
+// Sin encabezado, asumimos este orden de columnas.
+const BULK_ORDER: BulkField[] = ["name", "price", "cost", "stock", "sku", "category"];
+
+function bulkNorm(s: string): string {
+  // sin acentos para matchear encabezados (categoría, código, descripción…)
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[áàä]/g, "a")
+    .replace(/[éèë]/g, "e")
+    .replace(/[íìï]/g, "i")
+    .replace(/[óòö]/g, "o")
+    .replace(/[úùü]/g, "u");
+}
+
+// Parsea números tolerando símbolos y formato es-AR ("$ 1.500,50" → 1500.5).
+function bulkNum(s: string): number | null {
+  const t = s.replace(/[^0-9.,-]/g, "");
+  if (!t) return null;
+  let norm = t;
+  if (t.includes(",") && t.includes(".")) norm = t.replace(/\./g, "").replace(",", ".");
+  else if (t.includes(",")) norm = t.replace(",", ".");
+  const n = Number(norm);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseBulk(raw: string): BulkRow[] {
+  const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length === 0) return [];
+  // Excel/Sheets pegan con TAB; si no hay tabs, probamos punto y coma o coma.
+  const delim = lines.some((l) => l.includes("\t")) ? "\t" : lines.some((l) => l.includes(";")) ? ";" : ",";
+  const grid = lines.map((l) => l.split(delim).map((c) => c.trim()));
+
+  // ¿La primera fila es encabezado? Si alguna celda matchea "nombre" o "precio".
+  const first = grid[0];
+  const mapped = first.map((c) => BULK_HEADERS[bulkNorm(c)] ?? null);
+  const hasHeader = mapped.includes("name") || mapped.includes("price");
+  const colMap: Array<BulkField | null> = hasHeader ? mapped : BULK_ORDER.slice(0, Math.max(first.length, 1));
+  const dataRows = hasHeader ? grid.slice(1) : grid;
+
+  const idx = (f: BulkField) => colMap.indexOf(f);
+  return dataRows.map((cells) => {
+    const cell = (f: BulkField) => {
+      const i = idx(f);
+      return i >= 0 && i < cells.length ? cells[i] : "";
+    };
+    const name = cell("name").trim();
+    return {
+      name,
+      price: bulkNum(cell("price")),
+      cost: bulkNum(cell("cost")),
+      stock: bulkNum(cell("stock")),
+      sku: cell("sku").trim(),
+      category: cell("category").trim(),
+      valid: name.length > 0,
+    };
+  });
+}
+
+function BulkImportModal({
+  open,
+  onClose,
+  onImported,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const { showToast } = useUIStore();
+  const [raw, setRaw] = useState("");
+  const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setRaw("");
+      setImporting(false);
+    }
+  }, [open]);
+
+  const parsed = useMemo(() => parseBulk(raw), [raw]);
+  const valid = useMemo(() => parsed.filter((r) => r.valid), [parsed]);
+  const ignored = parsed.length - valid.length;
+
+  async function run() {
+    if (valid.length === 0) return;
+    setImporting(true);
+    try {
+      const res = await api.bulkImportProducts(
+        valid.map((r) => ({
+          name: r.name,
+          price: r.price ?? 0,
+          cost: r.cost,
+          // Con stock en la fila → llevamos control; sin stock → producto sin tracking.
+          trackStock: r.stock != null,
+          stock: r.stock ?? 0,
+          sku: r.sku || null,
+          category: r.category || null,
+        })),
+      );
+      showToast(
+        res.skipped > 0
+          ? `${res.imported} importados · ${res.skipped} ya existían`
+          : `${res.imported} ${res.imported === 1 ? "producto importado" : "productos importados"}`,
+        "success",
+      );
+      onImported();
+      onClose();
+    } catch {
+      showToast("No se pudo importar. Revisá el formato.", "error");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  const th: React.CSSProperties = {
+    textAlign: "left",
+    padding: "6px 8px",
+    fontWeight: weight.semibold,
+    color: color.textMuted,
+    position: "sticky",
+    top: 0,
+    background: color.surface2,
+    borderBottom: `1px solid ${color.border}`,
+    whiteSpace: "nowrap",
+  };
+  const td: React.CSSProperties = {
+    padding: "5px 8px",
+    borderBottom: `1px solid ${color.border}`,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    maxWidth: 160,
+    color: color.textMuted,
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      isDirty={() => raw.trim().length > 0}
+      confirmCloseText="¿Cerrar y descartar lo pegado?"
+      title="Importar en bloque"
+      subtitle="Pegá tu catálogo desde Excel o Google Sheets — una fila por producto."
+      maxWidth={760}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={run} disabled={valid.length === 0} loading={importing}>
+            {valid.length > 0 ? `Importar ${valid.length} ${valid.length === 1 ? "producto" : "productos"}` : "Importar"}
+          </Button>
+        </>
+      }
+    >
+      <div style={{ fontSize: text.xs, color: color.textDim, marginBottom: space[2], lineHeight: 1.5 }}>
+        Columnas:{" "}
+        <strong style={{ color: color.textMuted }}>Nombre, Precio, Costo, Stock, SKU, Categoría</strong>. Si la primera
+        fila tiene encabezados los detectamos solos. Solo el nombre es obligatorio.
+      </div>
+      <textarea
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        placeholder={"iPhone 13 128GB\t650000\t520000\t3\niPhone 14 Pro\t1100000\t900000\t1\nFunda silicona\t12000\t6000\t20"}
+        rows={6}
+        autoFocus
+        style={{
+          width: "100%",
+          resize: "vertical",
+          minHeight: 120,
+          background: color.surface2,
+          border: `1px solid ${color.border}`,
+          borderRadius: radius.md,
+          padding: "8px 10px",
+          color: color.text,
+          fontSize: text.sm,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          lineHeight: 1.5,
+        }}
+      />
+
+      {parsed.length > 0 && (
+        <div style={{ marginTop: space[3] }}>
+          <div style={{ fontSize: text.xs, color: color.textMuted, marginBottom: 6 }}>
+            {valid.length} {valid.length === 1 ? "producto listo" : "productos listos"}
+            {ignored > 0
+              ? ` · ${ignored} fila${ignored === 1 ? "" : "s"} sin nombre se ignora${ignored === 1 ? "" : "n"}`
+              : ""}
+          </div>
+          <div style={{ maxHeight: 240, overflow: "auto", border: `1px solid ${color.border}`, borderRadius: radius.md }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: text.xs }}>
+              <thead>
+                <tr>
+                  <th style={th}>Nombre</th>
+                  <th style={th}>Precio</th>
+                  <th style={th}>Costo</th>
+                  <th style={th}>Stock</th>
+                  <th style={th}>SKU</th>
+                  <th style={th}>Categoría</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parsed.slice(0, 100).map((r, i) => (
+                  <tr key={i} style={{ opacity: r.valid ? 1 : 0.45 }}>
+                    <td style={{ ...td, color: color.text }}>
+                      {r.name || <span style={{ color: color.danger }}>— sin nombre —</span>}
+                    </td>
+                    <td style={td}>{r.price != null ? formatMoney(r.price, "ARS") : "—"}</td>
+                    <td style={td}>{r.cost != null ? formatMoney(r.cost, "ARS") : "—"}</td>
+                    <td style={td}>{r.stock != null ? r.stock : "—"}</td>
+                    <td style={td}>{r.sku || "—"}</td>
+                    <td style={td}>{r.category || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {parsed.length > 100 && (
+            <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 4 }}>
+              …y {parsed.length - 100} fila{parsed.length - 100 === 1 ? "" : "s"} más (se importan todas)
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* ───────── Desbloqueo de catálogo Apple (add-on pago) ───────── */
 
 function UnlockCatalogModal({
   open,
@@ -449,9 +778,7 @@ function UnlockCatalogModal({
           <span style={{ fontSize: text.xl, fontWeight: weight.bold, color: color.text }}>
             {formatUsd(pack.priceUsd)}
           </span>
-          <span style={{ fontSize: text.xs, color: color.textDim }}>
-            pago único{ars ? ` · ${ars}` : ""}
-          </span>
+          <span style={{ fontSize: text.xs, color: color.textDim }}>pago único{ars ? ` · ${ars}` : ""}</span>
         </div>
 
         <Button variant="primary" fullWidth loading={busyPay} onClick={pay}>
@@ -539,6 +866,22 @@ function ProductModal({
   const [trackStock, setTrackStock] = useState(true);
   const [stock, setStock] = useState("");
   const [saving, setSaving] = useState(false);
+  // Quick-add: el alta muestra solo lo esencial (nombre, precio, stock). Lo
+  // demás (categoría, SKU, precios por tipo, refurbish) va en "Más opciones".
+  // Al editar arranca expandido (estás gestionando el detalle del producto).
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Serializado: cada unidad es única (IMEI / N° de serie). El stock pasa a ser
+  // la cantidad de IMEIs sin vender. `imeis` = persistidos (edición);
+  // `pendingImeis` = cargados en el alta antes de existir el producto.
+  const [serialized, setSerialized] = useState(false);
+  const [imeis, setImeis] = useState<api.CatalogImei[]>([]);
+  const [pendingImeis, setPendingImeis] = useState<string[]>([]);
+  const [imeiInput, setImeiInput] = useState("");
+  // Refurbish interno: reparaciones cargadas a la unidad (cada una suma al costo).
+  const [repairs, setRepairs] = useState<api.CatalogRepair[]>([]);
+  const [repDesc, setRepDesc] = useState("");
+  const [repCost, setRepCost] = useState("");
+  const [addingRepair, setAddingRepair] = useState(false);
   // Precios por tipo de cliente (vacío = usa el precio base).
   const [typePrices, setTypePrices] = useState<Record<ClientType, string>>({
     final: "", revendedor: "", mayorista: "", empresa: "",
@@ -557,10 +900,27 @@ function ProductModal({
     setSku(product?.sku ?? "");
     setTrackStock(product ? product.trackStock : true);
     setStock(product ? String(product.stock) : "");
+    setShowAdvanced(!!product); // alta: colapsado; edición: expandido
+    // Serializado / IMEIs: reset; en edición se cargan del server.
+    setSerialized(false);
+    setImeis([]);
+    setPendingImeis([]);
+    setImeiInput("");
+    // Refurbish: reset; en edición se cargan las reparaciones del server.
+    setRepairs([]);
+    setRepDesc("");
+    setRepCost("");
     // Precios por tipo: limpiar y, si es edición, cargar los existentes.
     setTypePrices({ final: "", revendedor: "", mayorista: "", empresa: "" });
     setOrigPrices({ final: null, revendedor: null, mayorista: null, empresa: null });
     if (product) {
+      api.listCatalogImeis(product.id)
+        .then((list) => {
+          setImeis(list);
+          setSerialized(list.length > 0);
+        })
+        .catch(() => {});
+      api.listCatalogRepairs(product.id).then(setRepairs).catch(() => {});
       api.listCatalogPrices()
         .then((all) => {
           const tp: Record<ClientType, string> = { final: "", revendedor: "", mayorista: "", empresa: "" };
@@ -580,6 +940,79 @@ function ProductModal({
 
   const canSubmit = name.trim().length >= 1;
 
+  // Stock derivado en modo serializado = unidades sin vender + las pendientes.
+  const availableCount = imeis.filter((x) => !x.soldAt).length + pendingImeis.length;
+
+  // Agrega IMEIs desde el textarea: separa por línea/coma/; — sirve para pegar
+  // una lista completa o escribir uno y dar Enter (uno por uno).
+  async function addImeisFromInput() {
+    const list = Array.from(
+      new Set(imeiInput.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean)),
+    );
+    if (list.length === 0) return;
+    if (product) {
+      try {
+        const res = await api.addCatalogImeis(product.id, list);
+        setImeis(res.imeis);
+        setStock(String(res.stock));
+        if (res.skipped > 0) showToast(`${res.added} agregados · ${res.skipped} ya existían`, "info");
+      } catch {
+        showToast("No se pudieron agregar los IMEIs", "error");
+        return;
+      }
+    } else {
+      // Alta: el producto aún no existe — acumular local (dedup) y guardar al crear.
+      setPendingImeis((prev) => Array.from(new Set([...prev, ...list])));
+    }
+    setImeiInput("");
+  }
+
+  async function removeServerImei(id: string) {
+    if (!product) return;
+    try {
+      const res = await api.deleteCatalogImei(product.id, id);
+      setImeis((prev) => prev.filter((x) => x.id !== id));
+      setStock(String(res.stock));
+    } catch {
+      showToast("No se puede borrar: la unidad ya fue vendida", "error");
+    }
+  }
+  function removePendingImei(imei: string) {
+    setPendingImeis((prev) => prev.filter((x) => x !== imei));
+  }
+
+  // Refurbish: total de reparaciones (desglose; ya está incluido en el costo).
+  const repairsTotal = repairs.reduce((a, r) => a + r.cost, 0);
+
+  async function addRepair() {
+    const description = repDesc.trim();
+    const c = Number(repCost);
+    if (!product || !description || !Number.isFinite(c) || c < 0) return;
+    setAddingRepair(true);
+    try {
+      const res = await api.addCatalogRepair(product.id, { description, cost: c });
+      setRepairs((prev) => [res.repair, ...prev]);
+      setCost(String(res.cost)); // el costo del equipo ya incluye la reparación
+      setRepDesc("");
+      setRepCost("");
+    } catch {
+      showToast("No se pudo agregar la reparación", "error");
+    } finally {
+      setAddingRepair(false);
+    }
+  }
+
+  async function removeRepair(id: string) {
+    if (!product) return;
+    try {
+      const res = await api.deleteCatalogRepair(product.id, id);
+      setRepairs((prev) => prev.filter((r) => r.id !== id));
+      setCost(String(res.cost));
+    } catch {
+      showToast("No se pudo borrar la reparación", "error");
+    }
+  }
+
   async function submit() {
     if (!canSubmit) return;
     setSaving(true);
@@ -589,11 +1022,16 @@ function ProductModal({
       price: price ? Number(price) : 0,
       cost: cost ? Number(cost) : null,
       sku: sku.trim() || null,
-      trackStock,
-      stock: trackStock ? (stock ? Number(stock) : 0) : 0,
+      // Serializado ⇒ siempre con tracking y stock = unidades disponibles.
+      trackStock: serialized ? true : trackStock,
+      stock: serialized ? availableCount : trackStock ? (stock ? Number(stock) : 0) : 0,
     };
     try {
       const id = product ? (await api.updateProduct(product.id, input), product.id) : await api.createProduct(input);
+      // Alta serializada: persistir los IMEIs acumulados (el Worker fija el stock).
+      if (!product && serialized && pendingImeis.length > 0) {
+        await api.addCatalogImeis(id, pendingImeis);
+      }
       // Upsert de precios por tipo (sólo los que cambiaron). Vacío/0 = borrar.
       await Promise.all(
         CLIENT_TYPES.map((t) => {
@@ -635,9 +1073,6 @@ function ProductModal({
       <ModalField label="Nombre" required>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: Funda iPhone 15" autoFocus />
       </ModalField>
-      <ModalField label="Categoría">
-        <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Ej: Accesorios" />
-      </ModalField>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
         <ModalField label="Precio (ARS)">
           <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" />
@@ -646,6 +1081,145 @@ function ProductModal({
           <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" />
         </ModalField>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setShowAdvanced((v) => !v)}
+        style={{
+          textAlign: "left",
+          background: "transparent",
+          border: "none",
+          color: color.textMuted,
+          fontSize: text.sm,
+          fontWeight: weight.medium,
+          cursor: "pointer",
+          padding: "2px 0",
+          marginTop: space[1],
+        }}
+      >
+        {showAdvanced ? "− Menos opciones" : "+ Más opciones"}{" "}
+        <span style={{ color: color.textDim, fontWeight: 400 }}>· categoría, SKU, precios por tipo, reparaciones</span>
+      </button>
+
+      {showAdvanced && (
+        <>
+          <ModalField label="Categoría">
+            <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Ej: Accesorios" />
+          </ModalField>
+          {/* Refurbish interno: reparaciones / repuestos cargados a la unidad */}
+          <div style={{ marginBottom: space[5] }}>
+        <div style={{ fontSize: text.sm, fontWeight: weight.medium, color: color.textMuted, marginBottom: 4 }}>
+          Reparaciones / refurbish <span style={{ color: color.textDim, fontWeight: 400 }}>· se suman al costo</span>
+        </div>
+        {product ? (
+          <>
+            {repairs.length > 0 && (
+              <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, marginBottom: space[2] }}>
+                {repairs.map((r) => (
+                  <div
+                    key={r.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: space[2],
+                      padding: "6px 10px",
+                      borderBottom: `1px solid ${color.border}`,
+                      fontSize: text.sm,
+                    }}
+                  >
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.description}
+                    </span>
+                    <span style={{ color: color.textMuted, flexShrink: 0 }}>{formatMoney(r.cost, "ARS")}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeRepair(r.id)}
+                      aria-label="Quitar reparación"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 24,
+                        height: 24,
+                        borderRadius: radius.sm,
+                        color: color.textDim,
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 10px", fontSize: text.sm }}>
+                  <span style={{ color: color.textMuted }}>Total reparaciones</span>
+                  <span style={{ fontWeight: weight.semibold }}>{formatMoney(repairsTotal, "ARS")}</span>
+                </div>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: space[2], alignItems: "center" }}>
+              <input
+                value={repDesc}
+                onChange={(e) => setRepDesc(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void addRepair();
+                  }
+                }}
+                placeholder="Reparación / repuesto (ej: Pantalla OEM)"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  background: color.surface2,
+                  border: `1px solid ${color.border}`,
+                  borderRadius: radius.md,
+                  padding: "8px 10px",
+                  color: color.text,
+                  fontSize: text.sm,
+                  fontFamily: "inherit",
+                }}
+              />
+              <input
+                type="number"
+                value={repCost}
+                onChange={(e) => setRepCost(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void addRepair();
+                  }
+                }}
+                placeholder="Costo"
+                style={{
+                  width: 96,
+                  flexShrink: 0,
+                  background: color.surface2,
+                  border: `1px solid ${color.border}`,
+                  borderRadius: radius.md,
+                  padding: "8px 10px",
+                  color: color.text,
+                  fontSize: text.sm,
+                  fontFamily: "inherit",
+                }}
+              />
+              <Button variant="secondary" onClick={addRepair} disabled={!repDesc.trim() || addingRepair} loading={addingRepair}>
+                Sumar
+              </Button>
+            </div>
+            <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 6 }}>
+              El costo de arriba ya incluye las reparaciones · Costo real del equipo: {formatMoney(Number(cost) || 0, "ARS")}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: text.xs, color: color.textDim }}>
+            Disponible al editar: creá el producto y reabrílo para cargar reparaciones.
+          </div>
+        )}
+      </div>
+
       <ModalField label="SKU / código" hint="Opcional">
         <Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Ej: FND-15-NEG" />
       </ModalField>
@@ -672,15 +1246,157 @@ function ProductModal({
           ))}
         </div>
       </div>
+        </>
+      )}
+
+      {/* Serializado: gestionar por IMEI / N° de serie (iPhones, equipos únicos). */}
       <label style={{ display: "flex", alignItems: "center", gap: space[2], cursor: "pointer", marginTop: space[1] }}>
-        <input type="checkbox" checked={trackStock} onChange={(e) => setTrackStock(e.target.checked)} />
-        <span style={{ fontSize: text.sm, color: color.text }}>Llevar control de stock</span>
+        <input
+          type="checkbox"
+          checked={serialized}
+          onChange={(e) => {
+            setSerialized(e.target.checked);
+            if (e.target.checked) setTrackStock(true);
+          }}
+        />
+        <span style={{ fontSize: text.sm, color: color.text }}>
+          Gestionar por IMEI / N° de serie{" "}
+          <span style={{ color: color.textDim }}>· cada unidad es única</span>
+        </span>
       </label>
-      {trackStock && (
-        <ModalField label="Stock actual">
-          <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" />
-        </ModalField>
+
+      {serialized ? (
+        <div style={{ marginTop: space[3] }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[2] }}>
+            <span style={{ fontSize: text.sm, fontWeight: weight.medium, color: color.textMuted }}>
+              IMEIs / N° de serie
+            </span>
+            <span style={{ fontSize: text.xs, color: color.textDim }}>
+              {availableCount} en stock
+            </span>
+          </div>
+          <textarea
+            value={imeiInput}
+            onChange={(e) => setImeiInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void addImeisFromInput();
+              }
+            }}
+            placeholder={"Pegá una lista (uno por línea) o escribí uno y Enter\n352099001761481\n352099001761482"}
+            rows={3}
+            style={{
+              width: "100%",
+              resize: "vertical",
+              minHeight: 64,
+              background: color.surface2,
+              border: `1px solid ${color.border}`,
+              borderRadius: radius.md,
+              padding: "8px 10px",
+              color: color.text,
+              fontSize: text.sm,
+              fontFamily: "inherit",
+              lineHeight: 1.5,
+            }}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: space[2] }}>
+            <Button variant="secondary" size="sm" onClick={() => void addImeisFromInput()} disabled={!imeiInput.trim()}>
+              Agregar
+            </Button>
+          </div>
+          {(imeis.length > 0 || pendingImeis.length > 0) && (
+            <div
+              style={{
+                marginTop: space[2],
+                maxHeight: 180,
+                overflowY: "auto",
+                border: `1px solid ${color.border}`,
+                borderRadius: radius.md,
+              }}
+            >
+              {pendingImeis.map((imei) => (
+                <ImeiRow key={`pending-${imei}`} imei={imei} onRemove={() => removePendingImei(imei)} />
+              ))}
+              {imeis.map((row) => (
+                <ImeiRow
+                  key={row.id}
+                  imei={row.imei}
+                  sold={!!row.soldAt}
+                  onRemove={row.soldAt ? undefined : () => void removeServerImei(row.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <label style={{ display: "flex", alignItems: "center", gap: space[2], cursor: "pointer", marginTop: space[1] }}>
+            <input type="checkbox" checked={trackStock} onChange={(e) => setTrackStock(e.target.checked)} />
+            <span style={{ fontSize: text.sm, color: color.text }}>Llevar control de stock</span>
+          </label>
+          {trackStock && (
+            <ModalField label="Stock actual">
+              <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" />
+            </ModalField>
+          )}
+        </>
       )}
     </Modal>
+  );
+}
+
+/** Fila de un IMEI en el modal: número monoespaciado + estado/acción.
+ *  Sin `onRemove` y con `sold` → unidad vendida (no se puede quitar). */
+function ImeiRow({ imei, sold, onRemove }: { imei: string; sold?: boolean; onRemove?: () => void }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: space[2],
+        padding: "6px 10px",
+        borderBottom: `1px solid ${color.border}`,
+        fontSize: text.sm,
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          color: sold ? color.textDim : color.text,
+          textDecoration: sold ? "line-through" : "none",
+          flex: 1,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {imei}
+      </span>
+      {sold ? (
+        <span style={{ fontSize: text.xs, color: color.textDim, flexShrink: 0 }}>vendido</span>
+      ) : onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Quitar IMEI"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 24,
+            height: 24,
+            borderRadius: radius.sm,
+            color: color.textDim,
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          <Trash2 size={14} />
+        </button>
+      ) : null}
+    </div>
   );
 }
