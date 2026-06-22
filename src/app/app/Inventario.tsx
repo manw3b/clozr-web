@@ -539,6 +539,13 @@ function ProductModal({
   const [trackStock, setTrackStock] = useState(true);
   const [stock, setStock] = useState("");
   const [saving, setSaving] = useState(false);
+  // Serializado: cada unidad es única (IMEI / N° de serie). El stock pasa a ser
+  // la cantidad de IMEIs sin vender. `imeis` = persistidos (edición);
+  // `pendingImeis` = cargados en el alta antes de existir el producto.
+  const [serialized, setSerialized] = useState(false);
+  const [imeis, setImeis] = useState<api.CatalogImei[]>([]);
+  const [pendingImeis, setPendingImeis] = useState<string[]>([]);
+  const [imeiInput, setImeiInput] = useState("");
   // Precios por tipo de cliente (vacío = usa el precio base).
   const [typePrices, setTypePrices] = useState<Record<ClientType, string>>({
     final: "", revendedor: "", mayorista: "", empresa: "",
@@ -557,10 +564,21 @@ function ProductModal({
     setSku(product?.sku ?? "");
     setTrackStock(product ? product.trackStock : true);
     setStock(product ? String(product.stock) : "");
+    // Serializado / IMEIs: reset; en edición se cargan del server.
+    setSerialized(false);
+    setImeis([]);
+    setPendingImeis([]);
+    setImeiInput("");
     // Precios por tipo: limpiar y, si es edición, cargar los existentes.
     setTypePrices({ final: "", revendedor: "", mayorista: "", empresa: "" });
     setOrigPrices({ final: null, revendedor: null, mayorista: null, empresa: null });
     if (product) {
+      api.listCatalogImeis(product.id)
+        .then((list) => {
+          setImeis(list);
+          setSerialized(list.length > 0);
+        })
+        .catch(() => {});
       api.listCatalogPrices()
         .then((all) => {
           const tp: Record<ClientType, string> = { final: "", revendedor: "", mayorista: "", empresa: "" };
@@ -580,6 +598,47 @@ function ProductModal({
 
   const canSubmit = name.trim().length >= 1;
 
+  // Stock derivado en modo serializado = unidades sin vender + las pendientes.
+  const availableCount = imeis.filter((x) => !x.soldAt).length + pendingImeis.length;
+
+  // Agrega IMEIs desde el textarea: separa por línea/coma/; — sirve para pegar
+  // una lista completa o escribir uno y dar Enter (uno por uno).
+  async function addImeisFromInput() {
+    const list = Array.from(
+      new Set(imeiInput.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean)),
+    );
+    if (list.length === 0) return;
+    if (product) {
+      try {
+        const res = await api.addCatalogImeis(product.id, list);
+        setImeis(res.imeis);
+        setStock(String(res.stock));
+        if (res.skipped > 0) showToast(`${res.added} agregados · ${res.skipped} ya existían`, "info");
+      } catch {
+        showToast("No se pudieron agregar los IMEIs", "error");
+        return;
+      }
+    } else {
+      // Alta: el producto aún no existe — acumular local (dedup) y guardar al crear.
+      setPendingImeis((prev) => Array.from(new Set([...prev, ...list])));
+    }
+    setImeiInput("");
+  }
+
+  async function removeServerImei(id: string) {
+    if (!product) return;
+    try {
+      const res = await api.deleteCatalogImei(product.id, id);
+      setImeis((prev) => prev.filter((x) => x.id !== id));
+      setStock(String(res.stock));
+    } catch {
+      showToast("No se puede borrar: la unidad ya fue vendida", "error");
+    }
+  }
+  function removePendingImei(imei: string) {
+    setPendingImeis((prev) => prev.filter((x) => x !== imei));
+  }
+
   async function submit() {
     if (!canSubmit) return;
     setSaving(true);
@@ -589,11 +648,16 @@ function ProductModal({
       price: price ? Number(price) : 0,
       cost: cost ? Number(cost) : null,
       sku: sku.trim() || null,
-      trackStock,
-      stock: trackStock ? (stock ? Number(stock) : 0) : 0,
+      // Serializado ⇒ siempre con tracking y stock = unidades disponibles.
+      trackStock: serialized ? true : trackStock,
+      stock: serialized ? availableCount : trackStock ? (stock ? Number(stock) : 0) : 0,
     };
     try {
       const id = product ? (await api.updateProduct(product.id, input), product.id) : await api.createProduct(input);
+      // Alta serializada: persistir los IMEIs acumulados (el Worker fija el stock).
+      if (!product && serialized && pendingImeis.length > 0) {
+        await api.addCatalogImeis(id, pendingImeis);
+      }
       // Upsert de precios por tipo (sólo los que cambiaron). Vacío/0 = borrar.
       await Promise.all(
         CLIENT_TYPES.map((t) => {
@@ -672,15 +736,154 @@ function ProductModal({
           ))}
         </div>
       </div>
+      {/* Serializado: gestionar por IMEI / N° de serie (iPhones, equipos únicos). */}
       <label style={{ display: "flex", alignItems: "center", gap: space[2], cursor: "pointer", marginTop: space[1] }}>
-        <input type="checkbox" checked={trackStock} onChange={(e) => setTrackStock(e.target.checked)} />
-        <span style={{ fontSize: text.sm, color: color.text }}>Llevar control de stock</span>
+        <input
+          type="checkbox"
+          checked={serialized}
+          onChange={(e) => {
+            setSerialized(e.target.checked);
+            if (e.target.checked) setTrackStock(true);
+          }}
+        />
+        <span style={{ fontSize: text.sm, color: color.text }}>
+          Gestionar por IMEI / N° de serie{" "}
+          <span style={{ color: color.textDim }}>· cada unidad es única</span>
+        </span>
       </label>
-      {trackStock && (
-        <ModalField label="Stock actual">
-          <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" />
-        </ModalField>
+
+      {serialized ? (
+        <div style={{ marginTop: space[3] }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[2] }}>
+            <span style={{ fontSize: text.sm, fontWeight: weight.medium, color: color.textMuted }}>
+              IMEIs / N° de serie
+            </span>
+            <span style={{ fontSize: text.xs, color: color.textDim }}>
+              {availableCount} en stock
+            </span>
+          </div>
+          <textarea
+            value={imeiInput}
+            onChange={(e) => setImeiInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void addImeisFromInput();
+              }
+            }}
+            placeholder={"Pegá una lista (uno por línea) o escribí uno y Enter\n352099001761481\n352099001761482"}
+            rows={3}
+            style={{
+              width: "100%",
+              resize: "vertical",
+              minHeight: 64,
+              background: color.surface2,
+              border: `1px solid ${color.border}`,
+              borderRadius: radius.md,
+              padding: "8px 10px",
+              color: color.text,
+              fontSize: text.sm,
+              fontFamily: "inherit",
+              lineHeight: 1.5,
+            }}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: space[2] }}>
+            <Button variant="secondary" size="sm" onClick={() => void addImeisFromInput()} disabled={!imeiInput.trim()}>
+              Agregar
+            </Button>
+          </div>
+          {(imeis.length > 0 || pendingImeis.length > 0) && (
+            <div
+              style={{
+                marginTop: space[2],
+                maxHeight: 180,
+                overflowY: "auto",
+                border: `1px solid ${color.border}`,
+                borderRadius: radius.md,
+              }}
+            >
+              {pendingImeis.map((imei) => (
+                <ImeiRow key={`pending-${imei}`} imei={imei} onRemove={() => removePendingImei(imei)} />
+              ))}
+              {imeis.map((row) => (
+                <ImeiRow
+                  key={row.id}
+                  imei={row.imei}
+                  sold={!!row.soldAt}
+                  onRemove={row.soldAt ? undefined : () => void removeServerImei(row.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <label style={{ display: "flex", alignItems: "center", gap: space[2], cursor: "pointer", marginTop: space[1] }}>
+            <input type="checkbox" checked={trackStock} onChange={(e) => setTrackStock(e.target.checked)} />
+            <span style={{ fontSize: text.sm, color: color.text }}>Llevar control de stock</span>
+          </label>
+          {trackStock && (
+            <ModalField label="Stock actual">
+              <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" />
+            </ModalField>
+          )}
+        </>
       )}
     </Modal>
+  );
+}
+
+/** Fila de un IMEI en el modal: número monoespaciado + estado/acción.
+ *  Sin `onRemove` y con `sold` → unidad vendida (no se puede quitar). */
+function ImeiRow({ imei, sold, onRemove }: { imei: string; sold?: boolean; onRemove?: () => void }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: space[2],
+        padding: "6px 10px",
+        borderBottom: `1px solid ${color.border}`,
+        fontSize: text.sm,
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          color: sold ? color.textDim : color.text,
+          textDecoration: sold ? "line-through" : "none",
+          flex: 1,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {imei}
+      </span>
+      {sold ? (
+        <span style={{ fontSize: text.xs, color: color.textDim, flexShrink: 0 }}>vendido</span>
+      ) : onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Quitar IMEI"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 24,
+            height: 24,
+            borderRadius: radius.sm,
+            color: color.textDim,
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          <Trash2 size={14} />
+        </button>
+      ) : null}
+    </div>
   );
 }

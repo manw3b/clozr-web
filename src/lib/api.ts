@@ -852,6 +852,62 @@ export async function deleteProduct(id: string): Promise<void> {
   await req(`/workspaces/${ws()}/catalog/${id}`, { method: "DELETE" });
 }
 
+/* ---------- IMEIs / N° de serie por producto (unidades serializadas) ----------
+ * Cada unidad de un producto serializado (ej: iPhone) es única. El stock del
+ * producto = cantidad de IMEIs sin vender. El Worker recalcula el stock al
+ * agregar/borrar y marca `track_stock=1` automáticamente. */
+export interface CatalogImei {
+  id: string;
+  imei: string;
+  soldAt: string | null;
+  saleId: string | null;
+  createdAt: string | null;
+}
+interface CatalogImeiRaw {
+  id: string;
+  imei: string;
+  sold_at?: string | null;
+  sale_id?: string | null;
+  created_at?: string | null;
+}
+function mapImei(r: CatalogImeiRaw): CatalogImei {
+  return {
+    id: r.id,
+    imei: r.imei,
+    soldAt: r.sold_at ?? null,
+    saleId: r.sale_id ?? null,
+    createdAt: r.created_at ?? null,
+  };
+}
+export async function listCatalogImeis(itemId: string): Promise<CatalogImei[]> {
+  const data = await req<{ imeis: CatalogImeiRaw[] }>(`/workspaces/${ws()}/catalog/${itemId}/imeis`);
+  return (data.imeis ?? []).map(mapImei);
+}
+/** Agrega IMEIs (dedup contra los existentes en el server). Devuelve la lista
+ *  completa actualizada + cuántos se agregaron / saltaron + el nuevo stock. */
+export async function addCatalogImeis(
+  itemId: string,
+  imeis: string[],
+): Promise<{ added: number; skipped: number; stock: number; imeis: CatalogImei[] }> {
+  const r = await req<{ added?: number; skipped?: number; stock?: number; imeis?: CatalogImeiRaw[] }>(
+    `/workspaces/${ws()}/catalog/${itemId}/imeis`,
+    { method: "POST", body: JSON.stringify({ imeis }) },
+  );
+  return {
+    added: Number(r.added ?? 0),
+    skipped: Number(r.skipped ?? 0),
+    stock: Number(r.stock ?? 0),
+    imeis: (r.imeis ?? []).map(mapImei),
+  };
+}
+/** Borra un IMEI. Tira ApiError "already_sold" (409) si la unidad ya se vendió. */
+export async function deleteCatalogImei(itemId: string, imeiId: string): Promise<{ stock: number }> {
+  const r = await req<{ stock?: number }>(`/workspaces/${ws()}/catalog/${itemId}/imeis/${imeiId}`, {
+    method: "DELETE",
+  });
+  return { stock: Number(r.stock ?? 0) };
+}
+
 /* ---------- workspace settings ---------- */
 export async function updateWorkspace(patch: {
   name?: string;
