@@ -833,6 +833,7 @@ export interface ProductInput {
   category?: string | null;
   price?: number;
   cost?: number | null;
+  currency?: Currency;
   sku?: string | null;
   notes?: string | null;
   trackStock?: boolean;
@@ -848,6 +849,7 @@ function productBody(p: ProductInput): Record<string, unknown> {
   if (p.category !== undefined) b.category = p.category;
   if (p.price !== undefined) b.price = p.price;
   if (p.cost !== undefined) b.cost = p.cost;
+  if (p.currency !== undefined) b.currency = p.currency;
   if (p.sku !== undefined) b.sku = p.sku;
   if (p.notes !== undefined) b.notes = p.notes;
   if (p.trackStock !== undefined) b.track_stock = p.trackStock ? 1 : 0;
@@ -866,7 +868,7 @@ export async function listCatalog(): Promise<Product[]> {
 export async function createProduct(input: ProductInput): Promise<string> {
   const r = await req<{ id: string }>(`/workspaces/${ws()}/catalog`, {
     method: "POST",
-    body: JSON.stringify({ currency: "ARS", ...productBody(input) }),
+    body: JSON.stringify({ currency: "USD", ...productBody(input) }),
   });
   return r.id;
 }
@@ -876,7 +878,7 @@ export async function createProduct(input: ProductInput): Promise<string> {
 export async function bulkImportProducts(
   items: ProductInput[],
 ): Promise<{ imported: number; skipped: number; errors: Array<{ id: string; error: string }> }> {
-  const body = { items: items.map((p) => ({ currency: "ARS", ...productBody(p) })) };
+  const body = { items: items.map((p) => ({ currency: "USD", ...productBody(p) })) };
   const r = await req<{ imported?: number; skipped?: number; errors?: Array<{ id: string; error: string }> }>(
     `/workspaces/${ws()}/catalog/import`,
     { method: "POST", body: JSON.stringify(body) },

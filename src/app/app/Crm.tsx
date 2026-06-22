@@ -34,6 +34,7 @@ import { AppShell } from "@/layout/AppShell";
 import type { NewAction } from "@/layout/Topbar";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { usePermissions } from "@/store/usePermissions";
+import { useBlueRate } from "@/store/dollarStore";
 import { can as canFor } from "@/lib/permissions";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmHost } from "@/components/ConfirmHost";
@@ -1294,6 +1295,7 @@ function SaleModal({
 
   // Precios por tipo de cliente (precios por tipo). Se cargan una vez; el
   // precio sugerido de cada ítem depende del tipo del cliente seleccionado.
+  const blue = useBlueRate(); // cotización del dólar blue (para convertir USD→ARS)
   const [catalogPrices, setCatalogPrices] = useState<CatalogPrice[]>([]);
   useEffect(() => {
     api.listCatalogPrices().then(setCatalogPrices).catch(() => {});
@@ -1310,10 +1312,22 @@ function SaleModal({
     const c = customers.find((x) => x.id === (preset?.customerId ?? ""));
     return c?.type ?? "final";
   });
-  // Precio sugerido de un producto para la lista actual; si no hay precio
-  // especial para ese tipo, cae al precio base del catálogo.
+  // Precio sugerido en PESOS: el catálogo vive en USD (fuente de verdad) y acá
+  // se convierte al dólar blue. Un producto marcado en ARS se toma tal cual.
   function suggestedPrice(p: Product, type: ClientType = priceType): number {
-    return priceByKey.get(`${p.id}|${type}`) ?? p.price;
+    const base = priceByKey.get(`${p.id}|${type}`) ?? p.price;
+    if (p.currency === "USD" && blue && blue > 0) return Math.round(base * blue);
+    return base;
+  }
+  // Costo del producto llevado a pesos (para el margen): si está en USD, al blue.
+  function costArs(p: Product): number | null {
+    if (p.cost == null) return null;
+    return p.currency === "USD" && blue && blue > 0 ? p.cost * blue : p.cost;
+  }
+  function costArsById(id: string | null | undefined): number | null {
+    if (!id) return null;
+    const p = productById.get(id);
+    return p ? costArs(p) : null;
   }
   // Re-sugiere el precio de las líneas linkeadas autocompletadas (priceAuto)
   // para un tipo dado, sin pisar precios editados a mano ni los del preset.
@@ -1414,7 +1428,7 @@ function SaleModal({
   function lineStatus(l: SaleLine): { kind: "linked" | "nocost" | "free"; marginPct: number | null } {
     const p = l.catalogItemId ? productById.get(l.catalogItemId) : undefined;
     if (!p) return { kind: "free", marginPct: null };
-    const c = p.cost;
+    const c = costArs(p); // costo en pesos (USD → blue) para comparar con el precio
     if (c == null || c <= 0) return { kind: "nocost", marginPct: null };
     const price = Number(l.unitPrice) || 0;
     return { kind: "linked", marginPct: price > 0 ? ((price - c) / price) * 100 : null };
@@ -1435,7 +1449,7 @@ function SaleModal({
       const rev = qty * price;
       if (rev <= 0) continue;
       const p = l.catalogItemId ? productById.get(l.catalogItemId) : undefined;
-      const c = p?.cost;
+      const c = p ? costArs(p) : null; // costo en pesos (USD → blue)
       if (p && c != null && c > 0) {
         costedRev += rev;
         cost += c * qty;
@@ -1450,7 +1464,8 @@ function SaleModal({
       uncostedRev,
       hasCosted: costedRev > 0,
     };
-  }, [lines, productById]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, productById, blue]);
 
   const validLines = lines.filter(
     (l) => l.description.trim() && Number(l.unitPrice) > 0 && Number(l.quantity) > 0,
@@ -1485,9 +1500,9 @@ function SaleModal({
           unitPrice: Number(l.unitPrice) || 0,
           catalogItemId: l.catalogItemId ?? null,
           imei: l.imei?.trim() || null,
-          // Snapshot del costo del catálogo al momento de la venta → margen
-          // histórico exacto aunque después se edite el costo del producto.
-          unitCost: l.catalogItemId ? productById.get(l.catalogItemId)?.cost ?? null : null,
+          // Snapshot del costo (en pesos, USD→blue) al momento de la venta →
+          // margen histórico exacto aunque después cambie el costo o el dólar.
+          unitCost: costArsById(l.catalogItemId),
         })),
         payments,
         tradeIn:
@@ -1534,7 +1549,9 @@ function SaleModal({
             ))}
           </select>
           <span className="text-xs text-text-dim">
-            Qué precio se sugiere (mostrador, revendedor…). Se ajusta solo al elegir un cliente; podés cambiarlo.
+            {blue
+              ? `Catálogo en US$ → precio sugerido en pesos al blue ($${Math.round(blue).toLocaleString("es-AR")}). Se ajusta al cliente; podés cambiarlo.`
+              : "⚠ Cargá la cotización del dólar (chip arriba) para sugerir precios en pesos."}
           </span>
         </div>
 

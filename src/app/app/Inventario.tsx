@@ -26,6 +26,8 @@ import { fetchDolares } from "@/lib/dolar";
 import * as api from "@/lib/api";
 import type { ClientType, Product } from "@/lib/types";
 import { CLIENT_TYPE_LABELS, CLIENT_TYPES, CATALOG_PACKS, formatUsd, formatArs } from "@/lib/types";
+import type { Currency } from "@/lib/types";
+import { useBlueRate } from "@/store/dollarStore";
 import { VisualProductPicker } from "./VisualProductPicker";
 
 type FilterTab = "todos" | "disponibles" | "agotados";
@@ -58,6 +60,7 @@ export function Inventario() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
+  const [migrating, setMigrating] = useState(false);
 
   // Re-hidrata el workspace tras desbloquear el catálogo (refleja el estado).
   async function refreshWs() {
@@ -110,6 +113,23 @@ export function Inventario() {
     });
   }
 
+  // Migración a USD: si hay productos en pesos y el catálogo es en dólares,
+  // los marca como US$ de una (los valores no cambian, solo la moneda).
+  const arsCount = products.filter((p) => p.currency === "ARS").length;
+  async function markCatalogUsd() {
+    setMigrating(true);
+    try {
+      const ars = products.filter((p) => p.currency === "ARS");
+      for (const p of ars) await api.updateProduct(p.id, { currency: "USD" });
+      showToast(`${ars.length} ${ars.length === 1 ? "producto pasado" : "productos pasados"} a US$`, "success");
+      load();
+    } catch {
+      showToast("No se pudo convertir el catálogo", "error");
+    } finally {
+      setMigrating(false);
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[5], height: "100%" }}>
       <PageHeader
@@ -127,6 +147,27 @@ export function Inventario() {
           ) : undefined
         }
       />
+
+      {canWrite && arsCount > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: space[3],
+            padding: space[3],
+            background: color.primaryBg,
+            border: `1px solid ${color.primary}`,
+            borderRadius: radius.md,
+          }}
+        >
+          <span style={{ flex: 1, minWidth: 0, fontSize: text.sm, color: color.text }}>
+            Tenés <strong>{arsCount}</strong> {arsCount === 1 ? "producto en pesos" : "productos en pesos"}. Si tu catálogo está en dólares, marcalo como US$ para que las ventas sugieran al blue.
+          </span>
+          <Button variant="primary" size="sm" loading={migrating} onClick={markCatalogUsd}>
+            Marcar catálogo en US$
+          </Button>
+        </div>
+      )}
 
       <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
         <MetricCard label="En catálogo" value={summary.total} icon={<Package size={16} />} />
@@ -659,8 +700,8 @@ function BulkImportModal({
                     <td style={{ ...td, color: color.text }}>
                       {r.name || <span style={{ color: color.danger }}>— sin nombre —</span>}
                     </td>
-                    <td style={td}>{r.price != null ? formatMoney(r.price, "ARS") : "—"}</td>
-                    <td style={td}>{r.cost != null ? formatMoney(r.cost, "ARS") : "—"}</td>
+                    <td style={td}>{r.price != null ? formatMoney(r.price, "USD") : "—"}</td>
+                    <td style={td}>{r.cost != null ? formatMoney(r.cost, "USD") : "—"}</td>
                     <td style={td}>{r.stock != null ? r.stock : "—"}</td>
                     <td style={td}>{r.sku || "—"}</td>
                     <td style={td}>{r.category || "—"}</td>
@@ -862,6 +903,8 @@ function ProductModal({
   const [category, setCategory] = useState("");
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
+  const [currency, setCurrency] = useState<Currency>("USD");
+  const blue = useBlueRate();
   const [sku, setSku] = useState("");
   const [trackStock, setTrackStock] = useState(true);
   const [stock, setStock] = useState("");
@@ -897,6 +940,7 @@ function ProductModal({
     setCategory(product?.category ?? "");
     setPrice(product ? String(product.price) : "");
     setCost(product?.cost != null ? String(product.cost) : "");
+    setCurrency(product?.currency ?? "USD");
     setSku(product?.sku ?? "");
     setTrackStock(product ? product.trackStock : true);
     setStock(product ? String(product.stock) : "");
@@ -1021,6 +1065,7 @@ function ProductModal({
       category: category.trim() || null,
       price: price ? Number(price) : 0,
       cost: cost ? Number(cost) : null,
+      currency,
       sku: sku.trim() || null,
       // Serializado ⇒ siempre con tracking y stock = unidades disponibles.
       trackStock: serialized ? true : trackStock,
@@ -1073,11 +1118,39 @@ function ProductModal({
       <ModalField label="Nombre" required>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: Funda iPhone 15" autoFocus />
       </ModalField>
+      {/* Moneda del producto: USD (base, default para reventa) o ARS. */}
+      <ModalField label="Moneda">
+        <div style={{ display: "flex", gap: space[2] }}>
+          {(["USD", "ARS"] as const).map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCurrency(c)}
+              style={{
+                flex: 1,
+                padding: "8px 10px",
+                borderRadius: radius.md,
+                fontSize: text.sm,
+                fontWeight: weight.medium,
+                cursor: "pointer",
+                border: `1px solid ${currency === c ? color.primary : color.border}`,
+                background: currency === c ? color.primaryBg : color.surface2,
+                color: currency === c ? color.primary : color.text,
+              }}
+            >
+              {c === "USD" ? "US$ Dólares" : "$ Pesos"}
+            </button>
+          ))}
+        </div>
+      </ModalField>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
-        <ModalField label="Precio (ARS)">
+        <ModalField
+          label={`Precio (${currency === "USD" ? "US$" : "$"})`}
+          hint={currency === "USD" && blue && Number(price) > 0 ? `≈ ${formatArs(Number(price) * blue)} al blue` : undefined}
+        >
           <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" />
         </ModalField>
-        <ModalField label="Costo (ARS)" hint="Opcional">
+        <ModalField label={`Costo (${currency === "USD" ? "US$" : "$"})`} hint="Opcional">
           <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" />
         </ModalField>
       </div>
@@ -1225,7 +1298,7 @@ function ProductModal({
       </ModalField>
       <div style={{ marginBottom: space[5] }}>
         <div style={{ fontSize: text.sm, fontWeight: weight.medium, color: color.textMuted, marginBottom: 4 }}>
-          Precios por tipo de cliente <span style={{ color: color.textDim, fontWeight: 400 }}>· opcional</span>
+          Precios por tipo de cliente <span style={{ color: color.textDim, fontWeight: 400 }}>· en {currency === "USD" ? "US$" : "$"} · opcional</span>
         </div>
         <div style={{ fontSize: text.xs, color: color.textDim, marginBottom: 8 }}>
           Dejá vacío para usar el precio base. Al cargar una venta se sugiere según el tipo del cliente.
