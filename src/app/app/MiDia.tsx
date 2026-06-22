@@ -359,7 +359,7 @@ export function MiDia({
             ) : null}
           </div>
 
-          <div style={{ display: "flex", gap: space[6], flexWrap: "wrap" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: space[6], flexWrap: "wrap", width: "100%", maxWidth: 460 }}>
             <HeroStat label="Ventas de hoy" value={`${todaySales.length}`} hint={formatMoney(todayTotal)} />
             <HeroStat
               label="Por cobrar"
