@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Search, Package, Pencil, Trash2, ChevronDown, LayoutGrid, ClipboardPaste } from "lucide-react";
+import { Plus, Search, Package, Pencil, Trash2, ChevronDown, LayoutGrid, ClipboardPaste, Lock } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card, MetricCard } from "@/components/Card";
@@ -19,11 +19,13 @@ import {
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { useUndoableActions } from "@/store/useUndoableActions";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
+import { fetchDolares } from "@/lib/dolar";
 import * as api from "@/lib/api";
 import type { ClientType, Product } from "@/lib/types";
-import { CLIENT_TYPE_LABELS, CLIENT_TYPES } from "@/lib/types";
+import { CLIENT_TYPE_LABELS, CLIENT_TYPES, CATALOG_PACKS, formatUsd, formatArs } from "@/lib/types";
 import { VisualProductPicker } from "./VisualProductPicker";
 
 type FilterTab = "todos" | "disponibles" | "agotados";
@@ -43,6 +45,10 @@ export function Inventario() {
   const { showToast } = useUIStore();
   const { can } = usePermissions();
   const canWrite = can("inventory.write");
+  const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
+  // El catálogo Apple es un add-on pago: solo los workspaces que lo
+  // desbloquearon ven el picker visual; el resto carga manual o lo abona.
+  const appleUnlocked = (activeWorkspace?.unlockedCatalogs ?? []).includes("apple");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -51,6 +57,14 @@ export function Inventario() {
   const [adding, setAdding] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [unlockOpen, setUnlockOpen] = useState(false);
+
+  // Re-hidrata el workspace tras desbloquear el catálogo (refleja el estado).
+  async function refreshWs() {
+    const me = await api.fetchMe();
+    const active = me.workspaces.find((w) => w.id === activeWorkspace?.id) ?? me.workspaces[0] ?? null;
+    useWorkspaceStore.setState({ workspaces: me.workspaces, activeWorkspace: active });
+  }
   const ctxMenu = useContextMenu();
   const [ctxProduct, setCtxProduct] = useState<Product | null>(null);
 
@@ -104,7 +118,9 @@ export function Inventario() {
         actions={
           canWrite ? (
             <AddProductMenu
+              appleUnlocked={appleUnlocked}
               onApple={() => setPickerOpen(true)}
+              onUnlock={() => setUnlockOpen(true)}
               onManual={() => setAdding(true)}
               onBulk={() => setBulkOpen(true)}
             />
@@ -153,7 +169,9 @@ export function Inventario() {
             actionNode={
               products.length === 0 && canWrite ? (
                 <AddProductMenu
+                  appleUnlocked={appleUnlocked}
                   onApple={() => setPickerOpen(true)}
+                  onUnlock={() => setUnlockOpen(true)}
                   onManual={() => setAdding(true)}
                   onBulk={() => setBulkOpen(true)}
                 />
@@ -237,6 +255,16 @@ export function Inventario() {
 
       <BulkImportModal open={bulkOpen} onClose={() => setBulkOpen(false)} onImported={load} />
 
+      <UnlockCatalogModal
+        open={unlockOpen}
+        onClose={() => setUnlockOpen(false)}
+        onUnlocked={async () => {
+          await refreshWs();
+          setUnlockOpen(false);
+          setPickerOpen(true); // ya desbloqueado → abrimos el picker visual
+        }}
+      />
+
       <ProductModal
         open={adding || editing !== null}
         product={editing}
@@ -284,16 +312,59 @@ export function Inventario() {
 /* ───────── Menú "Agregar producto": catálogo visual o carga manual ───────── */
 
 function AddProductMenu({
+  appleUnlocked,
   onApple,
+  onUnlock,
   onManual,
   onBulk,
 }: {
+  appleUnlocked: boolean;
   onApple: () => void;
+  onUnlock: () => void;
   onManual: () => void;
   onBulk: () => void;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+
+  const appleRow = (
+    <MenuRow
+      key="apple"
+      icon={<LayoutGrid size={16} />}
+      title="Catálogo Apple"
+      subtitle={appleUnlocked ? "Elegí modelo, color y capacidad" : "Premium · desbloquear catálogo"}
+      locked={!appleUnlocked}
+      onClick={() => {
+        setOpen(false);
+        appleUnlocked ? onApple() : onUnlock();
+      }}
+    />
+  );
+  const manualRow = (
+    <MenuRow
+      key="manual"
+      icon={<Pencil size={16} />}
+      title="Carga manual"
+      subtitle="Cargá cualquier producto a mano"
+      onClick={() => {
+        setOpen(false);
+        onManual();
+      }}
+    />
+  );
+  const bulkRow = (
+    <MenuRow
+      key="bulk"
+      icon={<ClipboardPaste size={16} />}
+      title="Importar en bloque"
+      subtitle="Pegá tu catálogo desde Excel"
+      onClick={() => {
+        setOpen(false);
+        onBulk();
+      }}
+    />
+  );
+
   return (
     <>
       <Button
@@ -305,34 +376,10 @@ function AddProductMenu({
       >
         Agregar producto
       </Button>
-      <Popover open={open} onClose={() => setOpen(false)} triggerRef={triggerRef} width={264} align="end">
-        <MenuRow
-          icon={<LayoutGrid size={16} />}
-          title="Catálogo Apple"
-          subtitle="Elegí modelo, color y capacidad"
-          onClick={() => {
-            setOpen(false);
-            onApple();
-          }}
-        />
-        <MenuRow
-          icon={<Pencil size={16} />}
-          title="Carga manual"
-          subtitle="Cargá cualquier producto a mano"
-          onClick={() => {
-            setOpen(false);
-            onManual();
-          }}
-        />
-        <MenuRow
-          icon={<ClipboardPaste size={16} />}
-          title="Importar en bloque"
-          subtitle="Pegá tu catálogo desde Excel"
-          onClick={() => {
-            setOpen(false);
-            onBulk();
-          }}
-        />
+      <Popover open={open} onClose={() => setOpen(false)} triggerRef={triggerRef} width={272} align="end">
+        {/* Multi-rubro: manual e importar son universales. El catálogo Apple
+            es un add-on; si no está desbloqueado va último, como upsell. */}
+        {appleUnlocked ? [appleRow, manualRow, bulkRow] : [manualRow, bulkRow, appleRow]}
       </Popover>
     </>
   );
@@ -343,11 +390,13 @@ function MenuRow({
   title,
   subtitle,
   onClick,
+  locked = false,
 }: {
   icon: React.ReactNode;
   title: string;
   subtitle: string;
   onClick: () => void;
+  locked?: boolean;
 }) {
   return (
     <button
@@ -369,10 +418,11 @@ function MenuRow({
       }}
     >
       <span style={{ display: "inline-flex", color: color.textMuted, flexShrink: 0 }}>{icon}</span>
-      <span style={{ minWidth: 0 }}>
+      <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "block", fontSize: text.sm, fontWeight: weight.medium, color: color.text }}>{title}</span>
         <span style={{ display: "block", fontSize: text.xs, color: color.textDim }}>{subtitle}</span>
       </span>
+      {locked && <Lock size={13} style={{ color: color.textDim, flexShrink: 0 }} />}
     </button>
   );
 }
@@ -626,6 +676,140 @@ function BulkImportModal({
           )}
         </div>
       )}
+    </Modal>
+  );
+}
+
+/* ───────── Desbloqueo de catálogo Apple (add-on pago) ───────── */
+
+function UnlockCatalogModal({
+  open,
+  onClose,
+  onUnlocked,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onUnlocked: () => Promise<void>;
+}) {
+  const showToast = useUIStore((s) => s.showToast);
+  const pack = CATALOG_PACKS.apple;
+  const [blueRate, setBlueRate] = useState<number | null>(null);
+  const [code, setCode] = useState("");
+  const [busyPay, setBusyPay] = useState(false);
+  const [busyCode, setBusyCode] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    fetchDolares()
+      .then((r) => {
+        const b = r.find((x) => x.casa === "blue") ?? r[0];
+        if (b?.venta) setBlueRate(b.venta);
+      })
+      .catch(() => {});
+  }, [open]);
+
+  async function pay() {
+    setBusyPay(true);
+    try {
+      const { initPoint } = await api.catalogCheckout(pack.key);
+      window.location.assign(initPoint); // → Mercado Pago
+    } catch (e) {
+      const c = e instanceof api.ApiError ? e.code : "";
+      showToast(
+        c === "billing_unavailable"
+          ? "El cobro no está disponible en este momento."
+          : c === "exchange_unavailable"
+            ? "No pudimos obtener la cotización del dólar. Probá de nuevo."
+            : c === "forbidden"
+              ? "Solo el dueño puede desbloquear el catálogo."
+              : "No pudimos iniciar el pago. Probá de nuevo.",
+        "error",
+      );
+      setBusyPay(false);
+    }
+  }
+
+  async function redeem() {
+    const c = code.trim();
+    if (!c) return;
+    setBusyCode(true);
+    try {
+      const r = await api.redeemCode(c);
+      if (r.kind === "unlock") {
+        await onUnlocked();
+        showToast("¡Catálogo desbloqueado!", "success");
+        setCode("");
+      } else {
+        showToast("Ese código no desbloquea un catálogo.", "error");
+      }
+    } catch (e) {
+      const cc = e instanceof api.ApiError ? e.code : "";
+      const M: Record<string, string> = {
+        code_not_found: "Ese código no existe.",
+        code_disabled: "Ese código está deshabilitado.",
+        code_expired: "Ese código venció.",
+        code_exhausted: "Ese código alcanzó su límite de usos.",
+        forbidden: "Solo el dueño puede canjear códigos.",
+      };
+      showToast(M[cc] ?? "No pudimos canjear el código.", "error");
+    } finally {
+      setBusyCode(false);
+    }
+  }
+
+  const ars = blueRate ? `≈ ${formatArs(pack.priceUsd * blueRate)}` : null;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Desbloquear catálogo Apple" maxWidth={460}>
+      <div style={{ display: "flex", flexDirection: "column", gap: space[4], padding: space[1] }}>
+        <p style={{ fontSize: text.sm, color: color.textMuted, margin: 0, lineHeight: 1.5 }}>{pack.description}</p>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: space[2],
+            padding: `${space[3]} ${space[4]}`,
+            borderRadius: radius.lg,
+            background: color.surface2,
+            border: `1px solid ${color.border}`,
+          }}
+        >
+          <span style={{ fontSize: text.xl, fontWeight: weight.bold, color: color.text }}>
+            {formatUsd(pack.priceUsd)}
+          </span>
+          <span style={{ fontSize: text.xs, color: color.textDim }}>pago único{ars ? ` · ${ars}` : ""}</span>
+        </div>
+
+        <Button variant="primary" fullWidth loading={busyPay} onClick={pay}>
+          Pagar y desbloquear
+        </Button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: space[2], color: color.textDim, fontSize: text.xs }}>
+          <span style={{ flex: 1, height: 1, background: color.border }} /> o con un código{" "}
+          <span style={{ flex: 1, height: 1, background: color.border }} />
+        </div>
+
+        <div style={{ display: "flex", gap: space[2] }}>
+          <div style={{ flex: 1 }}>
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  redeem();
+                }
+              }}
+              placeholder="CLOZR-XXXX-XXXX"
+              disabled={busyCode}
+            />
+          </div>
+          <Button variant="secondary" loading={busyCode} disabled={busyCode || !code.trim()} onClick={redeem}>
+            Canjear
+          </Button>
+        </div>
+      </div>
     </Modal>
   );
 }
