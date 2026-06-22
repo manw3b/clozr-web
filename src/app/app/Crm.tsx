@@ -8,7 +8,7 @@ import {
   CLIENT_TYPE_LABELS,
   CLIENT_TYPES,
   PAYMENT_METHOD_LABELS,
-  PAYMENT_METHODS,
+  PAYMENT_METHODS_MANUAL,
   PRIORITIES,
   PRIORITY_LABELS,
   SOURCE_LABELS,
@@ -1204,6 +1204,12 @@ function SaleModal({
   const [partial, setPartial] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  // Plan canje: equipo usado recibido como parte de pago.
+  const [tradeInOpen, setTradeInOpen] = useState(false);
+  const [tiDesc, setTiDesc] = useState("");
+  const [tiImei, setTiImei] = useState("");
+  const [tiCondition, setTiCondition] = useState("");
+  const [tiValue, setTiValue] = useState("");
   // Lista local de clientes (para reflejar al instante uno creado al vuelo).
   const [localCustomers, setLocalCustomers] = useState(customers);
   useEffect(() => { setLocalCustomers(customers); }, [customers]);
@@ -1243,8 +1249,16 @@ function SaleModal({
     (a, l) => a + (isSerialLine(l) ? 1 : Number(l.quantity) || 0) * (Number(l.unitPrice) || 0),
     0,
   );
-  const paidAmount = paidFull ? total : Number(partial) || 0;
+  // Plan canje: el equipo recibido vale `tradeInValue`, cuenta como pago (baja
+  // el saldo) y entra al stock como unidad usada al cerrar la venta.
+  const tradeInValue = tradeInOpen ? Math.max(0, Number(tiValue) || 0) : 0;
+  const due = Math.max(0, total - tradeInValue); // lo que queda a pagar
+  const cashPaid = paidFull ? due : Math.max(0, Number(partial) || 0);
+  const paidAmount = tradeInValue + cashPaid; // total cobrado (canje + efectivo/otro)
   const balance = total - paidAmount;
+  // El canje está "activo" si se empezó a cargar; si es así exige modelo + valor.
+  const tradeInActive = tradeInOpen && (tiDesc.trim() !== "" || tiValue.trim() !== "");
+  const tradeInOk = !tradeInActive || (tiDesc.trim() !== "" && tradeInValue > 0);
 
   // El modal está sucio si hay datos que se perderían al cerrar → click afuera
   // hace shake (no cierra), igual que en la desktop.
@@ -1252,6 +1266,7 @@ function SaleModal({
     if (busy) return false;
     if (customerId) return true;
     if (notes.trim() !== "") return true;
+    if (tradeInActive || tiImei.trim() !== "" || tiCondition.trim() !== "") return true;
     return lines.some((l) => l.description.trim() !== "" || String(l.unitPrice).trim() !== "");
   }
 
@@ -1424,7 +1439,7 @@ function SaleModal({
   const validLines = lines.filter(
     (l) => l.description.trim() && Number(l.unitPrice) > 0 && Number(l.quantity) > 0,
   );
-  const canSave = validLines.length > 0 && total > 0 && !busy;
+  const canSave = validLines.length > 0 && total > 0 && tradeInOk && !busy;
 
   async function save() {
     if (!canSave) return;
@@ -1436,7 +1451,9 @@ function SaleModal({
     const finalCustomerId = cust?.id ?? (isPresetCust ? customerId : undefined);
     const finalCustomerName =
       cust?.name || (isPresetCust ? preset?.customerName : "") || "Consumidor final";
-    const payments = paidAmount > 0 ? [{ method, amount: paidAmount, currency: "ARS" as Currency }] : [];
+    const payments: Array<{ method: string; amount: number; currency: Currency }> = [];
+    if (tradeInValue > 0) payments.push({ method: "canje", amount: tradeInValue, currency: "ARS" });
+    if (cashPaid > 0) payments.push({ method, amount: cashPaid, currency: "ARS" });
     try {
       await api.createSale({
         customerId: finalCustomerId,
@@ -1457,6 +1474,15 @@ function SaleModal({
           unitCost: l.catalogItemId ? productById.get(l.catalogItemId)?.cost ?? null : null,
         })),
         payments,
+        tradeIn:
+          tradeInActive && tiDesc.trim() && tradeInValue > 0
+            ? {
+                description: tiDesc.trim(),
+                imei: tiImei.trim() || undefined,
+                value: tradeInValue,
+                condition: tiCondition.trim() || undefined,
+              }
+            : undefined,
       });
       onSaved("Venta registrada");
     } catch {
@@ -1586,11 +1612,87 @@ function SaleModal({
           </button>
         </div>
 
+        {/* Plan canje: recibir un equipo usado como parte de pago */}
+        {!tradeInOpen ? (
+          <button
+            onClick={() => setTradeInOpen(true)}
+            className="-mt-1 w-full rounded-lg border border-dashed border-border-strong py-2 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
+          >
+            ↔ Plan canje · recibo un equipo en parte de pago
+          </button>
+        ) : (
+          <div className="rounded-xl border border-border bg-surface-2 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-semibold">Plan canje · equipo recibido</span>
+              <button
+                onClick={() => {
+                  setTradeInOpen(false);
+                  setTiDesc("");
+                  setTiImei("");
+                  setTiCondition("");
+                  setTiValue("");
+                }}
+                className="text-lg leading-none text-text-dim hover:text-danger"
+                aria-label="Quitar plan canje"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              <input
+                value={tiDesc}
+                onChange={(e) => setTiDesc(e.target.value)}
+                placeholder="Equipo recibido (ej: iPhone 12 128GB)"
+                className={fieldCls}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  value={tiImei}
+                  onChange={(e) => setTiImei(e.target.value)}
+                  placeholder="IMEI / N° de serie"
+                  autoComplete="off"
+                  className={fieldCls}
+                />
+                <input
+                  value={tiCondition}
+                  onChange={(e) => setTiCondition(e.target.value)}
+                  placeholder="Estado (ej: batería 89%)"
+                  className={fieldCls}
+                />
+              </div>
+              <input
+                type="number"
+                value={tiValue}
+                onChange={(e) => setTiValue(e.target.value)}
+                placeholder="Valor de toma ($)"
+                className={fieldCls}
+              />
+              <span className="text-xs text-text-dim">
+                Entra al stock como unidad usada (costo {money(tradeInValue, "ARS")}) y se descuenta del total.
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-xl bg-surface-2 p-4">
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-text-muted">Total</span>
             <span className="text-xl font-extrabold tracking-tight">{money(total, "ARS")}</span>
           </div>
+          {tradeInValue > 0 && (
+            <>
+              <div className="mt-1.5 flex items-baseline justify-between text-sm">
+                <span className="text-text-muted">Plan canje</span>
+                <span className="font-semibold" style={{ color: color.success }}>
+                  − {money(tradeInValue, "ARS")}
+                </span>
+              </div>
+              <div className="mt-1.5 flex items-baseline justify-between border-t border-border pt-2">
+                <span className="text-sm font-medium text-text-muted">A pagar</span>
+                <span className="text-lg font-extrabold tracking-tight">{money(due, "ARS")}</span>
+              </div>
+            </>
+          )}
           {coverage.hasCosted && (
             <div
               className="mt-2 flex justify-between text-sm"
@@ -1612,7 +1714,7 @@ function SaleModal({
           <label className="flex flex-col gap-1.5">
             <span className={labelCls}>Método de pago</span>
             <select value={method} onChange={(e) => setMethod(e.target.value)} className={fieldCls}>
-              {PAYMENT_METHODS.map((m) => (
+              {PAYMENT_METHODS_MANUAL.map((m) => (
                 <option key={m} value={m}>
                   {PAYMENT_METHOD_LABELS[m]}
                 </option>
@@ -1801,7 +1903,7 @@ function SaleDetailModal({
                 <div className={`${labelCls} mb-2`}>Registrar un pago</div>
                 <div className="flex items-end gap-2">
                   <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className={`${fieldCls} flex-1`}>
-                    {PAYMENT_METHODS.map((m) => (
+                    {PAYMENT_METHODS_MANUAL.map((m) => (
                       <option key={m} value={m}>
                         {PAYMENT_METHOD_LABELS[m]}
                       </option>

@@ -25,7 +25,7 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, formatRelative, formatDateLong, formatTime } from "@/lib/format";
 import * as api from "@/lib/api";
-import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS } from "@/lib/types";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_MANUAL } from "@/lib/types";
 import type { Currency, Sale, SaleDetail } from "@/lib/types";
 
 type SaleStatus = "paid" | "partial" | "pending";
@@ -680,7 +680,7 @@ function PaymentModal({
       </ModalField>
       <ModalField label="Método">
         <Select value={method} onChange={(e) => setMethod(e.target.value)}>
-          {PAYMENT_METHODS.map((m) => (
+          {PAYMENT_METHODS_MANUAL.map((m) => (
             <option key={m} value={m}>
               {PAYMENT_METHOD_LABELS[m]}
             </option>

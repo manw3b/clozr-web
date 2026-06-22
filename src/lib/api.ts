@@ -489,6 +489,10 @@ export interface NewSaleInput {
   notes?: string;
   items: Array<{ description: string; quantity: number; unitPrice: number; catalogItemId?: string | null; imei?: string | null; unitCost?: number | null }>;
   payments: Array<{ method: string; amount: number; currency: Currency }>;
+  /** Plan canje: equipo usado recibido como parte de pago. Se crea como una
+   *  unidad de catálogo (costo = valor de toma) al cerrar la venta. El crédito
+   *  va aparte, como un pago con method "canje" en `payments`. */
+  tradeIn?: { description: string; imei?: string; value: number; condition?: string; category?: string };
 }
 
 export async function createSale(input: NewSaleInput): Promise<string> {
@@ -535,6 +539,15 @@ export async function createSale(input: NewSaleInput): Promise<string> {
         amount: p.amount,
         currency: p.currency,
       })),
+      trade_in: input.tradeIn
+        ? {
+            description: input.tradeIn.description,
+            imei: input.tradeIn.imei ?? null,
+            value: input.tradeIn.value,
+            condition: input.tradeIn.condition ?? null,
+            category: input.tradeIn.category ?? null,
+          }
+        : undefined,
     }),
   });
   return r.id;

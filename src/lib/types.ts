@@ -454,6 +454,7 @@ export type PaymentMethod =
   | "tarjeta"
   | "mercadopago"
   | "cuenta-corriente"
+  | "canje"
   | "otro";
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
@@ -462,9 +463,13 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   tarjeta: "Tarjeta",
   mercadopago: "Mercado Pago",
   "cuenta-corriente": "Cuenta corriente",
+  canje: "Plan canje",
   otro: "Otro",
 };
 export const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
+// "canje" se setea solo desde el Plan canje de una venta — no es un método que
+// se elija a mano, así que se excluye de los selectores de cobro.
+export const PAYMENT_METHODS_MANUAL = PAYMENT_METHODS.filter((m) => m !== "canje");
 
 export interface SaleItem {
   id: string;
