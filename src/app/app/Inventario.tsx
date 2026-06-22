@@ -546,6 +546,11 @@ function ProductModal({
   const [imeis, setImeis] = useState<api.CatalogImei[]>([]);
   const [pendingImeis, setPendingImeis] = useState<string[]>([]);
   const [imeiInput, setImeiInput] = useState("");
+  // Refurbish interno: reparaciones cargadas a la unidad (cada una suma al costo).
+  const [repairs, setRepairs] = useState<api.CatalogRepair[]>([]);
+  const [repDesc, setRepDesc] = useState("");
+  const [repCost, setRepCost] = useState("");
+  const [addingRepair, setAddingRepair] = useState(false);
   // Precios por tipo de cliente (vacío = usa el precio base).
   const [typePrices, setTypePrices] = useState<Record<ClientType, string>>({
     final: "", revendedor: "", mayorista: "", empresa: "",
@@ -569,6 +574,10 @@ function ProductModal({
     setImeis([]);
     setPendingImeis([]);
     setImeiInput("");
+    // Refurbish: reset; en edición se cargan las reparaciones del server.
+    setRepairs([]);
+    setRepDesc("");
+    setRepCost("");
     // Precios por tipo: limpiar y, si es edición, cargar los existentes.
     setTypePrices({ final: "", revendedor: "", mayorista: "", empresa: "" });
     setOrigPrices({ final: null, revendedor: null, mayorista: null, empresa: null });
@@ -579,6 +588,7 @@ function ProductModal({
           setSerialized(list.length > 0);
         })
         .catch(() => {});
+      api.listCatalogRepairs(product.id).then(setRepairs).catch(() => {});
       api.listCatalogPrices()
         .then((all) => {
           const tp: Record<ClientType, string> = { final: "", revendedor: "", mayorista: "", empresa: "" };
@@ -637,6 +647,38 @@ function ProductModal({
   }
   function removePendingImei(imei: string) {
     setPendingImeis((prev) => prev.filter((x) => x !== imei));
+  }
+
+  // Refurbish: total de reparaciones (desglose; ya está incluido en el costo).
+  const repairsTotal = repairs.reduce((a, r) => a + r.cost, 0);
+
+  async function addRepair() {
+    const description = repDesc.trim();
+    const c = Number(repCost);
+    if (!product || !description || !Number.isFinite(c) || c < 0) return;
+    setAddingRepair(true);
+    try {
+      const res = await api.addCatalogRepair(product.id, { description, cost: c });
+      setRepairs((prev) => [res.repair, ...prev]);
+      setCost(String(res.cost)); // el costo del equipo ya incluye la reparación
+      setRepDesc("");
+      setRepCost("");
+    } catch {
+      showToast("No se pudo agregar la reparación", "error");
+    } finally {
+      setAddingRepair(false);
+    }
+  }
+
+  async function removeRepair(id: string) {
+    if (!product) return;
+    try {
+      const res = await api.deleteCatalogRepair(product.id, id);
+      setRepairs((prev) => prev.filter((r) => r.id !== id));
+      setCost(String(res.cost));
+    } catch {
+      showToast("No se pudo borrar la reparación", "error");
+    }
   }
 
   async function submit() {
@@ -710,6 +752,121 @@ function ProductModal({
           <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" />
         </ModalField>
       </div>
+
+      {/* Refurbish interno: reparaciones / repuestos cargados a la unidad */}
+      <div style={{ marginBottom: space[5] }}>
+        <div style={{ fontSize: text.sm, fontWeight: weight.medium, color: color.textMuted, marginBottom: 4 }}>
+          Reparaciones / refurbish <span style={{ color: color.textDim, fontWeight: 400 }}>· se suman al costo</span>
+        </div>
+        {product ? (
+          <>
+            {repairs.length > 0 && (
+              <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, marginBottom: space[2] }}>
+                {repairs.map((r) => (
+                  <div
+                    key={r.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: space[2],
+                      padding: "6px 10px",
+                      borderBottom: `1px solid ${color.border}`,
+                      fontSize: text.sm,
+                    }}
+                  >
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.description}
+                    </span>
+                    <span style={{ color: color.textMuted, flexShrink: 0 }}>{formatMoney(r.cost, "ARS")}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeRepair(r.id)}
+                      aria-label="Quitar reparación"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 24,
+                        height: 24,
+                        borderRadius: radius.sm,
+                        color: color.textDim,
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 10px", fontSize: text.sm }}>
+                  <span style={{ color: color.textMuted }}>Total reparaciones</span>
+                  <span style={{ fontWeight: weight.semibold }}>{formatMoney(repairsTotal, "ARS")}</span>
+                </div>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: space[2], alignItems: "center" }}>
+              <input
+                value={repDesc}
+                onChange={(e) => setRepDesc(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void addRepair();
+                  }
+                }}
+                placeholder="Reparación / repuesto (ej: Pantalla OEM)"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  background: color.surface2,
+                  border: `1px solid ${color.border}`,
+                  borderRadius: radius.md,
+                  padding: "8px 10px",
+                  color: color.text,
+                  fontSize: text.sm,
+                  fontFamily: "inherit",
+                }}
+              />
+              <input
+                type="number"
+                value={repCost}
+                onChange={(e) => setRepCost(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void addRepair();
+                  }
+                }}
+                placeholder="Costo"
+                style={{
+                  width: 96,
+                  flexShrink: 0,
+                  background: color.surface2,
+                  border: `1px solid ${color.border}`,
+                  borderRadius: radius.md,
+                  padding: "8px 10px",
+                  color: color.text,
+                  fontSize: text.sm,
+                  fontFamily: "inherit",
+                }}
+              />
+              <Button variant="secondary" onClick={addRepair} disabled={!repDesc.trim() || addingRepair} loading={addingRepair}>
+                Sumar
+              </Button>
+            </div>
+            <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 6 }}>
+              El costo de arriba ya incluye las reparaciones · Costo real del equipo: {formatMoney(Number(cost) || 0, "ARS")}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: text.xs, color: color.textDim }}>
+            Disponible al editar: creá el producto y reabrílo para cargar reparaciones.
+          </div>
+        )}
+      </div>
+
       <ModalField label="SKU / código" hint="Opcional">
         <Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Ej: FND-15-NEG" />
       </ModalField>

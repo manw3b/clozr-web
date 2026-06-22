@@ -921,6 +921,49 @@ export async function deleteCatalogImei(itemId: string, imeiId: string): Promise
   return { stock: Number(r.stock ?? 0) };
 }
 
+/* ---------- Refurbish interno: reparaciones / repuestos por unidad ----------
+ * Cada reparación se SUMA al `cost` del producto (costo real del equipo), así
+ * el margen de la venta y los reportes quedan bien sin tocar nada más. Las
+ * funciones devuelven el nuevo `cost` total para sincronizar la UI. */
+export interface CatalogRepair {
+  id: string;
+  description: string;
+  cost: number;
+  createdAt: string | null;
+}
+interface CatalogRepairRaw {
+  id: string;
+  description: string;
+  cost?: number | null;
+  created_at?: string | null;
+}
+function mapRepair(r: CatalogRepairRaw): CatalogRepair {
+  return { id: r.id, description: r.description, cost: Number(r.cost ?? 0), createdAt: r.created_at ?? null };
+}
+export async function listCatalogRepairs(itemId: string): Promise<CatalogRepair[]> {
+  const data = await req<{ repairs: CatalogRepairRaw[] }>(`/workspaces/${ws()}/catalog/${itemId}/repairs`);
+  return (data.repairs ?? []).map(mapRepair);
+}
+export async function addCatalogRepair(
+  itemId: string,
+  input: { description: string; cost: number },
+): Promise<{ cost: number; repair: CatalogRepair }> {
+  const r = await req<{ cost?: number; repair?: CatalogRepairRaw }>(
+    `/workspaces/${ws()}/catalog/${itemId}/repairs`,
+    { method: "POST", body: JSON.stringify({ description: input.description, cost: input.cost }) },
+  );
+  return {
+    cost: Number(r.cost ?? 0),
+    repair: r.repair ? mapRepair(r.repair) : { id: "", description: input.description, cost: input.cost, createdAt: null },
+  };
+}
+export async function deleteCatalogRepair(itemId: string, repairId: string): Promise<{ cost: number }> {
+  const r = await req<{ cost?: number }>(`/workspaces/${ws()}/catalog/${itemId}/repairs/${repairId}`, {
+    method: "DELETE",
+  });
+  return { cost: Number(r.cost ?? 0) };
+}
+
 /* ---------- workspace settings ---------- */
 export async function updateWorkspace(patch: {
   name?: string;
