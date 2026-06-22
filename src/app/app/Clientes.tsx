@@ -33,6 +33,7 @@ import { DataTable, applySort, type ColumnDef } from "@/components/data-table";
 import { ImportClientsModal } from "./ImportClientsModal";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { openWhatsApp, openTel, openMail } from "@/lib/openExternal";
+import { AiSuggestions } from "./AiSuggestions";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
@@ -616,6 +617,7 @@ function ClientDrawer({
                 <span style={{ fontSize: text.sm, color: color.textDim, fontStyle: "italic" }}>Sin notas.</span>
               )}
             </InfoSection>
+            <AiSuggestions customer={customer} />
           </div>
         ) : sales.length === 0 ? (
           <EmptyState size="compact" title="Sin ventas registradas" description="Cuando le vendás algo, va a aparecer acá." />

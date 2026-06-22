@@ -1489,6 +1489,23 @@ export async function aiChat(messages: AiChatMessage[]): Promise<{ reply: string
   return r;
 }
 
+export interface AiActionParams {
+  action: "generate" | "rewrite";
+  kind?: string; // para generate
+  tone?: string; // para rewrite
+  text?: string; // para rewrite
+  context?: Record<string, unknown>; // datos del cliente (para generate)
+}
+
+/** Acción contextual (Pro AI): generar o reescribir. Devuelve el texto + saldo.
+ *  Sin saldo → el Worker responde 402 y `req` lanza ApiError("no_credits"). */
+export async function aiAction(params: AiActionParams): Promise<{ text: string; wallet: AiWallet }> {
+  return req<{ text: string; wallet: AiWallet }>(`/workspaces/${ws()}/ai/action`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
 export async function aiCheckout(pack: string): Promise<{ initPoint: string }> {
   const r = await req<{ init_point: string }>(`/workspaces/${ws()}/ai/checkout`, {
     method: "POST",

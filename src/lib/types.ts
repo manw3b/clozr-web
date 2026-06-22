@@ -150,9 +150,30 @@ export const CATALOG_PACKS: Record<string, CatalogPack> = {
   },
 };
 
-/* ───────── IA de Clozr (microtransacciones por mensaje) ───────── */
-/** Mensajes gratis por workspace antes de tener que comprar un pack. */
-export const AI_FREE_LIMIT = 1;
+/* ───────── IA de Clozr (microtransacciones por acción) ───────── */
+/** Acciones gratis por workspace (trial) antes de tener que comprar un pack. */
+export const AI_FREE_LIMIT = 3;
+
+/** Tipos de mensaje que la IA puede generar desde la ficha del cliente.
+ *  Las keys deben coincidir con GEN_KINDS del Worker. */
+export const AI_GEN_KINDS: Array<{ key: string; label: string }> = [
+  { key: "primer_contacto", label: "Primer contacto" },
+  { key: "seguimiento", label: "Seguimiento" },
+  { key: "reactivacion", label: "Reactivar" },
+  { key: "agradecimiento", label: "Agradecer" },
+  { key: "cobranza", label: "Cobranza" },
+  { key: "upselling", label: "Ofrecer más" },
+];
+
+/** Tonos para reescribir. Keys = TONES del Worker. */
+export const AI_TONES: Array<{ key: string; label: string }> = [
+  { key: "mas_corto", label: "Más corto" },
+  { key: "mas_vendedor", label: "Más vendedor" },
+  { key: "mas_amigable", label: "Más amigable" },
+  { key: "mas_formal", label: "Más formal" },
+  { key: "mas_argentino", label: "Más argentino" },
+  { key: "mas_directo", label: "Más directo" },
+];
 
 export interface AiPack {
   key: string;

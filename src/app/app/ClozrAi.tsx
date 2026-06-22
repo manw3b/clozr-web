@@ -6,7 +6,7 @@ import { Drawer } from "@/components/Drawer";
 import { Button } from "@/components/Button";
 import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
-import { AI_PACKS, formatUsd } from "@/lib/types";
+import { AI_PACKS, AI_FREE_LIMIT, formatUsd } from "@/lib/types";
 import * as api from "@/lib/api";
 
 const EXAMPLES = [
@@ -160,7 +160,7 @@ export function ClozrAi() {
                   <div style={{ display: "flex", flexDirection: "column", gap: space[3], paddingTop: space[4] }}>
                     <div style={{ fontSize: text.sm, color: color.textMuted, lineHeight: 1.5 }}>
                       Preguntame sobre tus ventas, stock o clientes, o pedime que te redacte un mensaje. Tenés{" "}
-                      <strong style={{ color: color.text }}>1 mensaje gratis</strong> para probar.
+                      <strong style={{ color: color.text }}>{AI_FREE_LIMIT} acciones gratis</strong> para probar.
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
                       {EXAMPLES.map((ex) => (
@@ -265,7 +265,7 @@ function PlansPanel({
       <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
         <Lock size={15} style={{ color: color.textMuted }} />
         <span style={{ fontSize: text.sm, color: color.textMuted }}>
-          Usaste tu mensaje gratis. Elegí un pack para seguir.
+          Te quedaste sin acciones. Elegí un pack para seguir.
         </span>
       </div>
       {AI_PACKS.map((p) => (
