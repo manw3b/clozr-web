@@ -47,7 +47,7 @@ interface PopoverProps {
   open: boolean;
   onClose: () => void;
   /** Ref al elemento trigger — se usa para anclar y para detectar click-outside. */
-  triggerRef: React.RefObject<HTMLElement>;
+  triggerRef: React.RefObject<HTMLElement | null>;
   /** Ancho del popover en px. Default 320. */
   width?: number;
   /** Alto máximo en px. Default 440. */

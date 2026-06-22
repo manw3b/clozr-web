@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Search, Package, Pencil, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Search, Package, Pencil, Trash2, ChevronDown, LayoutGrid } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card, MetricCard } from "@/components/Card";
@@ -8,6 +8,7 @@ import { Input } from "@/components/Input";
 import { Tabs } from "@/components/Tabs";
 import { Modal, ModalField } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
+import { Popover } from "@/components/Popover";
 import {
   ContextMenu,
   ContextMenuItem,
@@ -101,13 +102,7 @@ export function Inventario() {
         subtitle={loading ? "Cargando…" : `${summary.total} producto${summary.total === 1 ? "" : "s"} en el catálogo`}
         actions={
           canWrite ? (
-            <Button
-              variant="primary"
-              iconLeft={<Plus size={16} />}
-              onClick={() => setPickerOpen(true)}
-            >
-              Agregar producto
-            </Button>
+            <AddProductMenu onApple={() => setPickerOpen(true)} onManual={() => setAdding(true)} />
           ) : undefined
         }
       />
@@ -152,7 +147,12 @@ export function Inventario() {
             }
             action={
               products.length === 0 && canWrite
-                ? { label: "Agregar producto", iconLeft: <Plus size={14} />, onClick: () => setPickerOpen(true) }
+                ? { label: "Catálogo Apple", iconLeft: <LayoutGrid size={14} />, onClick: () => setPickerOpen(true) }
+                : undefined
+            }
+            secondaryAction={
+              products.length === 0 && canWrite
+                ? { label: "Carga manual", onClick: () => setAdding(true) }
                 : undefined
             }
           />
@@ -272,6 +272,85 @@ export function Inventario() {
         </ContextMenu>
       )}
     </div>
+  );
+}
+
+/* ───────── Menú "Agregar producto": catálogo visual o carga manual ───────── */
+
+function AddProductMenu({ onApple, onManual }: { onApple: () => void; onManual: () => void }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        ref={triggerRef}
+        variant="primary"
+        iconLeft={<Plus size={16} />}
+        iconRight={<ChevronDown size={14} />}
+        onClick={() => setOpen((v) => !v)}
+      >
+        Agregar producto
+      </Button>
+      <Popover open={open} onClose={() => setOpen(false)} triggerRef={triggerRef} width={264} align="end">
+        <MenuRow
+          icon={<LayoutGrid size={16} />}
+          title="Catálogo Apple"
+          subtitle="Elegí modelo, color y capacidad"
+          onClick={() => {
+            setOpen(false);
+            onApple();
+          }}
+        />
+        <MenuRow
+          icon={<Pencil size={16} />}
+          title="Carga manual"
+          subtitle="Cargá cualquier producto a mano"
+          onClick={() => {
+            setOpen(false);
+            onManual();
+          }}
+        />
+      </Popover>
+    </>
+  );
+}
+
+function MenuRow({
+  icon,
+  title,
+  subtitle,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      role="menuitem"
+      onClick={onClick}
+      onMouseEnter={(e) => (e.currentTarget.style.background = color.surface2)}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: space[3],
+        width: "100%",
+        textAlign: "left",
+        padding: "8px 10px",
+        background: "transparent",
+        border: "none",
+        borderRadius: radius.sm,
+        cursor: "pointer",
+      }}
+    >
+      <span style={{ display: "inline-flex", color: color.textMuted, flexShrink: 0 }}>{icon}</span>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: text.sm, fontWeight: weight.medium, color: color.text }}>{title}</span>
+        <span style={{ display: "block", fontSize: text.xs, color: color.textDim }}>{subtitle}</span>
+      </span>
+    </button>
   );
 }
 
