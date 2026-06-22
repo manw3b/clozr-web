@@ -23,7 +23,7 @@ import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
-import { formatMoney, greetByHour, greetText, formatDateLong, toLocalISODate } from "@/lib/format";
+import { formatMoney, greetByHour, greetText, formatDateLong, toLocalISODate, displayName } from "@/lib/format";
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import * as api from "@/lib/api";
 import type { CashMovement, Customer, Followup, Sale, Task, User } from "@/lib/types";
@@ -92,7 +92,7 @@ export function MiDia({
   const nowMs = now.getTime();
   const greeting = greetText(greetByHour(now.getHours()));
   const todayKey = toLocalISODate(now);
-  const userName = user.name ?? user.email.split("@")[0];
+  const userName = displayName(user);
 
   const pendingTasks = useMemo(() => tasks.filter((t) => !t.completed), [tasks]);
   const todaySales = useMemo(

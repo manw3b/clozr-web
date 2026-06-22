@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as api from "@/lib/api";
+import { displayName } from "@/lib/format";
 import { color, radius, shadow } from "@/tokens";
 import {
   CLIENT_TYPE_LABELS,
@@ -232,7 +233,7 @@ export default function Crm({
         active={view}
         onNavigate={(id) => setView(id as View)}
         workspace={{ name: activeWs.name }}
-        user={{ name: user.name ?? user.email, email: user.email }}
+        user={{ name: displayName(user), email: user.email }}
         onLogout={onLogout}
         onSearchClick={() => setPaletteOpen(true)}
         onNewAction={handleNew}
@@ -349,7 +350,7 @@ export default function Crm({
         <SaleModal
           customers={customers}
           catalog={catalog}
-          sellerName={user.name ?? user.email}
+          sellerName={displayName(user)}
           preset={modal.preset}
           title={modal.fromItemId ? "Convertir en venta" : "Nueva venta"}
           onClose={() => setModal(null)}

@@ -53,6 +53,24 @@ export function greetText(g: keyof typeof greetTexts): string {
   return greetTexts[g];
 }
 
+/**
+ * Nombre presentable para saludos / "vendedor". Usa el nombre cargado; si no
+ * hay, arma uno lindo a partir del prefijo del email en vez de mostrarlo crudo:
+ *   "pyter.import@gmail.com" → "Pyter Import"  ·  "juan_perez@x.com" → "Juan Perez"
+ */
+export function displayName(user: { name?: string | null; email?: string | null }): string {
+  const name = user.name?.trim();
+  if (name && name !== user.email) return name;
+  const local = (user.email?.split('@')[0] ?? '').trim();
+  if (!local) return 'crack';
+  return local
+    .split(/[.\-_+\d]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+    .trim() || 'crack';
+}
+
 /** "Sábado, 2 de mayo" */
 export function formatDateLong(iso: string): string {
   const d = new Date(iso);
