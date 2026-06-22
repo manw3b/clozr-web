@@ -34,6 +34,7 @@ import { ImportClientsModal } from "./ImportClientsModal";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { openWhatsApp, openTel, openMail } from "@/lib/openExternal";
 import { AiSuggestions } from "./AiSuggestions";
+import { AiSummary } from "./AiSummary";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
@@ -617,6 +618,7 @@ function ClientDrawer({
                 <span style={{ fontSize: text.sm, color: color.textDim, fontStyle: "italic" }}>Sin notas.</span>
               )}
             </InfoSection>
+            <AiSummary customer={customer} sales={sales} stats={stats} />
             <AiSuggestions customer={customer} />
           </div>
         ) : sales.length === 0 ? (

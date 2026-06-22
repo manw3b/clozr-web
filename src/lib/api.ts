@@ -1490,11 +1490,11 @@ export async function aiChat(messages: AiChatMessage[]): Promise<{ reply: string
 }
 
 export interface AiActionParams {
-  action: "generate" | "rewrite";
+  action: "generate" | "rewrite" | "summary";
   kind?: string; // para generate
   tone?: string; // para rewrite
   text?: string; // para rewrite
-  context?: Record<string, unknown>; // datos del cliente (para generate)
+  context?: Record<string, unknown>; // datos del cliente (generate / summary)
 }
 
 /** Acción contextual (Pro AI): generar o reescribir. Devuelve el texto + saldo.

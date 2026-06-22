@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, Copy, RotateCcw, Lock } from "lucide-react";
+import { Copy, RotateCcw, Lock } from "lucide-react";
 import { Button } from "@/components/Button";
+import { ClozrAiIcon } from "@/components/ClozrAiIcon";
 import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { openWhatsApp } from "@/lib/openExternal";
@@ -79,21 +80,21 @@ export function AiSuggestions({ customer }: { customer: Customer }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[3] }}>
-        <Sparkles size={15} style={{ color: color.primary }} />
+        <ClozrAiIcon size={15} style={{ color: color.primary }} />
         <span style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
           Sugerencias inteligentes
         </span>
       </div>
 
       {noCredits ? (
-        <Paywall buying={buying} onBuy={buy} onBack={() => setNoCredits(false)} />
+        <AiPaywall buying={buying} onBuy={buy} onBack={() => setNoCredits(false)} />
       ) : (
         <>
           {/* Tarjetas de tipo de mensaje */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
             {AI_GEN_KINDS.map((k) => (
-              <Chip key={k.key} loading={busy === k.key} disabled={!!busy} onClick={() => generate(k.key)} primary>
-                ✨ {k.label}
+              <Chip key={k.key} loading={busy === k.key} disabled={!!busy} onClick={() => generate(k.key)} primary icon>
+                {k.label}
               </Chip>
             ))}
           </div>
@@ -164,18 +165,23 @@ function Chip({
   loading,
   disabled,
   primary,
+  icon,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   loading?: boolean;
   disabled?: boolean;
   primary?: boolean;
+  icon?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
         padding: "6px 12px",
         borderRadius: 999,
         fontSize: text.xs,
@@ -187,12 +193,17 @@ function Chip({
         opacity: disabled && !loading ? 0.5 : 1,
       }}
     >
-      {loading ? "…" : children}
+      {loading ? "…" : (
+        <>
+          {icon && <ClozrAiIcon size={12} />}
+          {children}
+        </>
+      )}
     </button>
   );
 }
 
-function Paywall({
+export function AiPaywall({
   buying,
   onBuy,
   onBack,

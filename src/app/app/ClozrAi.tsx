@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, Send, Lock, Check, X } from "lucide-react";
+import { Send, Lock, Check, X } from "lucide-react";
 import { Drawer } from "@/components/Drawer";
+import { ClozrAiIcon } from "@/components/ClozrAiIcon";
 import { Button } from "@/components/Button";
 import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
@@ -116,7 +117,7 @@ export function ClozrAi() {
             boxShadow: "var(--shadow-lg)",
           }}
         >
-          <Sparkles size={18} />
+          <ClozrAiIcon size={18} glow />
           IA de Clozr
         </button>
       )}
