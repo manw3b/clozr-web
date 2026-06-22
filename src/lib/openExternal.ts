@@ -25,3 +25,19 @@ export function openMail(email: string): void {
   if (!email) return;
   window.location.href = `mailto:${email}`;
 }
+
+/** Normaliza un usuario de Instagram: saca @, espacios y el prefijo de URL. */
+export function instagramHandle(value: string): string {
+  return value
+    .trim()
+    .replace(/^@/, "")
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+    .replace(/[/?#].*$/, "")
+    .trim();
+}
+
+export function openInstagram(value: string): void {
+  const h = instagramHandle(value);
+  if (!h) return;
+  window.open(`https://instagram.com/${h}`, "_blank", "noopener,noreferrer");
+}

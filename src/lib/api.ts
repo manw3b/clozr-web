@@ -195,6 +195,7 @@ interface CustomerRaw {
   name: string;
   phone?: string | null;
   email?: string | null;
+  instagram?: string | null;
   type?: string | null;
   notes?: string | null;
   created_at?: string | null;
@@ -205,6 +206,7 @@ function mapCustomer(r: CustomerRaw): Customer {
     name: r.name,
     phone: r.phone ?? undefined,
     email: r.email ?? undefined,
+    instagram: r.instagram ?? undefined,
     type: (r.type as Customer["type"]) ?? "final",
     notes: r.notes ?? undefined,
     createdAt: r.created_at ?? undefined,
@@ -221,6 +223,7 @@ export async function createCustomer(data: Partial<Customer>): Promise<string> {
       name: data.name,
       phone: data.phone ?? null,
       email: data.email ?? null,
+      instagram: data.instagram ?? null,
       type: data.type ?? "final",
       notes: data.notes ?? null,
     }),
@@ -234,6 +237,7 @@ export async function updateCustomer(id: string, data: Partial<Customer>): Promi
       ...(data.name !== undefined && { name: data.name }),
       ...(data.phone !== undefined && { phone: data.phone }),
       ...(data.email !== undefined && { email: data.email }),
+      ...(data.instagram !== undefined && { instagram: data.instagram }),
       ...(data.type !== undefined && { type: data.type }),
       ...(data.notes !== undefined && { notes: data.notes }),
     }),
@@ -650,6 +654,7 @@ interface TaskRaw {
   notes?: string | null;
   due_at?: string | null;
   completed?: number | null;
+  assigned_to?: string | null;
   template_id?: string | null;
   customer_id?: string | null;
   created_at?: string | null;
@@ -662,6 +667,7 @@ function mapTask(r: TaskRaw): Task {
     notes: r.notes ?? undefined,
     dueAt: r.due_at ?? undefined,
     completed: r.completed === 1,
+    assignedTo: r.assigned_to ?? undefined,
     templateId: r.template_id ?? undefined,
     customerId: r.customer_id ?? undefined,
     createdAt: r.created_at ?? undefined,
@@ -677,10 +683,16 @@ export async function createTask(input: {
   title: string;
   type: TaskType;
   dueAt?: string | null;
+  assignedTo?: string | null;
 }): Promise<string> {
   const r = await req<{ id: string }>(`/workspaces/${ws()}/tasks`, {
     method: "POST",
-    body: JSON.stringify({ title: input.title, type: input.type, due_at: input.dueAt ?? null }),
+    body: JSON.stringify({
+      title: input.title,
+      type: input.type,
+      due_at: input.dueAt ?? null,
+      assigned_to: input.assignedTo ?? null,
+    }),
   });
   return r.id;
 }

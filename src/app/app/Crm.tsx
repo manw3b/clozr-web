@@ -1303,22 +1303,21 @@ function SaleModal({
     for (const p of catalogPrices) m.set(`${p.catalogItemId}|${p.customerType}`, p.price);
     return m;
   }, [catalogPrices]);
-  // Tipo del cliente elegido (consumidor final / sin cliente → "final").
-  const custType: ClientType = useMemo(() => {
-    const c = customers.find((x) => x.id === customerId);
+  // Lista de precios a aplicar (tipo de cliente). Arranca según el cliente del
+  // preset (o "final" para venta de mostrador) y se puede cambiar a mano: así
+  // se cobra precio de revendedor/mayorista aun sin un cliente cargado.
+  const [priceType, setPriceType] = useState<ClientType>(() => {
+    const c = customers.find((x) => x.id === (preset?.customerId ?? ""));
     return c?.type ?? "final";
-  }, [customers, customerId]);
-  // Precio sugerido de un producto para el tipo actual; si no hay precio
+  });
+  // Precio sugerido de un producto para la lista actual; si no hay precio
   // especial para ese tipo, cae al precio base del catálogo.
-  function suggestedPrice(p: Product, type: ClientType = custType): number {
+  function suggestedPrice(p: Product, type: ClientType = priceType): number {
     return priceByKey.get(`${p.id}|${type}`) ?? p.price;
   }
-  // Cambiar de cliente re-sugiere el precio de las líneas linkeadas que fueron
-  // autocompletadas (priceAuto), respetando precios editados a mano o del preset.
-  function changeCustomer(newId: string) {
-    setCustomerId(newId);
-    const c = customers.find((x) => x.id === newId);
-    const newType: ClientType = c?.type ?? "final";
+  // Re-sugiere el precio de las líneas linkeadas autocompletadas (priceAuto)
+  // para un tipo dado, sin pisar precios editados a mano ni los del preset.
+  function resuggestFor(newType: ClientType) {
     setLines((prev) =>
       prev.map((l) => {
         if (!l.catalogItemId || !l.priceAuto) return l;
@@ -1327,6 +1326,20 @@ function SaleModal({
         return { ...l, unitPrice: String(suggestedPrice(p, newType)) };
       }),
     );
+  }
+  // Cambiar de cliente re-sugiere el precio de las líneas linkeadas que fueron
+  // autocompletadas (priceAuto), respetando precios editados a mano o del preset.
+  function changeCustomer(newId: string) {
+    setCustomerId(newId);
+    const c = customers.find((x) => x.id === newId);
+    const newType: ClientType = c?.type ?? "final";
+    setPriceType(newType);
+    resuggestFor(newType);
+  }
+  // Cambiar la lista de precios a mano (sin tocar el cliente).
+  function changePriceType(newType: ClientType) {
+    setPriceType(newType);
+    resuggestFor(newType);
   }
 
   function setLine(i: number, patch: Partial<SaleLine>) {
@@ -1505,6 +1518,24 @@ function SaleModal({
             presetName={preset?.customerName ?? undefined}
             onCreateNew={(name) => setNewClientName(name)}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className={labelCls}>Lista de precios</span>
+          <select
+            value={priceType}
+            onChange={(e) => changePriceType(e.target.value as ClientType)}
+            className={fieldCls}
+          >
+            {CLIENT_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {CLIENT_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-text-dim">
+            Qué precio se sugiere (mostrador, revendedor…). Se ajusta solo al elegir un cliente; podés cambiarlo.
+          </span>
         </div>
 
         {newClientName !== null && (
