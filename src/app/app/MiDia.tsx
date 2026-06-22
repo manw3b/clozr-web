@@ -27,6 +27,7 @@ import { formatMoney, greetByHour, greetText, formatDateLong, toLocalISODate, di
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import * as api from "@/lib/api";
 import type { CashMovement, Customer, Followup, Sale, Task, User } from "@/lib/types";
+import { ClozrToday } from "./ClozrToday";
 
 /**
  * Vista Mi Día (v2) — home/agregador. Hero con saludo + objetivo del día
@@ -221,6 +222,19 @@ export function MiDia({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[5] }}>
+      <ClozrToday
+        stats={{
+          followups: pendingFollowups.length,
+          collections: collections.length,
+          collectionsAmount: collections.reduce((a, s) => a + s.balance, 0),
+          inactive: inactiveClients.length,
+          tasks: pendingTasks.length,
+          todaySales: todaySales.length,
+        }}
+        candidates={inactiveClients.map((x) => x.customer.name).slice(0, 4)}
+        onNavigate={onNavigate}
+      />
+
       {/* HERO */}
       <div
         className="cz-hero"

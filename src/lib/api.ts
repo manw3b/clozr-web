@@ -1490,7 +1490,7 @@ export async function aiChat(messages: AiChatMessage[]): Promise<{ reply: string
 }
 
 export interface AiActionParams {
-  action: "generate" | "rewrite" | "summary";
+  action: "generate" | "rewrite" | "summary" | "daybrief";
   kind?: string; // para generate
   tone?: string; // para rewrite
   text?: string; // para rewrite
