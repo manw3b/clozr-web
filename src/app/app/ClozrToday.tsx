@@ -5,8 +5,10 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { ClozrAiIcon } from "@/components/ClozrAiIcon";
 import { useUIStore } from "@/store/uiStore";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
+import { hasAiPlan } from "@/lib/types";
 import * as api from "@/lib/api";
 import { AiPaywall } from "./AiSuggestions";
 
@@ -34,6 +36,7 @@ export function ClozrToday({
   onNavigate: (view: string) => void;
 }) {
   const { showToast } = useUIStore();
+  const ws = useWorkspaceStore((s) => s.activeWorkspace);
   const [reco, setReco] = useState("");
   const [busy, setBusy] = useState(false);
   const [noCredits, setNoCredits] = useState(false);
@@ -103,8 +106,8 @@ export function ClozrToday({
         </span>
       </div>
 
-      {/* Recomendación del día (IA) */}
-      {noCredits ? (
+      {/* Recomendación del día (IA) — solo con plan pago activo */}
+      {hasAiPlan(ws) && (noCredits ? (
         <div style={{ marginBottom: space[3] }}>
           <AiPaywall buying={buying} onBuy={buy} onBack={() => setNoCredits(false)} />
         </div>
@@ -130,7 +133,7 @@ export function ClozrToday({
             Recomendación del día
           </Button>
         </div>
-      )}
+      ))}
 
       {/* Insights accionables (calculados, sin costo) */}
       {insights.length > 0 ? (
