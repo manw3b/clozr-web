@@ -35,6 +35,7 @@ import type { NewAction } from "@/layout/Topbar";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { usePermissions } from "@/store/usePermissions";
 import { useBlueRate } from "@/store/dollarStore";
+import { printComprobante } from "@/lib/comprobante";
 import { can as canFor } from "@/lib/permissions";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmHost } from "@/components/ConfirmHost";
@@ -1832,6 +1833,7 @@ function SaleDetailModal({
   onChanged: (msg: string) => void;
   onDeleted: (msg: string) => void;
 }) {
+  const ws = useWorkspaceStore((s) => s.activeWorkspace);
   const [sale, setSale] = useState<SaleDetail | null>(null);
   const [loadErr, setLoadErr] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1987,7 +1989,18 @@ function SaleDetailModal({
               Eliminar
             </button>
             <div className="flex-1" />
-            <button onClick={onClose} className="rounded-lg bg-surface-2 px-3.5 py-2 text-sm font-semibold hover:bg-border-strong">
+            <button
+              onClick={() =>
+                printComprobante(
+                  { name: ws?.name ?? "Mi negocio", logoUrl: ws?.logoKey ? api.assetUrl(ws.logoKey) : null },
+                  sale,
+                )
+              }
+              className="rounded-lg bg-surface-2 px-3.5 py-2 text-sm font-semibold hover:bg-border-strong"
+            >
+              Comprobante
+            </button>
+            <button onClick={onClose} className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-hover">
               Cerrar
             </button>
           </div>
