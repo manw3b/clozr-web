@@ -22,6 +22,7 @@ import { Drawer } from "@/components/Drawer";
 import { Modal, ModalField } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { InstagramIcon } from "@/components/icons/SocialIcons";
 import {
   ContextMenu,
   ContextMenuItem,
@@ -32,7 +33,7 @@ import {
 import { DataTable, applySort, type ColumnDef } from "@/components/data-table";
 import { ImportClientsModal } from "./ImportClientsModal";
 import { confirmAsync } from "@/lib/confirmAsync";
-import { openWhatsApp, openTel, openMail } from "@/lib/openExternal";
+import { openWhatsApp, openTel, openMail, openInstagram, instagramHandle } from "@/lib/openExternal";
 import { AiSuggestions } from "./AiSuggestions";
 import { AiSummary } from "./AiSummary";
 import { useUIStore } from "@/store/uiStore";
@@ -248,13 +249,18 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
       {
         id: "actions",
         header: "",
-        width: "140px",
+        width: "168px",
         align: "right",
         cell: (c) => (
           <div style={{ display: "inline-flex", alignItems: "center", gap: 2 }} onClick={(e) => e.stopPropagation()}>
             <RowIconBtn ariaLabel="WhatsApp" disabled={!c.phone} onClick={() => c.phone && openWhatsApp(c.phone)}>
               <WhatsAppIcon size={13} color="var(--success)" />
             </RowIconBtn>
+            {c.instagram && (
+              <RowIconBtn ariaLabel="Instagram" onClick={() => c.instagram && openInstagram(c.instagram)}>
+                <InstagramIcon size={13} color="#E1306C" />
+              </RowIconBtn>
+            )}
             <RowIconBtn ariaLabel="Llamar" disabled={!c.phone} onClick={() => c.phone && openTel(c.phone)}>
               <Phone size={13} strokeWidth={2.2} color="var(--text-muted)" />
             </RowIconBtn>
@@ -430,6 +436,11 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
               Email
             </ContextMenuItem>
           )}
+          {ctxCustomer.instagram && (
+            <ContextMenuItem icon={<InstagramIcon size={13} color="#E1306C" />} onClick={() => { if (ctxCustomer.instagram) openInstagram(ctxCustomer.instagram); ctxMenu.close(); }}>
+              Instagram
+            </ContextMenuItem>
+          )}
           <ContextMenuItem
             icon={<Copy size={14} />}
             onClick={() => {
@@ -575,6 +586,9 @@ function ClientDrawer({
           <Button variant="secondary" size="md" iconLeft={<WhatsAppIcon size={15} color="var(--success)" />} onClick={() => customer.phone && openWhatsApp(customer.phone)} fullWidth>
             WhatsApp
           </Button>
+          {customer.instagram && (
+            <Button variant="secondary" size="md" iconLeft={<InstagramIcon size={15} color="#E1306C" />} onClick={() => customer.instagram && openInstagram(customer.instagram)} aria-label="Instagram" />
+          )}
           {canSell && (
             <Button variant="primary" size="md" iconLeft={<Plus size={15} />} onClick={onNewSale} fullWidth>
               Nueva venta
@@ -608,6 +622,7 @@ function ClientDrawer({
             <InfoSection title="Datos de contacto">
               <InfoRow label="Teléfono" value={customer.phone || "—"} />
               <InfoRow label="Email" value={customer.email || "—"} />
+              {customer.instagram && <InfoRow label="Instagram" value={`@${instagramHandle(customer.instagram)}`} />}
               <InfoRow label="Tipo" value={CLIENT_TYPE_LABELS[customer.type]} />
               {customer.createdAt && <InfoRow label="Cliente desde" value={formatDateLong(customer.createdAt)} />}
             </InfoSection>
@@ -727,6 +742,7 @@ function ClientFormModal({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [type, setType] = useState<ClientType>("final");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -736,12 +752,13 @@ function ClientFormModal({
     setName(customer?.name ?? "");
     setPhone(customer?.phone ?? "");
     setEmail(customer?.email ?? "");
+    setInstagram(customer?.instagram ?? "");
     setType(customer?.type ?? "final");
     setNotes(customer?.notes ?? "");
   }, [open, customer]);
 
   const canSubmit = name.trim().length >= 2;
-  const isDirty = () => name.trim().length > 0 || phone.trim().length > 0 || email.trim().length > 0 || notes.trim().length > 0 || type !== "final";
+  const isDirty = () => name.trim().length > 0 || phone.trim().length > 0 || email.trim().length > 0 || instagram.trim().length > 0 || notes.trim().length > 0 || type !== "final";
 
   async function submit() {
     if (!canSubmit) return;
@@ -750,6 +767,7 @@ function ClientFormModal({
       name: name.trim(),
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
+      instagram: instagram.trim() || undefined,
       type,
       notes: notes.trim() || undefined,
     };
@@ -794,6 +812,9 @@ function ClientFormModal({
       </ModalField>
       <ModalField label="Email">
         <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@email.com" />
+      </ModalField>
+      <ModalField label="Instagram">
+        <Input value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="@usuario" />
       </ModalField>
       <ModalField label="Tipo" required>
         <Select value={type} onChange={(e) => setType(e.target.value as ClientType)}>

@@ -329,6 +329,8 @@ export interface Customer {
   name: string;
   phone?: string;
   email?: string;
+  /** Usuario de Instagram (con o sin @, o URL del perfil). */
+  instagram?: string;
   type: ClientType;
   notes?: string;
   createdAt?: string;
