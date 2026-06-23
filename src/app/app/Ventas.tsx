@@ -30,7 +30,7 @@ import { exportToCsv, timestamp } from "@/lib/csv";
 import { buildComprobanteText, printComprobante } from "@/lib/comprobante";
 import { shareOnWhatsApp } from "@/lib/openExternal";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
-import { TurnoDialog } from "./TurnoDialog";
+import { TurnoFormDialog } from "./TurnoFormDialog";
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_MANUAL, saleCode } from "@/lib/types";
 import type { Currency, Customer, Sale, SaleDetail } from "@/lib/types";
 
@@ -654,9 +654,10 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
       />
 
       {turnoOpen && detail && (
-        <TurnoDialog
+        <TurnoFormDialog
+          customers={[]}
           sale={detail}
-          customerPhone={customerPhone}
+          salePhone={customerPhone}
           onClose={() => setTurnoOpen(false)}
           onSaved={() => { reload(); onChanged(); }}
         />
