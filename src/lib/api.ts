@@ -1110,6 +1110,14 @@ export async function setSettings(patch: Record<string, string>): Promise<void> 
   await req(`/workspaces/${ws()}/settings`, { method: "PUT", body: JSON.stringify({ settings: patch }) });
 }
 
+/* ---------- permisos por rol (Fase ⑤) ---------- */
+export async function getRolePermissions(): Promise<{ roles: Record<string, string[]>; all: string[] }> {
+  return req(`/workspaces/${ws()}/role-permissions`);
+}
+export async function setRolePermissions(roles: Record<string, string[]>): Promise<void> {
+  await req(`/workspaces/${ws()}/role-permissions`, { method: "PUT", body: JSON.stringify({ roles }) });
+}
+
 /* ---------- followups (seguimientos) + last contact (Mi Día) ---------- */
 interface FollowupRaw {
   id: string;

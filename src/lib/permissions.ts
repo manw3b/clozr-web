@@ -86,3 +86,40 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   vendedor: "Vende y gestiona sus clientes; no configura el espacio.",
   viewer: "Ve la información pero no puede editar.",
 };
+
+/** Todas las claves de permiso — columnas de la matriz editable (Fase ⑤). */
+export const ALL_PERMISSIONS: Permission[] = [
+  "customers.write",
+  "sales.write",
+  "pipeline.write",
+  "cash.write",
+  "inventory.write",
+  "tasks.write",
+  "reports.view",
+  "settings.manage",
+  "team.manage",
+  "billing.manage",
+  "workspace.delete",
+];
+
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  "customers.write": "Clientes",
+  "sales.write": "Ventas",
+  "pipeline.write": "Pipeline",
+  "cash.write": "Caja",
+  "inventory.write": "Inventario",
+  "tasks.write": "Tareas",
+  "reports.view": "Ver reportes",
+  "settings.manage": "Configuración",
+  "team.manage": "Gestionar equipo",
+  "billing.manage": "Facturación",
+  "workspace.delete": "Eliminar espacio",
+};
+
+/** ¿El permiso es sensible? (mover estos a roles bajos amplía mucho el acceso). */
+export const SENSITIVE_PERMISSIONS = new Set<Permission>([
+  "settings.manage",
+  "team.manage",
+  "billing.manage",
+  "workspace.delete",
+]);
