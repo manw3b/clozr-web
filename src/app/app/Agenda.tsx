@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, type CSSProperties } from "react";
-import { CalendarDays, MapPin, Clock, GitBranch, Plus, CheckCircle2, XCircle, RotateCcw, Wrench } from "lucide-react";
+import { CalendarDays, MapPin, Clock, GitBranch, Plus, CheckCircle2, XCircle, RotateCcw, Wrench, ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
@@ -24,6 +24,7 @@ import type { Sale, PipelineItem, Customer, Appointment } from "@/lib/types";
  */
 
 type Filter = "upcoming" | "past";
+type ViewMode = "list" | "day";
 type Kind = "turno" | "visita";
 
 interface Entry {
@@ -65,6 +66,8 @@ export function Agenda({
   const [filter, setFilter] = useState<Filter>("upcoming");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [form, setForm] = useState<null | { initial?: Appointment }>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [dayKey, setDayKey] = useState<string>(() => toLocalISODate(new Date()));
 
   const todayKey = toLocalISODate(new Date());
   const tomorrowKey = toLocalISODate(new Date(Date.now() + 86_400_000));
@@ -167,20 +170,36 @@ export function Agenda({
         actions={canWrite ? <Button variant="primary" size="md" iconLeft={<Plus size={16} />} onClick={() => setForm({})}>Nuevo turno</Button> : undefined}
       />
 
-      <div style={{ marginBottom: space[4] }}>
+      <div style={{ marginBottom: space[4], display: "flex", gap: space[2], flexWrap: "wrap", alignItems: "center" }}>
         <Tabs
           variant="pills"
           size="sm"
-          value={filter}
-          onChange={(v) => setFilter(v as Filter)}
+          value={viewMode}
+          onChange={(v) => setViewMode(v as ViewMode)}
           items={[
-            { value: "upcoming", label: "Próximos", count: upcomingCount },
-            { value: "past", label: "Pasados", count: pastCount },
+            { value: "list", label: "Lista" },
+            { value: "day", label: "Día" },
           ]}
         />
+        {viewMode === "list" && (
+          <Tabs
+            variant="pills"
+            size="sm"
+            value={filter}
+            onChange={(v) => setFilter(v as Filter)}
+            items={[
+              { value: "upcoming", label: "Próximos", count: upcomingCount },
+              { value: "past", label: "Pasados", count: pastCount },
+            ]}
+          />
+        )}
       </div>
 
-      {groups.length === 0 ? (
+      {viewMode === "day" && (
+        <AgendaDay all={all} dayKey={dayKey} setDayKey={setDayKey} todayKey={todayKey} tomorrowKey={tomorrowKey} />
+      )}
+
+      {viewMode === "list" && (groups.length === 0 ? (
         <EmptyState
           icon={<CalendarDays size={28} />}
           title={filter === "upcoming" ? "No tenés turnos próximos" : "No hay turnos pasados"}
@@ -261,7 +280,7 @@ export function Agenda({
             </div>
           ))}
         </div>
-      )}
+      ))}
 
       {form && (
         <TurnoFormDialog
@@ -282,6 +301,108 @@ export function Agenda({
           onClose={() => setRepairForm(null)}
           onSaved={() => {}}
         />
+      )}
+    </div>
+  );
+}
+
+/* ───────── Vista Día: timeline por hora ───────── */
+
+const kindColor = (k: Kind) => (k === "turno" ? color.primary : color.info);
+
+function timelineBlock(e: Entry) {
+  return (
+    <div
+      key={e.key}
+      onClick={e.onClick}
+      style={{
+        cursor: e.onClick ? "pointer" : "default",
+        background: color.surface,
+        border: `1px solid ${color.border}`,
+        borderLeft: `3px solid ${kindColor(e.kind)}`,
+        borderRadius: radius.md,
+        padding: `${space[2]} ${space[3]}`,
+        opacity: e.status === "cancelled" ? 0.55 : 1,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: space[2], minWidth: 0 }}>
+        {hasTime(e.at) && (
+          <span style={{ fontSize: text.xs, fontWeight: weight.bold, color: color.text, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{formatTime(e.at)}</span>
+        )}
+        <span style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+          {e.customerName}
+        </span>
+        {e.kind === "turno" ? <Badge tone="primary" variant="soft" size="sm">Turno</Badge> : <Badge tone="info" variant="soft" size="sm">Visita</Badge>}
+        {e.status === "done" && <Badge tone="success" variant="soft" size="sm">Hecho</Badge>}
+      </div>
+      {e.meta && (
+        <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.meta}</div>
+      )}
+    </div>
+  );
+}
+
+function AgendaDay({ all, dayKey, setDayKey, todayKey, tomorrowKey }: {
+  all: Entry[];
+  dayKey: string;
+  setDayKey: (k: string) => void;
+  todayKey: string;
+  tomorrowKey: string;
+}) {
+  const dayEntries = useMemo(
+    () => all.filter((e) => e.at.slice(0, 10) === dayKey).sort((a, b) => a.at.localeCompare(b.at)),
+    [all, dayKey],
+  );
+  const { timed, untimed, hours } = useMemo(() => {
+    const timed = dayEntries.filter((e) => hasTime(e.at));
+    const untimed = dayEntries.filter((e) => !hasTime(e.at));
+    const hs = timed.map((e) => Number(e.at.slice(11, 13)));
+    const start = hs.length ? Math.min(8, ...hs) : 8;
+    const end = hs.length ? Math.max(20, ...hs) : 20;
+    const hours = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    return { timed, untimed, hours };
+  }, [dayEntries]);
+
+  const shiftDay = (delta: number) => {
+    const d = new Date(dayKey + "T12:00");
+    d.setDate(d.getDate() + delta);
+    setDayKey(toLocalISODate(d));
+  };
+  const label =
+    (dayKey === todayKey ? "Hoy · " : dayKey === tomorrowKey ? "Mañana · " : "") + cap(formatDateLong(dayKey + "T12:00"));
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[4] }}>
+        <button onClick={() => shiftDay(-1)} aria-label="Día anterior" className="btn-icon muted" style={qBtn}><ChevronLeft size={16} /></button>
+        <div style={{ flex: 1, textAlign: "center", fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>{label}</div>
+        <button onClick={() => shiftDay(1)} aria-label="Día siguiente" className="btn-icon muted" style={qBtn}><ChevronRight size={16} /></button>
+        {dayKey !== todayKey && <Button variant="ghost" size="sm" onClick={() => setDayKey(todayKey)}>Hoy</Button>}
+      </div>
+
+      {untimed.length > 0 && (
+        <div style={{ marginBottom: space[3] }}>
+          <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: space[2] }}>Sin horario</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>{untimed.map(timelineBlock)}</div>
+        </div>
+      )}
+
+      <div>
+        {hours.map((h) => {
+          const hes = timed.filter((e) => Number(e.at.slice(11, 13)) === h);
+          return (
+            <div key={h} style={{ display: "flex", gap: space[3], borderTop: `1px solid ${color.border}`, padding: `${space[2]} 0`, minHeight: 52 }}>
+              <div style={{ width: 44, flexShrink: 0, fontSize: text.xs, color: color.textMuted, fontVariantNumeric: "tabular-nums", paddingTop: 2 }}>
+                {String(h).padStart(2, "0")}:00
+              </div>
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: space[2] }}>{hes.map(timelineBlock)}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {dayEntries.length === 0 && (
+        <div style={{ textAlign: "center", fontSize: text.sm, color: color.textDim, padding: space[5] }}>Sin turnos ni visitas este día.</div>
       )}
     </div>
   );
