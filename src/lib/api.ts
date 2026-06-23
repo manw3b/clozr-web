@@ -754,7 +754,7 @@ export async function listMembers(): Promise<Member[]> {
   return (data.members ?? []).map(mapMember);
 }
 
-export async function inviteMember(email: string, role: "admin" | "vendedor" | "viewer"): Promise<void> {
+export async function inviteMember(email: string, role: string): Promise<void> {
   await req(`/workspaces/${ws()}/invite`, { method: "POST", body: JSON.stringify({ email, role }) });
 }
 
@@ -1116,6 +1116,14 @@ export async function getRolePermissions(): Promise<{ roles: Record<string, stri
 }
 export async function setRolePermissions(roles: Record<string, string[]>): Promise<void> {
   await req(`/workspaces/${ws()}/role-permissions`, { method: "PUT", body: JSON.stringify({ roles }) });
+}
+
+/* ---------- roles personalizados (Fase ⑤.B) ---------- */
+export async function getCustomRoles(): Promise<{ roles: Array<{ id: string; name: string; permissions: string[] }>; all: string[] }> {
+  return req(`/workspaces/${ws()}/custom-roles`);
+}
+export async function setCustomRoles(roles: Array<{ id: string; name: string; permissions: string[] }>): Promise<void> {
+  await req(`/workspaces/${ws()}/custom-roles`, { method: "PUT", body: JSON.stringify({ roles }) });
 }
 
 /* ---------- followups (seguimientos) + last contact (Mi Día) ---------- */

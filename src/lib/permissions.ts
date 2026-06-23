@@ -123,3 +123,10 @@ export const SENSITIVE_PERMISSIONS = new Set<Permission>([
   "billing.manage",
   "workspace.delete",
 ]);
+
+/** Rol personalizado del negocio (Fase ⑤.B). */
+export interface CustomRole {
+  id: string;
+  name: string;
+  permissions: Permission[];
+}
