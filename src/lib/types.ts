@@ -272,6 +272,8 @@ export interface Member {
   userName?: string | null;
   invitedAt?: string | null;
   acceptedAt?: string | null;
+  /** Origen del miembro: 'owner' | 'invite' | 'code' (null = legado). */
+  source?: string | null;
 }
 
 export interface Product {
