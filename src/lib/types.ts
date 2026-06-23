@@ -567,12 +567,38 @@ export interface Sale {
   notes?: string;
   saleDate?: string;
   createdAt?: string;
+  /** Nº de orden diario por vendedor (server-generado). */
+  orderSeq?: number | null;
+  /** Día local AR (YYYY-MM-DD) al que pertenece el Nº de orden. */
+  orderDay?: string | null;
 }
 
 /** Venta con items + pagos (GET de una venta). */
 export interface SaleDetail extends Sale {
   items: SaleItem[];
   payments: SalePayment[];
+}
+
+/**
+ * Código de orden legible de una venta: inicial del vendedor + DDMM + Nº de
+ * orden del día (2 dígitos). Ej: Gonzalo, 23/06, 1ª venta → "G230601".
+ * Devuelve null si todavía no hay Nº de orden (ventas viejas) o falta el vendedor.
+ */
+export function saleCode(s: Pick<Sale, "sellerName" | "orderSeq" | "orderDay" | "saleDate" | "createdAt">): string | null {
+  if (s.orderSeq == null) return null;
+  const initial = (s.sellerName ?? "").trim().charAt(0).toUpperCase();
+  if (!initial) return null;
+  let ddmm = "";
+  if (s.orderDay && /^\d{4}-\d{2}-\d{2}$/.test(s.orderDay)) {
+    ddmm = s.orderDay.slice(8, 10) + s.orderDay.slice(5, 7); // YYYY-MM-DD → DDMM
+  } else {
+    const d = new Date((s.saleDate ?? s.createdAt) ?? "");
+    if (!isNaN(d.getTime())) {
+      ddmm = String(d.getDate()).padStart(2, "0") + String(d.getMonth() + 1).padStart(2, "0");
+    }
+  }
+  if (!ddmm) return null;
+  return `${initial}${ddmm}${String(s.orderSeq).padStart(2, "0")}`;
 }
 
 /** Precio de un producto para un tipo de cliente (precios por tipo). */
