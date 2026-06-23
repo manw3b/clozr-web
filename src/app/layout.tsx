@@ -7,6 +7,7 @@ import "./globals.css";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#E11D48",
 };
 
 const inter = Inter({
