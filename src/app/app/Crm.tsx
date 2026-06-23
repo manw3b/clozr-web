@@ -306,7 +306,7 @@ export default function Crm({
         ) : view === "agenda" ? (
           <Agenda key={activeWs.id} sales={sales} items={items} customers={customers} onOpenSale={openSaleFromAgenda} onOpenPipeline={() => setView("pipeline")} />
         ) : view === "repairs" ? (
-          <Repairs key={activeWs.id} customers={customers} />
+          <Repairs key={activeWs.id} customers={customers} onOpenSale={openSaleFromAgenda} />
         ) : view === "tasks" ? (
           <Tareas key={activeWs.id} />
         ) : view === "deudas" ? (

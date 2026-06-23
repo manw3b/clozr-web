@@ -39,7 +39,7 @@ const STATUS_COLOR: Record<RepairStatus, string> = {
 const quoteTotal = (r: Repair | { partsCost?: number | null; laborCost?: number | null }) =>
   (r.partsCost ?? 0) + (r.laborCost ?? 0);
 
-export function Repairs({ customers }: { customers: Customer[] }) {
+export function Repairs({ customers, onOpenSale }: { customers: Customer[]; onOpenSale?: (id: string) => void }) {
   const { can } = usePermissions();
   const { showToast } = useUIStore();
   const canWrite = can("repairs.write");
@@ -155,7 +155,7 @@ export function Repairs({ customers }: { customers: Customer[] }) {
       )}
 
       {dialog && (
-        <RepairDialog customers={customers} initial={dialog.initial} onClose={() => setDialog(null)} onSaved={load} />
+        <RepairDialog customers={customers} initial={dialog.initial} onOpenSale={onOpenSale} onClose={() => setDialog(null)} onSaved={load} />
       )}
     </div>
   );
@@ -163,16 +163,22 @@ export function Repairs({ customers }: { customers: Customer[] }) {
 
 /* ───────── RepairDialog ───────── */
 
-function RepairDialog({
+export function RepairDialog({
   customers,
   initial,
   presetCustomer,
+  presetProblem,
+  presetAppointmentId,
+  onOpenSale,
   onClose,
   onSaved,
 }: {
   customers: Customer[];
   initial?: Repair | null;
   presetCustomer?: { id: string; name: string; phone?: string } | null;
+  presetProblem?: string;
+  presetAppointmentId?: string;
+  onOpenSale?: (id: string) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -184,7 +190,7 @@ function RepairDialog({
   const [deviceImei, setDeviceImei] = useState(initial?.deviceImei ?? "");
   const [devicePasscode, setDevicePasscode] = useState(initial?.devicePasscode ?? "");
   const [accessories, setAccessories] = useState(initial?.accessories ?? "");
-  const [problem, setProblem] = useState(initial?.problem ?? "");
+  const [problem, setProblem] = useState(initial?.problem ?? presetProblem ?? "");
   const [diagnosis, setDiagnosis] = useState(initial?.diagnosis ?? "");
   const [status, setStatus] = useState<RepairStatus>(initial?.status ?? "received");
   const [partsCost, setPartsCost] = useState(initial?.partsCost != null ? String(initial.partsCost) : "");
@@ -207,35 +213,67 @@ function RepairDialog({
   const total = (num(partsCost) ?? 0) + (num(laborCost) ?? 0);
   const valid = customerName.trim() !== "";
 
+  function buildInput() {
+    return {
+      customerId: customerId || null,
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim() || null,
+      deviceModel: deviceModel.trim() || null,
+      deviceImei: deviceImei.trim() || null,
+      devicePasscode: devicePasscode.trim() || null,
+      accessories: accessories.trim() || null,
+      problem: problem.trim() || null,
+      diagnosis: diagnosis.trim() || null,
+      status,
+      partsCost: num(partsCost),
+      laborCost: num(laborCost),
+      technician: technician.trim() || null,
+      warrantyMonths: num(warrantyMonths),
+      estimatedAt: estimatedAt || null,
+      notes: notes.trim() || null,
+      appointmentId: initial?.appointmentId ?? presetAppointmentId ?? null,
+    };
+  }
+
   async function save() {
     if (!valid) { showToast("Falta el cliente", "error"); return; }
     setSaving(true);
     try {
-      const input = {
-        customerId: customerId || null,
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim() || null,
-        deviceModel: deviceModel.trim() || null,
-        deviceImei: deviceImei.trim() || null,
-        devicePasscode: devicePasscode.trim() || null,
-        accessories: accessories.trim() || null,
-        problem: problem.trim() || null,
-        diagnosis: diagnosis.trim() || null,
-        status,
-        partsCost: num(partsCost),
-        laborCost: num(laborCost),
-        technician: technician.trim() || null,
-        warrantyMonths: num(warrantyMonths),
-        estimatedAt: estimatedAt || null,
-        notes: notes.trim() || null,
-      };
-      if (initial) await api.updateRepair(initial.id, input);
-      else await api.createRepair(input);
+      if (initial) await api.updateRepair(initial.id, buildInput());
+      else await api.createRepair(buildInput());
       onSaved();
       showToast("Reparación guardada", "success");
       onClose();
     } catch {
       showToast("No se pudo guardar", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Cobrar: crea una venta (impaga) por el presupuesto, la vincula y marca
+  // entregada. El pago se registra en la venta (reusa todo el flujo de ventas).
+  async function cobrar() {
+    if (!initial) return;
+    if (total <= 0) { showToast("Cargá el presupuesto antes de cobrar", "error"); return; }
+    setSaving(true);
+    try {
+      await api.updateRepair(initial.id, buildInput());
+      const label = `Reparación${deviceModel.trim() ? " " + deviceModel.trim() : ""}`;
+      const saleId = await api.createSale({
+        customerId: customerId || undefined,
+        customerName: customerName.trim() || "Consumidor final",
+        notes: [label, diagnosis.trim()].filter(Boolean).join(" — "),
+        items: [{ description: label, quantity: 1, unitPrice: total, unitCost: num(partsCost) }],
+        payments: [],
+      });
+      await api.updateRepair(initial.id, { saleId, status: "delivered", deliveredAt: new Date().toISOString().slice(0, 16) });
+      onSaved();
+      showToast("Venta creada — cobrá el pago en la venta", "success");
+      onClose();
+      onOpenSale?.(saleId);
+    } catch {
+      showToast("No se pudo cobrar", "error");
     } finally {
       setSaving(false);
     }
@@ -255,6 +293,11 @@ function RepairDialog({
           </span>
           <div style={{ display: "flex", gap: space[2] }}>
             <Button variant="ghost" size="md" onClick={onClose}>Cerrar</Button>
+            {initial?.saleId ? (
+              <Button variant="secondary" size="md" onClick={() => { onClose(); onOpenSale?.(initial.saleId!); }}>Ver venta</Button>
+            ) : initial ? (
+              <Button variant="secondary" size="md" onClick={cobrar} loading={saving} disabled={total <= 0}>Cobrar y entregar</Button>
+            ) : null}
             <Button variant="primary" size="md" onClick={save} loading={saving} disabled={!valid}>Guardar</Button>
           </div>
         </div>
