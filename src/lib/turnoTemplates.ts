@@ -121,6 +121,31 @@ export function applyTurnoTemplate(body: string, d: TurnoData): string {
     .replace(/\{negocio\}/g, fb(d.negocio, ""));
 }
 
+/**
+ * Variables del turno cuando NO viene de una venta (Fase ④, turno standalone).
+ * El "asunto" (tipo + notas) va en {equipo}/{pedido} para dar contexto; los
+ * campos de venta (código/usd/ars) quedan vacíos.
+ */
+export function buildTurnoDataFromAppointment(
+  appt: { customerName?: string | null; appointmentAt?: string | null; origin?: string | null; type?: string | null; notes?: string | null },
+  workspace: { name?: string; address?: string | null } | null,
+): TurnoData {
+  const asunto = [appt.type, appt.notes].map((s) => (s ?? "").trim()).filter(Boolean).join(" — ");
+  return {
+    nombre: appt.customerName ?? "",
+    equipo: asunto,
+    pedido: asunto,
+    dia: formatTurnoDay(appt.appointmentAt),
+    hora: formatTurnoTime(appt.appointmentAt),
+    vieneDe: appt.origin ?? "",
+    direccion: workspace?.address ?? "",
+    codigo: "",
+    usd: "",
+    ars: "",
+    negocio: workspace?.name ?? "",
+  };
+}
+
 /** Datos de muestra para previsualizar plantillas en el editor (Ajustes). */
 export const TURNO_SAMPLE: TurnoData = {
   nombre: "Juan Manuel",

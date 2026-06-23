@@ -302,7 +302,7 @@ export default function Crm({
             onConsumeInitial={() => setPendingSaleId(null)}
           />
         ) : view === "agenda" ? (
-          <Agenda key={activeWs.id} sales={sales} items={items} onOpenSale={openSaleFromAgenda} onOpenPipeline={() => setView("pipeline")} />
+          <Agenda key={activeWs.id} sales={sales} items={items} customers={customers} onOpenSale={openSaleFromAgenda} onOpenPipeline={() => setView("pipeline")} />
         ) : view === "tasks" ? (
           <Tareas key={activeWs.id} />
         ) : view === "deudas" ? (

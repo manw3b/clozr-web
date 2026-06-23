@@ -59,6 +59,29 @@ export interface Origin {
   name: string;
 }
 
+/** Turno (Fase ④) — entidad propia del cliente, no atada a una venta. */
+export interface Appointment {
+  id: string;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  /** Wall-clock local "YYYY-MM-DDTHH:mm". */
+  appointmentAt: string;
+  type?: string | null;
+  origin?: string | null;
+  notes?: string | null;
+  status: "pending" | "done" | "cancelled";
+  ownerId?: string | null;
+  ownerName?: string | null;
+  createdAt?: string | null;
+}
+
+/** Tipo de turno editable por negocio (Reparación, Plan canje, …). */
+export interface AppointmentType {
+  id: string;
+  name: string;
+}
+
 /* ───────── Planes / billing (T3) ─────────
  * Espejo del PLAN_CONFIG del worker (cf-worker/src/routes/billing.ts):
  * Free = 1 asiento (gratis); Pro = ARS 25.000/mes · 3 asientos; Team =

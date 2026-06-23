@@ -34,6 +34,8 @@ import type {
   User,
   Workspace,
   Origin,
+  Appointment,
+  AppointmentType,
 } from "./types";
 import { stagesForIndustry } from "./types";
 
@@ -1105,6 +1107,91 @@ export async function createOrigin(name: string): Promise<Origin> {
 }
 export async function deleteOrigin(id: string): Promise<void> {
   await req(`/workspaces/${ws()}/origins/${id}`, { method: "DELETE" });
+}
+
+/* ---------- turnos (appointments) — Fase ④ ---------- */
+interface AppointmentRaw {
+  id: string;
+  customer_id?: string | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  appointment_at: string;
+  type?: string | null;
+  origin?: string | null;
+  notes?: string | null;
+  status?: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  created_at?: string | null;
+}
+function mapAppointment(r: AppointmentRaw): Appointment {
+  return {
+    id: r.id,
+    customerId: r.customer_id ?? null,
+    customerName: r.customer_name ?? null,
+    customerPhone: r.customer_phone ?? null,
+    appointmentAt: r.appointment_at,
+    type: r.type ?? null,
+    origin: r.origin ?? null,
+    notes: r.notes ?? null,
+    status: (r.status as Appointment["status"]) ?? "pending",
+    ownerId: r.owner_id ?? null,
+    ownerName: r.owner_name ?? null,
+    createdAt: r.created_at ?? null,
+  };
+}
+export interface AppointmentInput {
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  appointmentAt: string;
+  type?: string | null;
+  origin?: string | null;
+  notes?: string | null;
+  status?: Appointment["status"];
+  ownerName?: string | null;
+}
+function appointmentBody(input: Partial<AppointmentInput>): Record<string, unknown> {
+  const b: Record<string, unknown> = {};
+  if (input.customerId !== undefined) b.customer_id = input.customerId;
+  if (input.customerName !== undefined) b.customer_name = input.customerName;
+  if (input.customerPhone !== undefined) b.customer_phone = input.customerPhone;
+  if (input.appointmentAt !== undefined) b.appointment_at = input.appointmentAt;
+  if (input.type !== undefined) b.type = input.type;
+  if (input.origin !== undefined) b.origin = input.origin;
+  if (input.notes !== undefined) b.notes = input.notes;
+  if (input.status !== undefined) b.status = input.status;
+  if (input.ownerName !== undefined) b.owner_name = input.ownerName;
+  return b;
+}
+export async function listAppointments(): Promise<Appointment[]> {
+  const r = await req<{ appointments: AppointmentRaw[] }>(`/workspaces/${ws()}/appointments`);
+  return (r.appointments ?? []).map(mapAppointment);
+}
+export async function createAppointment(input: AppointmentInput): Promise<{ id: string }> {
+  return req<{ id: string }>(`/workspaces/${ws()}/appointments`, { method: "POST", body: JSON.stringify(appointmentBody(input)) });
+}
+export async function updateAppointment(id: string, patch: Partial<AppointmentInput>): Promise<void> {
+  await req(`/workspaces/${ws()}/appointments/${id}`, { method: "PATCH", body: JSON.stringify(appointmentBody(patch)) });
+}
+export async function deleteAppointment(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/appointments/${id}`, { method: "DELETE" });
+}
+
+/* ---------- tipos de turno (editables) — Fase ④ ---------- */
+export async function listAppointmentTypes(): Promise<AppointmentType[]> {
+  const r = await req<{ types: Array<{ id: string; name: string }> }>(`/workspaces/${ws()}/appointment-types`);
+  return (r.types ?? []).map((t) => ({ id: t.id, name: t.name }));
+}
+export async function createAppointmentType(name: string): Promise<AppointmentType> {
+  const r = await req<{ type: { id: string; name: string } }>(`/workspaces/${ws()}/appointment-types`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  return { id: r.type.id, name: r.type.name };
+}
+export async function deleteAppointmentType(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/appointment-types/${id}`, { method: "DELETE" });
 }
 
 /* ---------- workspace settings (KV: plantillas, etc) ---------- */

@@ -12,6 +12,7 @@ import {
   DollarSign,
   Upload,
   Zap,
+  CalendarClock,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
@@ -34,6 +35,7 @@ import {
 import { DataTable, applySort, type ColumnDef } from "@/components/data-table";
 import { ImportClientsModal } from "./ImportClientsModal";
 import { QuickWhatsAppPicker } from "./QuickWhatsAppPicker";
+import { TurnoFormDialog } from "./TurnoFormDialog";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { openWhatsApp, openTel, openMail, openInstagram, instagramHandle } from "@/lib/openExternal";
 import { AiSuggestions } from "./AiSuggestions";
@@ -97,6 +99,7 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
   });
   const [openId, setOpenId] = useState<string | null>(null);
   const [quickFor, setQuickFor] = useState<Customer | null>(null);
+  const [turnoFor, setTurnoFor] = useState<Customer | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
@@ -396,12 +399,22 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
             setFormOpen(true);
           }}
           onNewSale={onNewSale}
+          onSchedule={() => setTurnoFor(openCustomer)}
           canWrite={canWrite}
           canSell={canSell}
         />
       )}
 
       {quickFor && <QuickWhatsAppPicker customer={quickFor} onClose={() => setQuickFor(null)} />}
+
+      {turnoFor && (
+        <TurnoFormDialog
+          customers={customers}
+          presetCustomer={{ id: turnoFor.id, name: turnoFor.name, phone: turnoFor.phone }}
+          onClose={() => setTurnoFor(null)}
+          onSaved={() => {}}
+        />
+      )}
 
       <ClientFormModal
         open={formOpen}
@@ -534,6 +547,7 @@ function ClientDrawer({
   onClose,
   onEdit,
   onNewSale,
+  onSchedule,
   canWrite,
   canSell,
 }: {
@@ -543,6 +557,7 @@ function ClientDrawer({
   onClose: () => void;
   onEdit: () => void;
   onNewSale: () => void;
+  onSchedule: () => void;
   canWrite: boolean;
   canSell: boolean;
 }) {
@@ -596,6 +611,11 @@ function ClientDrawer({
           </Button>
           {customer.instagram && (
             <Button variant="secondary" size="md" iconLeft={<InstagramIcon size={15} color="#E1306C" />} onClick={() => customer.instagram && openInstagram(customer.instagram)} aria-label="Instagram" />
+          )}
+          {canSell && (
+            <Button variant="secondary" size="md" iconLeft={<CalendarClock size={15} />} onClick={onSchedule} fullWidth>
+              Agendar turno
+            </Button>
           )}
           {canSell && (
             <Button variant="primary" size="md" iconLeft={<Plus size={15} />} onClick={onNewSale} fullWidth>
