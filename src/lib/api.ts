@@ -1331,6 +1331,14 @@ export async function setCustomRoles(roles: Array<{ id: string; name: string; pe
   await req(`/workspaces/${ws()}/custom-roles`, { method: "PUT", body: JSON.stringify({ roles }) });
 }
 
+/* ---------- home por rol configurable (Fase ⑧) ---------- */
+export async function getHomeLayouts(): Promise<{ layouts: Record<string, string[]> }> {
+  return req(`/workspaces/${ws()}/home-layouts`);
+}
+export async function setHomeLayouts(layouts: Record<string, string[]>): Promise<void> {
+  await req(`/workspaces/${ws()}/home-layouts`, { method: "PUT", body: JSON.stringify({ layouts }) });
+}
+
 /* ---------- followups (seguimientos) + last contact (Mi Día) ---------- */
 interface FollowupRaw {
   id: string;
