@@ -23,7 +23,8 @@ import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
-import { formatMoney, formatRelative, formatDateLong, formatTime } from "@/lib/format";
+import { formatMoney, dualMoney, formatRelative, formatDateLong, formatTime } from "@/lib/format";
+import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_MANUAL } from "@/lib/types";
 import type { Currency, Sale, SaleDetail } from "@/lib/types";
@@ -60,6 +61,7 @@ const PERIOD_FILTERS = [
  */
 export function Ventas({ onNewSale }: { onNewSale: () => void }) {
   const { showToast } = useUIStore();
+  const blue = useBlueRate();
   const { can } = usePermissions();
   const canWrite = can("sales.write");
   const [sales, setSales] = useState<Sale[]>([]);
@@ -287,7 +289,7 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
     <div style={{ display: "flex", flexDirection: "column", gap: space[5], height: "100%" }}>
       <PageHeader
         title="Ventas"
-        subtitle={loading ? "Cargando…" : `${filtered.length} ${filtered.length === 1 ? "venta" : "ventas"} · ${formatMoney(totals.vendido)} en el período`}
+        subtitle={loading ? "Cargando…" : `${filtered.length} ${filtered.length === 1 ? "venta" : "ventas"} · ${dualMoney(totals.vendido, blue).main} en el período`}
         actions={
           canWrite ? (
             <Button variant="primary" size="md" iconLeft={<Plus size={16} />} onClick={onNewSale}>
@@ -298,9 +300,9 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
       />
 
       <div className="cz-metric-grid">
-        <MetricCard label="Vendido" value={formatMoney(totals.vendido)} />
-        <MetricCard label="Cobrado" value={formatMoney(totals.cobrado)} tone="success" />
-        <MetricCard label="Por cobrar" value={formatMoney(totals.porCobrar)} tone={totals.porCobrar > 0 ? "warning" : "neutral"} />
+        <MetricCard label="Vendido" value={dualMoney(totals.vendido, blue).main} sub={dualMoney(totals.vendido, blue).sub} />
+        <MetricCard label="Cobrado" value={dualMoney(totals.cobrado, blue).main} sub={dualMoney(totals.cobrado, blue).sub} tone="success" />
+        <MetricCard label="Por cobrar" value={dualMoney(totals.porCobrar, blue).main} sub={dualMoney(totals.porCobrar, blue).sub} tone={totals.porCobrar > 0 ? "warning" : "neutral"} />
         <MetricCard label="Ventas" value={String(totals.count)} />
       </div>
 

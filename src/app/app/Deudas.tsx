@@ -20,7 +20,8 @@ import { DataTable, type ColumnDef } from "@/components/data-table";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { color, space, text, weight } from "@/tokens";
-import { formatMoney } from "@/lib/format";
+import { dualMoney } from "@/lib/format";
+import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
 import type { Customer, Sale } from "@/lib/types";
 
@@ -43,6 +44,7 @@ interface DeudaRow {
 
 export function Deudas() {
   const { showToast } = useUIStore();
+  const blue = useBlueRate();
   const { can } = usePermissions();
   const canWrite = can("sales.write");
   const ctxMenu = useContextMenu();
@@ -171,8 +173,13 @@ export function Deudas() {
       width: "140px",
       align: "right",
       cell: (r) => (
-        <span style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.danger }}>
-          {formatMoney(r.totalDue)}
+        <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end" }}>
+          <span style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.danger }}>
+            {dualMoney(r.totalDue, blue).main}
+          </span>
+          {dualMoney(r.totalDue, blue).sub && (
+            <span style={{ fontSize: 11, color: color.textDim }}>{dualMoney(r.totalDue, blue).sub}</span>
+          )}
         </span>
       ),
     },
@@ -255,8 +262,13 @@ export function Deudas() {
             Saldo total
           </div>
           <div style={{ fontSize: text["2xl"], fontWeight: weight.bold, color: color.danger, letterSpacing: "-0.5px" }}>
-            {formatMoney(totals.totalDue)}
+            {dualMoney(totals.totalDue, blue).main}
           </div>
+          {dualMoney(totals.totalDue, blue).sub && (
+            <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>
+              {dualMoney(totals.totalDue, blue).sub}
+            </div>
+          )}
         </Card>
         <Card padding={5}>
           <div style={{ fontSize: text.sm, color: color.textMuted, marginBottom: space[2] }}>

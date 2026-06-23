@@ -34,6 +34,33 @@ export function formatMoneyCompact(amount: number, currency: 'ARS' | 'USD' = 'AR
   return `${sign}${symbol}${abs}`;
 }
 
+export interface DualMoney {
+  /** Monto principal: US$ si hay cotización, sino ARS. */
+  main: string;
+  /** Monto secundario en ARS, o null si no hay cotización. */
+  sub: string | null;
+}
+
+/**
+ * Dual de moneda para los "puntos fuertes": US$ como principal (convertido al
+ * blue) y ARS como secundario. Sin cotización, cae a ARS solo. Los montos de
+ * Clozr se guardan en ARS; esto es SOLO presentación.
+ */
+export function dualMoney(ars: number, blue: number | null | undefined): DualMoney {
+  if (blue && blue > 0) {
+    return { main: formatMoney(Math.round(ars / blue), 'USD'), sub: formatMoney(ars, 'ARS') };
+  }
+  return { main: formatMoney(ars, 'ARS'), sub: null };
+}
+
+/** Igual que dualMoney pero compacto (cards de métricas con números grandes). */
+export function dualMoneyCompact(ars: number, blue: number | null | undefined): DualMoney {
+  if (blue && blue > 0) {
+    return { main: formatMoneyCompact(Math.round(ars / blue), 'USD'), sub: formatMoneyCompact(ars, 'ARS') };
+  }
+  return { main: formatMoneyCompact(ars, 'ARS'), sub: null };
+}
+
 /** Saludo segun la hora del día */
 export function greetByHour(hour: number): 'morning' | 'afternoon' | 'evening' | 'night' {
   if (hour >= 5 && hour < 12) return 'morning';

@@ -24,7 +24,7 @@ import { usePermissions } from "@/store/usePermissions";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useBlueRate } from "@/store/dollarStore";
 import { color, radius, space, text, weight } from "@/tokens";
-import { formatMoney, greetByHour, greetText, formatDateLong, toLocalISODate, displayName } from "@/lib/format";
+import { formatMoney, dualMoney, greetByHour, greetText, formatDateLong, toLocalISODate, displayName } from "@/lib/format";
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import * as api from "@/lib/api";
 import type { CashMovement, Customer, Followup, Sale, Task, User } from "@/lib/types";
@@ -226,11 +226,8 @@ export function MiDia({
     setGoalEditing(true);
   }
 
-  /* ── Moneda dual: US$ primario, $ARS secundario (los montos se guardan en ARS). ── */
-  function dual(ars: number): { main: string; sub: string | null } {
-    if (blue && blue > 0) return { main: formatMoney(Math.round(ars / blue), "USD"), sub: formatMoney(ars, "ARS") };
-    return { main: formatMoney(ars, "ARS"), sub: null };
-  }
+  /* ── Moneda dual: US$ primario, $ARS secundario (helper compartido). ── */
+  const dual = (ars: number) => dualMoney(ars, blue);
 
   /* ── Ventas por día → comparativa vs ayer + sparkline 7d + promedio. ── */
   const dailyMap = useMemo(() => {
