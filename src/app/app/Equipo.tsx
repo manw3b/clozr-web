@@ -13,7 +13,8 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
-import { roleLabel } from "@/lib/permissions";
+import { roleLabel, ALL_PERMISSIONS, PERMISSION_LABELS, SENSITIVE_PERMISSIONS, type Permission } from "@/lib/permissions";
+import { useRolePermsStore } from "@/store/rolePermsStore";
 import type { Member, User } from "@/lib/types";
 import { PLANS, SEATS_UNLIMITED, type PlanId } from "@/lib/types";
 
@@ -392,6 +393,9 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
         </Card>
       </div>
 
+      {/* Permisos por rol — editable solo por el dueño (Fase ⑤) */}
+      <RolePermissionsCard />
+
       {members === null ? (
         <div style={{ fontSize: text.sm, color: color.textDim, padding: space[6] }}>
           {loading ? "Cargando equipo…" : ""}
@@ -601,6 +605,116 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+/** Matriz roles × permisos. Editable solo por el dueño (Fase ⑤). */
+function RolePermissionsCard() {
+  const { showToast } = useUIStore();
+  const activeWs = useWorkspaceStore((s) => s.activeWorkspace);
+  const isOwner = activeWs?.role === "owner";
+  const setStoreMatrix = useRolePermsStore((s) => s.setMatrix);
+  const editableRoles: Array<"admin" | "vendedor" | "viewer"> = ["admin", "vendedor", "viewer"];
+
+  const [perms, setPerms] = useState<Record<string, Set<string>> | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .getRolePermissions()
+      .then((r) => {
+        if (!alive) return;
+        const m: Record<string, Set<string>> = {};
+        for (const role of editableRoles) m[role] = new Set(r.roles[role] ?? []);
+        setPerms(m);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWs?.id]);
+
+  function toggle(role: string, perm: Permission) {
+    setPerms((prev) => {
+      if (!prev) return prev;
+      const cur = new Set(prev[role] ?? []);
+      if (cur.has(perm)) cur.delete(perm);
+      else cur.add(perm);
+      return { ...prev, [role]: cur };
+    });
+  }
+
+  async function save() {
+    if (!perms || !activeWs) return;
+    setSaving(true);
+    try {
+      const payload: Record<string, string[]> = {};
+      for (const role of editableRoles) payload[role] = [...(perms[role] ?? [])];
+      await api.setRolePermissions(payload);
+      setStoreMatrix(activeWs.id, { owner: [...ALL_PERMISSIONS], ...payload });
+      showToast("Permisos actualizados", "success");
+    } catch {
+      showToast("No se pudo guardar", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: space[4] }}>
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2], marginBottom: 6 }}>
+          <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>Permisos por rol</div>
+          {isOwner && (
+            <Button size="sm" variant="primary" onClick={save} loading={saving} disabled={!perms}>
+              Guardar
+            </Button>
+          )}
+        </div>
+        <div style={{ fontSize: text.xs, color: color.textDim, marginBottom: 12 }}>
+          {isOwner
+            ? "Marcá qué puede hacer cada rol. El dueño siempre tiene todos los permisos."
+            : "Solo el dueño puede editar los permisos de los roles."}
+        </div>
+        {!perms ? (
+          <div style={{ fontSize: text.sm, color: color.textDim }}>Cargando…</div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: text.sm }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", padding: space[2], color: color.textMuted, fontWeight: weight.medium }}>Permiso</th>
+                  {editableRoles.map((r) => (
+                    <th key={r} style={{ padding: space[2], color: color.textMuted, fontWeight: weight.medium, textAlign: "center" }}>
+                      {roleLabel(r)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ALL_PERMISSIONS.map((perm) => (
+                  <tr key={perm} style={{ borderTop: `1px solid ${color.border}` }}>
+                    <td style={{ padding: space[2], color: color.text }}>
+                      {PERMISSION_LABELS[perm]}
+                      {SENSITIVE_PERMISSIONS.has(perm) && (
+                        <span style={{ marginLeft: 6, fontSize: 10, color: color.warning, fontWeight: weight.semibold }}>sensible</span>
+                      )}
+                    </td>
+                    {editableRoles.map((role) => (
+                      <td key={role} style={{ padding: space[2], textAlign: "center" }}>
+                        <input type="checkbox" checked={perms[role]?.has(perm) ?? false} disabled={!isOwner} onChange={() => toggle(role, perm)} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
