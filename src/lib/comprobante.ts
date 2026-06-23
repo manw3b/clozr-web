@@ -115,6 +115,40 @@ function buildHtml(business: ComprobanteBusiness, sale: SaleDetail): string {
 </div></body></html>`;
 }
 
+/** Comprobante en TEXTO plano (con formato WhatsApp) para compartir por chat. */
+export function buildComprobanteText(business: ComprobanteBusiness, sale: SaleDetail): string {
+  const ref = sale.id.slice(-6).toUpperCase();
+  const L: string[] = [];
+  L.push(`🧾 *${business.name || "Comprobante"}*`);
+  L.push(`Comprobante N° ${ref}`);
+  L.push("");
+  L.push(`Cliente: ${sale.customerName || "Consumidor final"}`);
+  const date = fmtDate(sale.saleDate ?? sale.createdAt);
+  if (date) L.push(`Fecha: ${date}`);
+  L.push("");
+  if (sale.items.length === 0) {
+    L.push("• (sin ítems)");
+  } else {
+    for (const it of sale.items) {
+      const qty = it.quantity > 1 ? `${it.quantity}× ` : "";
+      const imei = it.imei ? ` (IMEI ${it.imei})` : "";
+      L.push(`• ${qty}${it.description}${imei} — ${formatMoney(it.subtotal, "ARS")}`);
+    }
+  }
+  L.push("————————————");
+  L.push(`*Total: ${formatMoney(sale.total, "ARS")}*`);
+  if (sale.balance > 0.01) {
+    if (sale.totalPaid > 0) L.push(`Cobrado: ${formatMoney(sale.totalPaid, "ARS")}`);
+    L.push(`Saldo pendiente: ${formatMoney(sale.balance, "ARS")}`);
+  } else {
+    L.push("Estado: Pagado ✅");
+  }
+  if (sale.paymentMethod) L.push(`Forma de pago: ${payLabel(sale.paymentMethod)}`);
+  L.push("");
+  L.push("¡Gracias por tu compra! 🙌");
+  return L.join("\n");
+}
+
 /** Abre el diálogo de impresión con el comprobante (Guardar como PDF). */
 export function printComprobante(business: ComprobanteBusiness, sale: SaleDetail): void {
   const iframe = document.createElement("iframe");

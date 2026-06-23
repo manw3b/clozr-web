@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Search, Package, Pencil, Trash2, ChevronDown, LayoutGrid, ClipboardPaste, Lock } from "lucide-react";
+import { Plus, Search, Package, Pencil, Trash2, ChevronDown, LayoutGrid, ClipboardPaste, Lock, ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card, MetricCard } from "@/components/Card";
@@ -43,7 +43,7 @@ function isOut(p: Product): boolean {
  * el VisualProductPicker, el tracking unidad-por-unidad (IMEIs), precios por
  * tipo de cliente y la venta rápida. Acá el stock es un número simple.
  */
-export function Inventario() {
+export function Inventario({ onQuickSale }: { onQuickSale?: (p: Product) => void }) {
   const { showToast } = useUIStore();
   const { can } = usePermissions();
   const canWrite = can("inventory.write");
@@ -278,6 +278,24 @@ export function Inventario() {
                     </Badge>
                   )}
                 </div>
+                {onQuickSale && (
+                  <div style={{ marginTop: space[3] }}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      fullWidth
+                      iconLeft={<ShoppingCart size={14} />}
+                      disabled={isOut(p)}
+                      title={isOut(p) ? "Sin stock para vender" : "Vender este producto"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onQuickSale(p);
+                      }}
+                    >
+                      Vender
+                    </Button>
+                  </div>
+                )}
               </Card>
             ))}
           </div>
@@ -323,6 +341,21 @@ export function Inventario() {
       {ctxMenu.open && ctxProduct && (
         <ContextMenu position={ctxMenu.position} onClose={ctxMenu.close}>
           <ContextMenuLabel>{ctxProduct.name}</ContextMenuLabel>
+          {onQuickSale && (
+            <>
+              <ContextMenuItem
+                icon={<ShoppingCart size={14} />}
+                onClick={() => {
+                  const p = ctxProduct;
+                  ctxMenu.close();
+                  onQuickSale(p);
+                }}
+              >
+                Venta rápida
+              </ContextMenuItem>
+              <ContextMenuDivider />
+            </>
+          )}
           <ContextMenuItem
             icon={<Pencil size={14} />}
             onClick={() => {

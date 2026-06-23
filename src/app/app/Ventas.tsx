@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Search, Plus, MoreHorizontal, Check, Copy, Eye, Trash2, CheckCircle2, Clock, AlertCircle, Package, ShieldCheck } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Check, Copy, Eye, Trash2, CheckCircle2, Clock, AlertCircle, Package, ShieldCheck, Download, FileText } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Input, Select } from "@/components/Input";
@@ -26,8 +26,12 @@ import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, dualMoney, formatRelative, formatDateLong, formatTime } from "@/lib/format";
 import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
+import { exportToCsv, timestamp } from "@/lib/csv";
+import { buildComprobanteText, printComprobante } from "@/lib/comprobante";
+import { shareOnWhatsApp } from "@/lib/openExternal";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_MANUAL } from "@/lib/types";
-import type { Currency, Sale, SaleDetail } from "@/lib/types";
+import type { Currency, Customer, Sale, SaleDetail } from "@/lib/types";
 
 type SaleStatus = "paid" | "partial" | "pending";
 
@@ -59,11 +63,19 @@ const PERIOD_FILTERS = [
  * chart lateral, export CSV, mensaje/comprobante por WhatsApp, banner de
  * regularización.
  */
-export function Ventas({ onNewSale }: { onNewSale: () => void }) {
+export function Ventas({ onNewSale, customers = [] }: { onNewSale: () => void; customers?: Customer[] }) {
   const { showToast } = useUIStore();
   const blue = useBlueRate();
   const { can } = usePermissions();
   const canWrite = can("sales.write");
+  const businessName = useWorkspaceStore((s) => s.activeWorkspace?.name) ?? "";
+  // Teléfono por cliente para prefillar el comprobante por WhatsApp (si la venta
+  // tiene cliente cargado; si no, se abre el selector de contactos).
+  const phoneById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of customers) if (c.phone) m.set(c.id, c.phone);
+    return m;
+  }, [customers]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -283,6 +295,30 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
     }
   }
 
+  function exportCsv() {
+    exportToCsv(`ventas-${timestamp()}.csv`, filtered, [
+      ["Fecha", (s) => { const d = s.createdAt ?? s.saleDate; return d ? new Date(d).toLocaleString("es-AR") : ""; }],
+      ["Cliente", (s) => s.customerName || "Consumidor final"],
+      ["Total", (s) => s.total],
+      ["Cobrado", (s) => s.totalPaid],
+      ["Saldo", (s) => s.balance],
+      ["Estado", (s) => (statusOf(s) === "paid" ? "Pagado" : statusOf(s) === "partial" ? "Parcial" : "Pendiente")],
+      ["Pago", (s) => (s.paymentMethod ? PAYMENT_METHOD_LABELS[s.paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? s.paymentMethod : "")],
+      ["Vendedor", (s) => s.sellerName ?? ""],
+      ["Comprobante", (s) => s.id.slice(-6).toUpperCase()],
+    ]);
+    showToast(`${filtered.length} ${filtered.length === 1 ? "venta exportada" : "ventas exportadas"}`, "success");
+  }
+
+  async function sendReceiptWhatsApp(s: Sale) {
+    try {
+      const d = await api.getSale(s.id);
+      shareOnWhatsApp(buildComprobanteText({ name: businessName }, d), s.customerId ? phoneById.get(s.customerId) : undefined);
+    } catch {
+      showToast("No se pudo generar el comprobante", "error");
+    }
+  }
+
   const openSale = openId ? sales.find((s) => s.id === openId) ?? null : null;
 
   return (
@@ -291,11 +327,16 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
         title="Ventas"
         subtitle={loading ? "Cargando…" : `${filtered.length} ${filtered.length === 1 ? "venta" : "ventas"} · ${dualMoney(totals.vendido, blue).main} en el período`}
         actions={
-          canWrite ? (
-            <Button variant="primary" size="md" iconLeft={<Plus size={16} />} onClick={onNewSale}>
-              Nueva venta
+          <div style={{ display: "flex", gap: space[2] }}>
+            <Button variant="secondary" size="md" iconLeft={<Download size={15} />} onClick={exportCsv} disabled={filtered.length === 0}>
+              Exportar
             </Button>
-          ) : undefined
+            {canWrite && (
+              <Button variant="primary" size="md" iconLeft={<Plus size={16} />} onClick={onNewSale}>
+                Nueva venta
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -340,7 +381,15 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
         />
       </div>
 
-      {openSale && <SaleDrawer sale={openSale} onClose={() => setOpenId(null)} onChanged={load} canWrite={canWrite} />}
+      {openSale && (
+        <SaleDrawer
+          sale={openSale}
+          customerPhone={openSale.customerId ? phoneById.get(openSale.customerId) : undefined}
+          onClose={() => setOpenId(null)}
+          onChanged={load}
+          canWrite={canWrite}
+        />
+      )}
 
       {ctxMenu.open && ctxSale && (
         <ContextMenu position={ctxMenu.position} onClose={ctxMenu.close}>
@@ -358,6 +407,9 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
           <ContextMenuItem icon={<Copy size={14} />} onClick={() => { navigator.clipboard.writeText(ctxSale.id).catch(() => {}); showToast("ID copiado", "success"); ctxMenu.close(); }}>
             Copiar ID
           </ContextMenuItem>
+          <ContextMenuItem icon={<WhatsAppIcon size={13} color="var(--success)" />} onClick={() => { const s = ctxSale; ctxMenu.close(); sendReceiptWhatsApp(s); }}>
+            Comprobante por WhatsApp
+          </ContextMenuItem>
           {canWrite && (
             <>
               <ContextMenuDivider />
@@ -374,7 +426,7 @@ export function Ventas({ onNewSale }: { onNewSale: () => void }) {
 
 /* ───────── SaleDrawer ───────── */
 
-function SaleDrawer({ sale, onClose, onChanged, canWrite }: { sale: Sale; onClose: () => void; onChanged: () => void; canWrite: boolean }) {
+function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sale: Sale; customerPhone?: string; onClose: () => void; onChanged: () => void; canWrite: boolean }) {
   const { showToast } = useUIStore();
   const [detail, setDetail] = useState<SaleDetail | null>(null);
   const [payOpen, setPayOpen] = useState(false);
@@ -403,6 +455,11 @@ function SaleDrawer({ sale, onClose, onChanged, canWrite }: { sale: Sale; onClos
     }
   }
 
+  function sendReceipt() {
+    if (!detail) return;
+    shareOnWhatsApp(buildComprobanteText({ name: businessName }, detail), customerPhone);
+  }
+
   return (
     <Drawer
       open
@@ -424,27 +481,32 @@ function SaleDrawer({ sale, onClose, onChanged, canWrite }: { sale: Sale; onClos
         </header>
       }
       footer={
-        canWrite ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-            {st !== "paid" ? (
-              <div style={{ display: "flex", gap: space[2] }}>
-                <Button variant="secondary" size="md" onClick={() => setPayOpen(true)} fullWidth>
-                  Registrar pago
-                </Button>
-                <Button variant="primary" size="md" iconLeft={<CheckCircle2 size={15} />} onClick={markPaid} fullWidth>
-                  Marcar pagado
-                </Button>
-              </div>
-            ) : (
-              <div style={{ textAlign: "center", fontSize: text.sm, color: color.success, fontWeight: weight.semibold }}>✓ Venta cobrada</div>
-            )}
+        <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+          {canWrite && st !== "paid" && (
+            <div style={{ display: "flex", gap: space[2] }}>
+              <Button variant="secondary" size="md" onClick={() => setPayOpen(true)} fullWidth>
+                Registrar pago
+              </Button>
+              <Button variant="primary" size="md" iconLeft={<CheckCircle2 size={15} />} onClick={markPaid} fullWidth>
+                Marcar pagado
+              </Button>
+            </div>
+          )}
+          {st === "paid" && (
+            <div style={{ textAlign: "center", fontSize: text.sm, color: color.success, fontWeight: weight.semibold }}>✓ Venta cobrada</div>
+          )}
+          <div style={{ display: "flex", gap: space[2] }}>
+            <Button variant="secondary" size="md" iconLeft={<WhatsAppIcon size={15} color="var(--success)" />} onClick={sendReceipt} disabled={!detail} fullWidth>
+              Comprobante WhatsApp
+            </Button>
+            <Button variant="ghost" size="md" iconLeft={<FileText size={15} />} onClick={() => detail && printComprobante({ name: businessName }, detail)} disabled={!detail} title="Comprobante en PDF" />
+          </div>
+          {canWrite && (
             <Button variant="ghost" size="md" iconLeft={<ShieldCheck size={15} />} onClick={() => setWarrantyOpen(true)} fullWidth>
               Enviar garantía por mail
             </Button>
-          </div>
-        ) : st === "paid" ? (
-          <div style={{ textAlign: "center", fontSize: text.sm, color: color.success, fontWeight: weight.semibold }}>✓ Venta cobrada</div>
-        ) : null
+          )}
+        </div>
       }
     >
       <div style={{ padding: space[5], borderBottom: `1px solid ${color.border}`, textAlign: "center" }}>
