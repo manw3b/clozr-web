@@ -65,7 +65,7 @@ export const HOME_BLOCKS: HomeBlockMeta[] = [
   { key: "collections", label: "Por cobrar", description: "Cobros pendientes del negocio.", scope: "global", section: "Negocio", defaultRoles: ["admin", "owner", "viewer"] },
 
   { key: "new-customers", label: "Clientes nuevos", description: "Clientes cargados en los últimos días.", scope: "personal", section: "Personal", defaultRoles: ["vendedor"] },
-  { key: "customers-risk", label: "Clientes en riesgo", description: "Clientes sin contacto reciente.", scope: "personal", section: "Personal", defaultRoles: ["vendedor"] },
+  { key: "customers-risk", label: "Clientes en riesgo", description: "Clientes sin contacto reciente.", scope: "personal", section: "Personal", defaultRoles: ["vendedor", "admin"] },
   { key: "cash-today", label: "Caja del día", description: "Movimientos y saldo de caja de hoy.", scope: "global", section: "Negocio", defaultRoles: ["owner", "viewer"] },
   { key: "low-stock", label: "Stock bajo", description: "Productos por debajo del mínimo.", scope: "global", section: "Negocio", defaultRoles: ["owner", "viewer"] },
 ];
