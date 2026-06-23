@@ -40,10 +40,12 @@ export default function OnboardingWizard({
   user,
   onNameChange,
   onComplete,
+  onJoined,
 }: {
   user: User;
   onNameChange: (name: string) => void;
   onComplete: (w: Workspace) => void;
+  onJoined: (workspaceId: string) => void;
 }) {
   const needsName = !user.name || !user.name.trim() || user.name === user.email;
   const steps = useMemo<Step[]>(
@@ -66,6 +68,8 @@ export default function OnboardingWizard({
   const [createdWs, setCreatedWs] = useState<Workspace | null>(null);
   const [planBusy, setPlanBusy] = useState<PlanId | null>(null);
   const [seatLimitHit, setSeatLimitHit] = useState(false);
+  const [joinMode, setJoinMode] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
 
   const idx = steps.indexOf(step);
   const goNext = () => setStep(steps[Math.min(idx + 1, steps.length - 1)]);
@@ -184,6 +188,30 @@ export default function OnboardingWizard({
     if (createdWs) onComplete(createdWs);
   }
 
+  async function redeemJoin() {
+    const code = joinCode.trim().toUpperCase();
+    if (!code) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await api.redeemJoinCode(code);
+      onJoined(r.workspaceId);
+    } catch (e) {
+      const c = e instanceof api.ApiError ? e.code : "error";
+      setError(
+        c === "invalid_code"
+          ? "Código inválido. Verificalo con el dueño de la tienda."
+          : c === "expired"
+            ? "El código venció. Pedile uno nuevo al dueño."
+            : c === "seat_limit"
+              ? "La tienda alcanzó el límite de su plan. Avisale al dueño."
+              : "No pudimos unirte a la tienda. Probá de nuevo.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="grid min-h-screen place-items-center px-6">
       <div className="w-full max-w-md">
@@ -191,7 +219,7 @@ export default function OnboardingWizard({
           <StepDots total={steps.length - 2} current={idx - 1} />
         )}
 
-        {step === "welcome" && (
+        {step === "welcome" && !joinMode && (
           <Centered>
             <LogoMark className="h-14 w-auto" />
             <h1 className="text-2xl font-bold tracking-tight">
@@ -204,9 +232,38 @@ export default function OnboardingWizard({
               onClick={goNext}
               className="mt-2 w-full rounded-lg bg-primary py-3 font-semibold text-white transition hover:bg-primary-hover"
             >
-              Empezar
+              Crear mi tienda
+            </button>
+            <button
+              type="button"
+              onClick={() => { setJoinMode(true); setError(null); }}
+              className="mt-1 text-sm text-text-muted underline-offset-2 hover:text-text hover:underline"
+            >
+              Ya me invitaron a una tienda — entrar con código
             </button>
           </Centered>
+        )}
+
+        {step === "welcome" && joinMode && (
+          <Form onSubmit={redeemJoin}>
+            <Heading title="Entrar a una tienda" subtitle="Pegá el código que te pasó el dueño de la tienda." />
+            <input
+              autoFocus
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              placeholder="Código de la tienda"
+              className={fieldCls}
+              style={{ letterSpacing: "3px", fontWeight: 700 }}
+            />
+            <Primary busy={busy} label="Entrar" />
+            <button
+              type="button"
+              onClick={() => { setJoinMode(false); setError(null); }}
+              className="text-sm text-text-dim transition hover:text-text"
+            >
+              Volver
+            </button>
+          </Form>
         )}
 
         {step === "name" && (

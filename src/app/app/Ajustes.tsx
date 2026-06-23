@@ -389,8 +389,8 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
         <SectionTitle>Cuenta</SectionTitle>
         <div style={{ display: "flex", gap: space[2], alignItems: "flex-end", marginTop: space[3] }}>
           <div style={{ flex: 1 }}>
-            <Label>Tu nombre</Label>
-            <Input value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="Tu nombre" />
+            <Label>Tu alias</Label>
+            <Input value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="Cómo te ven en el equipo" />
           </div>
           <Button
             variant="primary"

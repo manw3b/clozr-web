@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { color, duration, ease, layout, radius, space, text, weight } from '../tokens';
 import { Avatar } from '../components/Avatar';
+import { displayName } from '../lib/format';
 import { usePermissions } from '../store/usePermissions';
 import type { Permission } from '../lib/permissions';
 const logoIsotipo = '/logo-isotipo.svg';
@@ -229,6 +230,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
         }}
       >
         <div
+          title={user.email}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -239,7 +241,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
             borderRadius: radius.md,
           }}
         >
-          <Avatar name={user.name} size={collapsed ? 32 : 28} />
+          <Avatar name={displayName(user)} size={collapsed ? 32 : 28} />
           {!collapsed && (
             <div style={{ minWidth: 0, textAlign: 'left' }}>
               <div
@@ -252,18 +254,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, user,
                   textOverflow: 'ellipsis',
                 }}
               >
-                {user.name}
-              </div>
-              <div
-                style={{
-                  fontSize: text.xs,
-                  color: color.textDim,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {user.email}
+                {displayName(user)}
               </div>
             </div>
           )}
