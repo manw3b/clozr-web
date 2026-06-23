@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Wrench, Trash2, Smartphone } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { DndContext, DragOverlay, PointerSensor, closestCorners, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { Plus, Wrench, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -72,6 +73,18 @@ export function Repairs({ customers, onOpenSale }: { customers: Customer[]; onOp
     try { await api.deleteRepair(r.id); } catch { showToast("No se pudo eliminar", "error"); load(); }
   }
 
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeRepair = activeId ? (repairs ?? []).find((r) => r.id === activeId) ?? null : null;
+  function onDragEnd(e: DragEndEvent) {
+    setActiveId(null);
+    const { active, over } = e;
+    if (!over) return;
+    const r = (repairs ?? []).find((x) => x.id === String(active.id));
+    const status = String(over.id) as RepairStatus;
+    if (r && STATUS_FLOW.includes(status)) void move(r, status);
+  }
+
   const byStatus = useMemo(() => {
     const m = new Map<RepairStatus, Repair[]>();
     for (const s of STATUS_FLOW) m.set(s, []);
@@ -98,60 +111,20 @@ export function Repairs({ customers, onOpenSale }: { customers: Customer[]; onOp
           action={canWrite ? { label: "Nueva reparación", onClick: () => setDialog({}), iconLeft: <Plus size={14} /> } : undefined}
         />
       ) : (
-        <div style={{ display: "flex", gap: space[3], overflowX: "auto", paddingBottom: space[3] }}>
-          {STATUS_FLOW.map((status) => {
-            const items = byStatus.get(status) ?? [];
-            return (
-              <div key={status} style={{ minWidth: 280, width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: space[2] }}>
-                <div style={{ display: "flex", alignItems: "center", gap: space[2], padding: `${space[1]} ${space[2]}` }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLOR[status], flexShrink: 0 }} />
-                  <span style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>{STATUS_LABEL[status]}</span>
-                  <span style={{ fontSize: text.xs, color: color.textMuted }}>{items.length}</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-                  {items.map((r) => (
-                    <Card key={r.id} padding={3} interactive={canWrite} onClick={canWrite ? () => setDialog({ initial: r }) : undefined}>
-                      <div style={{ display: "flex", alignItems: "flex-start", gap: space[2], justifyContent: "space-between" }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {r.deviceModel || "Equipo sin modelo"}
-                          </div>
-                          <div style={{ fontSize: text.xs, color: color.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
-                            {r.customerName || "Sin cliente"}{r.deviceImei ? ` · ${r.deviceImei}` : ""}
-                          </div>
-                        </div>
-                        {canWrite && (
-                          <button onClick={(e) => { e.stopPropagation(); void remove(r); }} aria-label="Eliminar" className="btn-icon muted" style={{ width: 24, height: 24, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
-                      {r.problem && (
-                        <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: space[1], overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.problem}</div>
-                      )}
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2], marginTop: space[2] }}>
-                        {quoteTotal(r) > 0 ? (
-                          <span style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>{formatMoney(quoteTotal(r))}</span>
-                        ) : <span />}
-                        {canWrite && (
-                          <select
-                            value={r.status}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => { e.stopPropagation(); void move(r, e.target.value as RepairStatus); }}
-                            className="select-trigger"
-                            style={{ padding: "3px 6px", fontSize: text.xs, borderRadius: radius.sm, color: color.text, maxWidth: 130 }}
-                          >
-                            {STATUS_FLOW.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-                          </select>
-                        )}
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={(e) => setActiveId(String(e.active.id))} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
+          <div style={{ display: "flex", gap: space[3], overflowX: "auto", paddingBottom: space[3] }}>
+            {STATUS_FLOW.map((status) => (
+              <RepairColumn key={status} status={status} count={(byStatus.get(status) ?? []).length}>
+                {(byStatus.get(status) ?? []).map((r) => (
+                  <RepairCard key={r.id} repair={r} canWrite={canWrite} onEdit={() => setDialog({ initial: r })} onRemove={() => remove(r)} onMove={(s) => move(r, s)} />
+                ))}
+              </RepairColumn>
+            ))}
+          </div>
+          <DragOverlay dropAnimation={null}>
+            {activeRepair ? <RepairCardView repair={activeRepair} canWrite={false} /> : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {dialog && (
@@ -348,5 +321,106 @@ export function RepairDialog({
 
       <ModalField label="Notas"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Observaciones internas" /></ModalField>
     </Modal>
+  );
+}
+
+/* ───────── Tablero: columna (droppable) + card (draggable) ───────── */
+
+const stopPD = (e: { stopPropagation: () => void }) => e.stopPropagation();
+
+function RepairColumn({ status, count, children }: { status: RepairStatus; count: number; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+  return (
+    <div style={{ minWidth: 280, width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: space[2] }}>
+      <div style={{ display: "flex", alignItems: "center", gap: space[2], padding: `${space[1]} ${space[2]}` }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLOR[status], flexShrink: 0 }} />
+        <span style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>{STATUS_LABEL[status]}</span>
+        <span style={{ fontSize: text.xs, color: color.textMuted }}>{count}</span>
+      </div>
+      <div
+        ref={setNodeRef}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: space[2],
+          minHeight: 80,
+          borderRadius: radius.md,
+          padding: space[1],
+          background: isOver ? color.surface2 : "transparent",
+          outline: isOver ? `1px dashed ${STATUS_COLOR[status]}` : "none",
+          transition: "background 120ms",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RepairCard({ repair, canWrite, onEdit, onRemove, onMove }: {
+  repair: Repair;
+  canWrite: boolean;
+  onEdit: () => void;
+  onRemove: () => void;
+  onMove: (s: RepairStatus) => void;
+}) {
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id: repair.id, disabled: !canWrite });
+  return (
+    <div
+      ref={setNodeRef}
+      {...(canWrite ? listeners : {})}
+      {...(canWrite ? attributes : {})}
+      style={{ opacity: isDragging ? 0.4 : 1, cursor: canWrite ? "grab" : "default" }}
+    >
+      <RepairCardView repair={repair} canWrite={canWrite} onEdit={onEdit} onRemove={onRemove} onMove={onMove} />
+    </div>
+  );
+}
+
+function RepairCardView({ repair: r, canWrite, onEdit, onRemove, onMove }: {
+  repair: Repair;
+  canWrite: boolean;
+  onEdit?: () => void;
+  onRemove?: () => void;
+  onMove?: (s: RepairStatus) => void;
+}) {
+  return (
+    <Card padding={3} interactive={!!onEdit} onClick={onEdit}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: space[2], justifyContent: "space-between" }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {r.deviceModel || "Equipo sin modelo"}
+          </div>
+          <div style={{ fontSize: text.xs, color: color.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
+            {r.customerName || "Sin cliente"}{r.deviceImei ? ` · ${r.deviceImei}` : ""}
+          </div>
+        </div>
+        {canWrite && onRemove && (
+          <button onPointerDown={stopPD} onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="Eliminar" className="btn-icon muted" style={{ width: 24, height: 24, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Trash2 size={13} />
+          </button>
+        )}
+      </div>
+      {r.problem && (
+        <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: space[1], overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.problem}</div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2], marginTop: space[2] }}>
+        {quoteTotal(r) > 0 ? (
+          <span style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>{formatMoney(quoteTotal(r))}</span>
+        ) : <span />}
+        {canWrite && onMove && (
+          <select
+            value={r.status}
+            onPointerDown={stopPD}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => { e.stopPropagation(); onMove(e.target.value as RepairStatus); }}
+            className="select-trigger"
+            style={{ padding: "3px 6px", fontSize: text.xs, borderRadius: radius.sm, color: color.text, maxWidth: 130 }}
+          >
+            {STATUS_FLOW.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+          </select>
+        )}
+      </div>
+    </Card>
   );
 }
