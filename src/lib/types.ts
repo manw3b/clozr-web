@@ -580,25 +580,29 @@ export interface SaleDetail extends Sale {
 }
 
 /**
- * Código de orden legible de una venta: inicial del vendedor + DDMM + Nº de
- * orden del día (2 dígitos). Ej: Gonzalo, 23/06, 1ª venta → "G230601".
+ * Código de orden legible de una venta: iniciales del vendedor (nombre +
+ * apellido) + "-" + Nº de venta del día + día + mes (sin ceros a la izquierda).
+ * Ej: Gonzalo Pérez, 1ª venta del 23/06 → "GP-1236".
  * Devuelve null si todavía no hay Nº de orden (ventas viejas) o falta el vendedor.
  */
 export function saleCode(s: Pick<Sale, "sellerName" | "orderSeq" | "orderDay" | "saleDate" | "createdAt">): string | null {
   if (s.orderSeq == null) return null;
-  const initial = (s.sellerName ?? "").trim().charAt(0).toUpperCase();
-  if (!initial) return null;
-  let ddmm = "";
+  // Iniciales: nombre + apellido ("Gonzalo Pérez" → "GP"). Un solo nombre → 1 inicial.
+  const words = (s.sellerName ?? "").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  const initials = (words[0].charAt(0) + (words.length > 1 ? words[words.length - 1].charAt(0) : "")).toUpperCase();
+  if (!initials) return null;
+  // Día y mes (números, sin ceros a la izquierda) desde order_day; fallback a la fecha.
+  let day = 0, month = 0;
   if (s.orderDay && /^\d{4}-\d{2}-\d{2}$/.test(s.orderDay)) {
-    ddmm = s.orderDay.slice(8, 10) + s.orderDay.slice(5, 7); // YYYY-MM-DD → DDMM
+    day = Number(s.orderDay.slice(8, 10));
+    month = Number(s.orderDay.slice(5, 7));
   } else {
     const d = new Date((s.saleDate ?? s.createdAt) ?? "");
-    if (!isNaN(d.getTime())) {
-      ddmm = String(d.getDate()).padStart(2, "0") + String(d.getMonth() + 1).padStart(2, "0");
-    }
+    if (!isNaN(d.getTime())) { day = d.getDate(); month = d.getMonth() + 1; }
   }
-  if (!ddmm) return null;
-  return `${initial}${ddmm}${String(s.orderSeq).padStart(2, "0")}`;
+  if (!day || !month) return null;
+  return `${initials}-${s.orderSeq}${day}${month}`;
 }
 
 /** Precio de un producto para un tipo de cliente (precios por tipo). */
