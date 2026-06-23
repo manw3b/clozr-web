@@ -1280,6 +1280,7 @@ export async function createCashMovement(input: {
   currency: Currency;
   description?: string | null;
   category?: string | null;
+  paymentMethod?: string | null;
 }): Promise<string> {
   const r = await req<{ id: string }>(`/workspaces/${ws()}/cash`, {
     method: "POST",
@@ -1289,6 +1290,7 @@ export async function createCashMovement(input: {
       currency: input.currency,
       description: input.description ?? null,
       category: input.category ?? null,
+      payment_method: input.paymentMethod ?? null,
       moved_at: new Date().toISOString(),
     }),
   });
