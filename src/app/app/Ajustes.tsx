@@ -26,6 +26,14 @@ import {
   TURNO_PLACEHOLDER_HELP,
   TURNO_SAMPLE,
 } from "@/lib/turnoTemplates";
+import {
+  parseQuickTemplates,
+  serializeQuickTemplates,
+  newQuickTemplate,
+  QUICK_TEMPLATES_KEY,
+  QUICK_PLACEHOLDER_HELP,
+  type QuickTemplate,
+} from "@/lib/quickTemplates";
 
 /**
  * Vista Ajustes — config del workspace con backend real (worker):
@@ -403,6 +411,9 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
 
       {/* Plantillas de turno (editables por negocio) */}
       <TurnoTemplatesCard />
+
+      {/* Mensajes rápidos de WhatsApp */}
+      <QuickTemplatesCard />
 
       {/* Plan y facturación */}
       <PlanCard />
@@ -829,6 +840,126 @@ function TemplateEditor({
         </pre>
       </div>
     </div>
+  );
+}
+
+/** Biblioteca de mensajes rápidos de WhatsApp, editable por negocio (Fase ③). */
+function QuickTemplatesCard() {
+  const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canManage = can("settings.manage");
+  const [list, setList] = useState<QuickTemplate[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api
+      .getSettings()
+      .then((s) => setList(parseQuickTemplates(s)))
+      .catch(() => setList(parseQuickTemplates(null)))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  function update(id: string, patch: Partial<QuickTemplate>) {
+    setList((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  }
+
+  async function save() {
+    const clean = list.map((t) => ({ ...t, name: t.name.trim(), body: t.body.trim() })).filter((t) => t.name && t.body);
+    setSaving(true);
+    try {
+      await api.setSettings({ [QUICK_TEMPLATES_KEY]: serializeQuickTemplates(clean) });
+      setList(clean);
+      showToast("Mensajes rápidos guardados", "success");
+    } catch {
+      showToast("No se pudieron guardar", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card padding={5}>
+      <SectionTitle>Mensajes rápidos</SectionTitle>
+      <Hint>Plantillas para enviar por WhatsApp en un toque desde la ficha del cliente.</Hint>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: space[2], marginTop: space[3] }}>
+        {QUICK_PLACEHOLDER_HELP.map((p) => (
+          <span
+            key={p.token}
+            title={p.label}
+            style={{
+              fontSize: text.xs,
+              fontFamily: "monospace",
+              padding: `2px ${space[2]}`,
+              background: color.surface2,
+              border: `1px solid ${color.border}`,
+              borderRadius: radius.sm,
+              color: color.textMuted,
+            }}
+          >
+            {p.token}
+          </span>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: space[3], marginTop: space[4] }}>
+        {loaded && list.length === 0 && (
+          <div style={{ fontSize: text.sm, color: color.textMuted }}>Sin mensajes todavía. Agregá uno.</div>
+        )}
+        {list.map((t) => (
+          <div key={t.id} style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[3] }}>
+            <div style={{ display: "flex", gap: space[2], alignItems: "center", marginBottom: space[2] }}>
+              <div style={{ flex: 1 }}>
+                <Input value={t.name} onChange={(e) => update(t.id, { name: e.target.value })} placeholder="Nombre (ej: Saludo)" disabled={!canManage} />
+              </div>
+              {canManage && (
+                <button
+                  onClick={() => setList((prev) => prev.filter((x) => x.id !== t.id))}
+                  aria-label="Eliminar"
+                  className="btn-icon muted"
+                  style={{ width: 30, height: 30, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+            <textarea
+              value={t.body}
+              onChange={(e) => update(t.id, { body: e.target.value })}
+              disabled={!canManage}
+              rows={3}
+              placeholder="Hola {nombre}, te escribo de {negocio}…"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                resize: "vertical",
+                padding: space[3],
+                background: color.surface,
+                border: `1px solid ${color.border}`,
+                borderRadius: radius.md,
+                fontSize: text.sm,
+                color: color.text,
+                fontFamily: "inherit",
+                lineHeight: 1.5,
+              }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {canManage ? (
+        <div style={{ display: "flex", gap: space[2], justifyContent: "space-between", marginTop: space[4] }}>
+          <Button variant="ghost" iconLeft={<Plus size={15} />} onClick={() => setList((prev) => [...prev, newQuickTemplate()])}>
+            Agregar mensaje
+          </Button>
+          <Button variant="primary" onClick={save} loading={saving} disabled={!loaded}>
+            Guardar
+          </Button>
+        </div>
+      ) : (
+        <Hint>Solo el dueño o un encargado pueden editar los mensajes.</Hint>
+      )}
+    </Card>
   );
 }
 
