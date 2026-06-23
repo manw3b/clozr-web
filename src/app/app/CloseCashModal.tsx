@@ -7,51 +7,66 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
+import type { CashBuckets, Currency } from "@/lib/types";
+
+/** Un bucket a arquear: método × moneda con el saldo que espera el sistema. */
+export interface ExpectedBucket {
+  method: string;
+  currency: Currency;
+  expected: number;
+}
+
+const bucketKey = (method: string, currency: Currency) => `${method}·${currency}`;
 
 /**
- * Modal de arqueo / cierre de caja. El usuario cuenta el efectivo físico
- * (ARS y USD por separado) y el modal muestra lo que el sistema espera, lo
- * contado y la diferencia (sobra/falta) por moneda. No fuerza diferencia 0 —
- * un faltante/sobrante queda registrado para auditoría.
- * Portado de clozr/src/pages/caja/components/CloseCashModal.tsx.
+ * Modal de arqueo / cierre de caja (Nivel B). El usuario cuenta cada bucket
+ * (método × moneda: Efectivo ARS, Transferencia ARS, Crypto USD…) y el modal
+ * muestra lo esperado, lo contado y la diferencia (sobra/falta) por bucket.
+ * No fuerza diferencia 0 — un faltante/sobrante queda registrado para auditoría.
  */
 export function CloseCashModal({
   open,
   onClose,
-  expectedArs,
-  expectedUsd,
+  expectedBuckets,
   onConfirm,
 }: {
   open: boolean;
   onClose: () => void;
-  expectedArs: number;
-  expectedUsd: number;
-  onConfirm: (input: { ars: number; usd: number }) => Promise<void>;
+  expectedBuckets: ExpectedBucket[];
+  onConfirm: (input: { ars: number; usd: number; buckets: CashBuckets }) => Promise<void>;
 }) {
-  const [arsInput, setArsInput] = useState("");
-  const [usdInput, setUsdInput] = useState("");
+  const [inputs, setInputs] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setArsInput(String(Math.round(expectedArs)));
-      setUsdInput(String(Math.round(expectedUsd)));
+      const init: Record<string, string> = {};
+      for (const b of expectedBuckets) init[bucketKey(b.method, b.currency)] = String(Math.round(b.expected));
+      setInputs(init);
     }
-  }, [open, expectedArs, expectedUsd]);
+  }, [open, expectedBuckets]);
 
-  const ars = Number(arsInput) || 0;
-  const usd = Number(usdInput) || 0;
-  const diffArs = ars - expectedArs;
-  const diffUsd = usd - expectedUsd;
+  const counted = (b: ExpectedBucket) => Number(inputs[bucketKey(b.method, b.currency)]) || 0;
 
-  const isDirty = () => ars !== Math.round(expectedArs) || usd !== Math.round(expectedUsd);
-  const canSubmit = arsInput.trim() !== "" && usdInput.trim() !== "" && !submitting;
+  const isDirty = () =>
+    expectedBuckets.some((b) => counted(b) !== Math.round(b.expected));
+  const allFilled = expectedBuckets.every((b) => (inputs[bucketKey(b.method, b.currency)] ?? "").trim() !== "");
+  const canSubmit = allFilled && !submitting;
 
   async function handleConfirm() {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      await onConfirm({ ars, usd });
+      const buckets: CashBuckets = {};
+      let ars = 0;
+      let usd = 0;
+      for (const b of expectedBuckets) {
+        const v = counted(b);
+        buckets[bucketKey(b.method, b.currency)] = v;
+        if (b.currency === "USD") usd += v;
+        else ars += v;
+      }
+      await onConfirm({ ars, usd, buckets });
       onClose();
     } finally {
       setSubmitting(false);
@@ -65,7 +80,7 @@ export function CloseCashModal({
       isDirty={isDirty}
       confirmCloseText="¿Cerrar el modal sin terminar el arqueo?"
       title="Cerrar caja del día"
-      maxWidth={560}
+      maxWidth={580}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -84,47 +99,72 @@ export function CloseCashModal({
       }
     >
       <p style={{ fontSize: text.sm, color: color.textMuted, marginTop: 0, marginBottom: space[3] }}>
-        Contá el efectivo físico en caja y registralo abajo. La diferencia con lo que el sistema
-        esperaba queda guardada para auditoría — no tiene que ser exactamente cero.
+        Contá cada caja (efectivo, transferencia, crypto…) y registrala abajo. La diferencia con lo
+        que el sistema esperaba queda guardada para auditoría — no tiene que ser exactamente cero.
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
-        <ModalField label="Pesos contados (ARS)" required>
-          <Input
-            type="number"
-            value={arsInput}
-            onChange={(e) => setArsInput(e.target.value)}
-            placeholder="0"
-            iconLeft={<span style={{ fontSize: 12, fontWeight: weight.semibold }}>$</span>}
-            autoFocus
-          />
-        </ModalField>
-        <ModalField label="Dólares contados (USD)" required>
-          <Input
-            type="number"
-            value={usdInput}
-            onChange={(e) => setUsdInput(e.target.value)}
-            placeholder="0"
-            iconLeft={<span style={{ fontSize: 12, fontWeight: weight.semibold }}>US$</span>}
-          />
-        </ModalField>
-      </div>
+      {expectedBuckets.length === 0 ? (
+        <div
+          style={{
+            padding: space[3],
+            background: color.surface2,
+            border: `1px solid ${color.border}`,
+            borderRadius: radius.md,
+            fontSize: text.sm,
+            color: color.textMuted,
+          }}
+        >
+          No hubo saldo inicial ni movimientos hoy — la caja se cierra en cero.
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+            {expectedBuckets.map((b, i) => {
+              const key = bucketKey(b.method, b.currency);
+              const symbol = b.currency === "USD" ? "US$" : "$";
+              return (
+                <ModalField key={key} label={`${b.method} ${b.currency}`} required>
+                  <Input
+                    type="number"
+                    value={inputs[key] ?? ""}
+                    onChange={(e) => setInputs((prev) => ({ ...prev, [key]: e.target.value }))}
+                    placeholder="0"
+                    iconLeft={<span style={{ fontSize: 12, fontWeight: weight.semibold }}>{symbol}</span>}
+                    autoFocus={i === 0}
+                  />
+                </ModalField>
+              );
+            })}
+          </div>
 
-      <div
-        style={{
-          marginTop: space[4],
-          padding: space[3],
-          background: color.surface2,
-          border: `1px solid ${color.border}`,
-          borderRadius: radius.md,
-          display: "flex",
-          flexDirection: "column",
-          gap: space[2],
-        }}
-      >
-        <DiffRow label="Pesos" expected={expectedArs} counted={ars} diff={diffArs} currency="ARS" />
-        <DiffRow label="Dólares" expected={expectedUsd} counted={usd} diff={diffUsd} currency="USD" />
-      </div>
+          <div
+            style={{
+              marginTop: space[4],
+              padding: space[3],
+              background: color.surface2,
+              border: `1px solid ${color.border}`,
+              borderRadius: radius.md,
+              display: "flex",
+              flexDirection: "column",
+              gap: space[2],
+            }}
+          >
+            {expectedBuckets.map((b) => {
+              const c = counted(b);
+              return (
+                <DiffRow
+                  key={bucketKey(b.method, b.currency)}
+                  label={`${b.method} · ${b.currency}`}
+                  expected={b.expected}
+                  counted={c}
+                  diff={c - b.expected}
+                  currency={b.currency}
+                />
+              );
+            })}
+          </div>
+        </>
+      )}
     </Modal>
   );
 }
@@ -140,11 +180,11 @@ function DiffRow({
   expected: number;
   counted: number;
   diff: number;
-  currency: "ARS" | "USD";
+  currency: Currency;
 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "90px 1fr 1fr 100px", gap: space[2], alignItems: "center" }}>
-      <span style={{ fontSize: text.xs, color: color.textMuted, fontWeight: weight.semibold, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "150px 1fr 1fr 110px", gap: space[2], alignItems: "center" }}>
+      <span style={{ fontSize: text.xs, color: color.text, fontWeight: weight.semibold, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {label}
       </span>
       <span style={{ fontSize: text.xs, color: color.textDim, textAlign: "right" }}>
@@ -158,7 +198,7 @@ function DiffRow({
   );
 }
 
-function DiffBadge({ value, currency }: { value: number; currency: "ARS" | "USD" }) {
+function DiffBadge({ value, currency }: { value: number; currency: Currency }) {
   const rounded = Math.round(value * 100) / 100;
   const isZero = Math.abs(rounded) < 0.01;
   const isPositive = rounded > 0;

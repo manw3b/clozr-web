@@ -8,7 +8,7 @@ import { Tabs } from "@/components/Tabs";
 import { Modal, ModalField } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { CashSessionChip } from "@/components/CashSessionChip";
-import { CloseCashModal } from "./CloseCashModal";
+import { CloseCashModal, type ExpectedBucket } from "./CloseCashModal";
 import { OpenCashModal } from "./OpenCashModal";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
@@ -16,7 +16,7 @@ import { useUndoableActions } from "@/store/useUndoableActions";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, toLocalISODate } from "@/lib/format";
 import * as api from "@/lib/api";
-import type { CashKind, CashMovement, CashSession, Currency } from "@/lib/types";
+import type { CashBuckets, CashKind, CashMovement, CashSession, Currency } from "@/lib/types";
 
 type Period = "today" | "week" | "month";
 
@@ -29,6 +29,15 @@ const PERIODS: { value: Period; label: string }[] = [
 // Métodos de caja (buckets): cómo entra/sale la plata. Crypto se trata como
 // USD (USDT ≈ USD) pero se ve como línea aparte en el desglose.
 const CASH_METHODS = ["Efectivo", "Transferencia", "Crypto", "Tarjeta", "Otro"];
+
+// Key de bucket usada en toda la Caja: `método·moneda`. Los nombres de método
+// no contienen "·", así que la moneda es siempre el último segmento.
+const bucketKey = (method: string, currency: Currency) => `${method}·${currency}`;
+function parseBucketKey(key: string): [string, Currency] {
+  const idx = key.lastIndexOf("·");
+  if (idx === -1) return [key, "ARS"];
+  return [key.slice(0, idx), key.slice(idx + 1) === "USD" ? "USD" : "ARS"];
+}
 
 function inPeriod(movedAt: string | null | undefined, period: Period): boolean {
   if (!movedAt) return false;
@@ -91,23 +100,34 @@ export function Caja() {
   );
   const isOpen = !!todaySession && !todaySession.closedAt;
 
-  // Saldo esperado HOY (para el arqueo) = apertura + (ingresos − egresos) de
-  // hoy, por moneda. Sin conversión: ARS y USD son cajas físicas distintas.
-  const expected = useMemo(() => {
-    let ars = todaySession?.openedBalanceArs ?? 0;
-    let usd = todaySession?.openedBalanceUsd ?? 0;
+  // Arqueo Nivel B: saldo esperado HOY por bucket (método × moneda) = apertura
+  // del bucket + (ingresos − egresos) de hoy de ese método/moneda. Sin
+  // conversión: cada bucket es una caja física/digital distinta.
+  const expectedBuckets = useMemo<ExpectedBucket[]>(() => {
+    const map = new Map<string, ExpectedBucket>();
+    const seed = (method: string, currency: Currency, amount: number) => {
+      const key = bucketKey(method, currency);
+      const cur = map.get(key) ?? { method, currency, expected: 0 };
+      cur.expected += amount;
+      map.set(key, cur);
+    };
+    const opened = todaySession?.openedBuckets ?? null;
+    if (opened) {
+      for (const [key, amount] of Object.entries(opened)) {
+        const [method, currency] = parseBucketKey(key);
+        seed(method, currency, amount);
+      }
+    }
     for (const m of movements) {
       if (!inPeriod(m.movedAt, "today")) continue;
-      const delta = m.kind === "income" ? m.amount : -m.amount;
-      if (m.currency === "USD") usd += delta;
-      else ars += delta;
+      seed(m.paymentMethod || "Otro", m.currency, m.kind === "income" ? m.amount : -m.amount);
     }
-    return { ars, usd };
+    return Array.from(map.values()).sort((a, b) => Math.abs(b.expected) - Math.abs(a.expected));
   }, [movements, todaySession]);
 
-  async function handleOpenSession(input: { ars: number; usd: number }) {
+  async function handleOpenSession(input: { ars: number; usd: number; buckets: CashBuckets }) {
     try {
-      await api.openCashSession({ date: todayISO, ars: input.ars, usd: input.usd });
+      await api.openCashSession({ date: todayISO, ars: input.ars, usd: input.usd, buckets: input.buckets });
       showToast("Caja abierta", "success");
       load();
     } catch (e) {
@@ -116,7 +136,7 @@ export function Caja() {
     }
   }
 
-  async function handleCloseSession(input: { ars: number; usd: number }) {
+  async function handleCloseSession(input: { ars: number; usd: number; buckets: CashBuckets }) {
     if (!todaySession) return;
     try {
       await api.closeCashSession(todaySession.id, input);
@@ -154,7 +174,7 @@ export function Caja() {
     const map = new Map<string, { method: string; currency: Currency; net: number }>();
     for (const m of periodMovements) {
       const method = m.paymentMethod || "Otro";
-      const key = `${method}·${m.currency}`;
+      const key = bucketKey(method, m.currency);
       const cur = map.get(key) ?? { method, currency: m.currency, net: 0 };
       cur.net += m.kind === "income" ? m.amount : -m.amount;
       map.set(key, cur);
@@ -369,8 +389,7 @@ export function Caja() {
       <CloseCashModal
         open={closeOpen}
         onClose={() => setCloseOpen(false)}
-        expectedArs={expected.ars}
-        expectedUsd={expected.usd}
+        expectedBuckets={expectedBuckets}
         onConfirm={handleCloseSession}
       />
     </div>

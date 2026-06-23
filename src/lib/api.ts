@@ -14,6 +14,7 @@ import type {
   CashKind,
   CashMovement,
   CashSession,
+  CashBuckets,
   Customer,
   LeadPriority,
   LeadSource,
@@ -1307,9 +1308,28 @@ interface CashSessionRaw {
   opened_at?: string | null;
   opened_balance_ars?: number | null;
   opened_balance_usd?: number | null;
+  opened_buckets?: string | null;
   closed_at?: string | null;
   closed_balance_ars?: number | null;
   closed_balance_usd?: number | null;
+  closed_buckets?: string | null;
+}
+/** Parsea el JSON de buckets del Worker ({ "Efectivo·ARS": 1000 }) de forma
+ *  tolerante: descarta valores no numéricos y cualquier cosa que no sea objeto. */
+function parseBuckets(s: string | null | undefined): CashBuckets | null {
+  if (!s) return null;
+  try {
+    const o = JSON.parse(s) as unknown;
+    if (!o || typeof o !== "object" || Array.isArray(o)) return null;
+    const out: CashBuckets = {};
+    for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
+      const n = Number(v);
+      if (Number.isFinite(n)) out[k] = n;
+    }
+    return Object.keys(out).length ? out : null;
+  } catch {
+    return null;
+  }
 }
 /** El Worker devuelve datetime('now') = "YYYY-MM-DD HH:MM:SS" (UTC, sin zona).
  *  Lo normalizamos a ISO-UTC para que new Date()/formatRelative lo interpreten
@@ -1326,9 +1346,11 @@ function mapCashSession(r: CashSessionRaw): CashSession {
     openedAt: toIsoUtc(r.opened_at),
     openedBalanceArs: Number(r.opened_balance_ars ?? 0),
     openedBalanceUsd: Number(r.opened_balance_usd ?? 0),
+    openedBuckets: parseBuckets(r.opened_buckets),
     closedAt: r.closed_at ? toIsoUtc(r.closed_at) : null,
     closedBalanceArs: r.closed_balance_ars != null ? Number(r.closed_balance_ars) : null,
     closedBalanceUsd: r.closed_balance_usd != null ? Number(r.closed_balance_usd) : null,
+    closedBuckets: parseBuckets(r.closed_buckets),
   };
 }
 
@@ -1340,6 +1362,7 @@ export async function openCashSession(input: {
   date: string;
   ars?: number;
   usd?: number;
+  buckets?: CashBuckets;
 }): Promise<CashSession> {
   const data = await req<{ session: CashSessionRaw }>(`/workspaces/${ws()}/cash-sessions/open`, {
     method: "POST",
@@ -1347,13 +1370,14 @@ export async function openCashSession(input: {
       session_date: input.date,
       opened_balance_ars: input.ars ?? 0,
       opened_balance_usd: input.usd ?? 0,
+      opened_buckets: input.buckets ?? null,
     }),
   });
   return mapCashSession(data.session);
 }
 export async function closeCashSession(
   sessionId: string,
-  input: { ars: number; usd: number },
+  input: { ars: number; usd: number; buckets?: CashBuckets },
 ): Promise<CashSession> {
   const data = await req<{ session: CashSessionRaw }>(
     `/workspaces/${ws()}/cash-sessions/${sessionId}/close`,
@@ -1362,6 +1386,7 @@ export async function closeCashSession(
       body: JSON.stringify({
         closed_balance_ars: input.ars,
         closed_balance_usd: input.usd,
+        closed_buckets: input.buckets ?? null,
       }),
     },
   );
