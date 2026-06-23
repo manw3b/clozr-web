@@ -36,6 +36,8 @@ import type {
   Origin,
   Appointment,
   AppointmentType,
+  Repair,
+  RepairStatus,
 } from "./types";
 import { stagesForIndustry } from "./types";
 
@@ -1196,6 +1198,112 @@ export async function createAppointmentType(name: string): Promise<AppointmentTy
 }
 export async function deleteAppointmentType(id: string): Promise<void> {
   await req(`/workspaces/${ws()}/appointment-types/${id}`, { method: "DELETE" });
+}
+
+/* ---------- reparaciones (taller) — Fase ⑥ ---------- */
+interface RepairRaw {
+  id: string;
+  customer_id?: string | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  device_model?: string | null;
+  device_imei?: string | null;
+  device_passcode?: string | null;
+  accessories?: string | null;
+  problem?: string | null;
+  diagnosis?: string | null;
+  status?: string | null;
+  parts_cost?: number | null;
+  labor_cost?: number | null;
+  technician?: string | null;
+  warranty_months?: number | null;
+  notes?: string | null;
+  received_at?: string | null;
+  estimated_at?: string | null;
+  delivered_at?: string | null;
+  appointment_id?: string | null;
+  sale_id?: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  created_at?: string | null;
+}
+function mapRepairRow(r: RepairRaw): Repair {
+  return {
+    id: r.id,
+    customerId: r.customer_id ?? null,
+    customerName: r.customer_name ?? null,
+    customerPhone: r.customer_phone ?? null,
+    deviceModel: r.device_model ?? null,
+    deviceImei: r.device_imei ?? null,
+    devicePasscode: r.device_passcode ?? null,
+    accessories: r.accessories ?? null,
+    problem: r.problem ?? null,
+    diagnosis: r.diagnosis ?? null,
+    status: (r.status as RepairStatus) ?? "received",
+    partsCost: r.parts_cost ?? null,
+    laborCost: r.labor_cost ?? null,
+    technician: r.technician ?? null,
+    warrantyMonths: r.warranty_months ?? null,
+    notes: r.notes ?? null,
+    receivedAt: r.received_at ?? null,
+    estimatedAt: r.estimated_at ?? null,
+    deliveredAt: r.delivered_at ?? null,
+    appointmentId: r.appointment_id ?? null,
+    saleId: r.sale_id ?? null,
+    ownerId: r.owner_id ?? null,
+    ownerName: r.owner_name ?? null,
+    createdAt: r.created_at ?? null,
+  };
+}
+export interface RepairInput {
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  deviceModel?: string | null;
+  deviceImei?: string | null;
+  devicePasscode?: string | null;
+  accessories?: string | null;
+  problem?: string | null;
+  diagnosis?: string | null;
+  status?: RepairStatus;
+  partsCost?: number | null;
+  laborCost?: number | null;
+  technician?: string | null;
+  warrantyMonths?: number | null;
+  notes?: string | null;
+  estimatedAt?: string | null;
+  deliveredAt?: string | null;
+  appointmentId?: string | null;
+  saleId?: string | null;
+}
+function repairBody(input: Partial<RepairInput>): Record<string, unknown> {
+  const m: Record<string, string> = {
+    customerId: "customer_id", customerName: "customer_name", customerPhone: "customer_phone",
+    deviceModel: "device_model", deviceImei: "device_imei", devicePasscode: "device_passcode",
+    accessories: "accessories", problem: "problem", diagnosis: "diagnosis", status: "status",
+    partsCost: "parts_cost", laborCost: "labor_cost", technician: "technician",
+    warrantyMonths: "warranty_months", notes: "notes", estimatedAt: "estimated_at",
+    deliveredAt: "delivered_at", appointmentId: "appointment_id", saleId: "sale_id",
+  };
+  const b: Record<string, unknown> = {};
+  for (const [k, snake] of Object.entries(m)) {
+    const v = (input as Record<string, unknown>)[k];
+    if (v !== undefined) b[snake] = v;
+  }
+  return b;
+}
+export async function listRepairs(): Promise<Repair[]> {
+  const r = await req<{ repairs: RepairRaw[] }>(`/workspaces/${ws()}/repairs`);
+  return (r.repairs ?? []).map(mapRepairRow);
+}
+export async function createRepair(input: RepairInput): Promise<{ id: string }> {
+  return req<{ id: string }>(`/workspaces/${ws()}/repairs`, { method: "POST", body: JSON.stringify(repairBody(input)) });
+}
+export async function updateRepair(id: string, patch: Partial<RepairInput>): Promise<void> {
+  await req(`/workspaces/${ws()}/repairs/${id}`, { method: "PATCH", body: JSON.stringify(repairBody(patch)) });
+}
+export async function deleteRepair(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/repairs/${id}`, { method: "DELETE" });
 }
 
 /* ---------- workspace settings (KV: plantillas, etc) ---------- */

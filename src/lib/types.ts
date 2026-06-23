@@ -84,6 +84,44 @@ export interface AppointmentType {
   name: string;
 }
 
+/** Reparación del taller (Fase ⑥). Estados fijos del ciclo de vida. */
+export type RepairStatus =
+  | "received"
+  | "diagnosing"
+  | "quoted"
+  | "approved"
+  | "repairing"
+  | "ready"
+  | "delivered"
+  | "cancelled";
+
+export interface Repair {
+  id: string;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  deviceModel?: string | null;
+  deviceImei?: string | null;
+  devicePasscode?: string | null;
+  accessories?: string | null;
+  problem?: string | null;
+  diagnosis?: string | null;
+  status: RepairStatus;
+  partsCost?: number | null;
+  laborCost?: number | null;
+  technician?: string | null;
+  warrantyMonths?: number | null;
+  notes?: string | null;
+  receivedAt?: string | null;
+  estimatedAt?: string | null;
+  deliveredAt?: string | null;
+  appointmentId?: string | null;
+  saleId?: string | null;
+  ownerId?: string | null;
+  ownerName?: string | null;
+  createdAt?: string | null;
+}
+
 /* ───────── Planes / billing (T3) ─────────
  * Espejo del PLAN_CONFIG del worker (cf-worker/src/routes/billing.ts):
  * Free = 1 asiento (gratis); Pro = ARS 25.000/mes · 3 asientos; Team =

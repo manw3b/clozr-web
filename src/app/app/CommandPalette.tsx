@@ -23,6 +23,7 @@ const NAV: { label: string; view: string }[] = [
   { label: "Clientes", view: "customers" },
   { label: "Ventas", view: "sales" },
   { label: "Agenda", view: "agenda" },
+  { label: "Reparaciones", view: "repairs" },
   { label: "Caja", view: "cash" },
   { label: "Deudas", view: "deudas" },
   { label: "Inventario", view: "inventory" },

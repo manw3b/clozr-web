@@ -18,6 +18,7 @@ export type Permission =
   | "cash.write"
   | "inventory.write"
   | "tasks.write"
+  | "repairs.write"
   | "reports.view"
   | "settings.manage"
   | "team.manage"
@@ -30,6 +31,7 @@ const OPERATE: Permission[] = [
   "pipeline.write",
   "cash.write",
   "tasks.write",
+  "repairs.write",
 ];
 
 const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
@@ -95,6 +97,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "cash.write",
   "inventory.write",
   "tasks.write",
+  "repairs.write",
   "reports.view",
   "settings.manage",
   "team.manage",
@@ -109,6 +112,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "cash.write": "Caja",
   "inventory.write": "Inventario",
   "tasks.write": "Tareas",
+  "repairs.write": "Reparaciones",
   "reports.view": "Ver reportes",
   "settings.manage": "Configuración",
   "team.manage": "Gestionar equipo",
