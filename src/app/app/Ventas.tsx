@@ -30,7 +30,7 @@ import { exportToCsv, timestamp } from "@/lib/csv";
 import { buildComprobanteText, printComprobante } from "@/lib/comprobante";
 import { shareOnWhatsApp } from "@/lib/openExternal";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
-import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_MANUAL } from "@/lib/types";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_MANUAL, saleCode } from "@/lib/types";
 import type { Currency, Customer, Sale, SaleDetail } from "@/lib/types";
 
 type SaleStatus = "paid" | "partial" | "pending";
@@ -153,14 +153,24 @@ export function Ventas({ onNewSale, customers = [] }: { onNewSale: () => void; c
         header: "Cliente",
         sortable: true,
         width: "minmax(200px, 1.5fr)",
-        cell: (s) => (
-          <div style={{ display: "flex", alignItems: "center", gap: space[3], minWidth: 0 }}>
-            <Avatar name={s.customerName || "Consumidor final"} size={28} />
-            <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {s.customerName || "Consumidor final"}
+        cell: (s) => {
+          const code = saleCode(s);
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: space[3], minWidth: 0 }}>
+              <Avatar name={s.customerName || "Consumidor final"} size={28} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {s.customerName || "Consumidor final"}
+                </div>
+                {code && (
+                  <div style={{ fontSize: 10, color: color.textMuted, fontVariantNumeric: "tabular-nums", letterSpacing: "0.5px", marginTop: 1 }}>
+                    {code}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ),
+          );
+        },
       },
       {
         id: "amount",
@@ -305,7 +315,7 @@ export function Ventas({ onNewSale, customers = [] }: { onNewSale: () => void; c
       ["Estado", (s) => (statusOf(s) === "paid" ? "Pagado" : statusOf(s) === "partial" ? "Parcial" : "Pendiente")],
       ["Pago", (s) => (s.paymentMethod ? PAYMENT_METHOD_LABELS[s.paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? s.paymentMethod : "")],
       ["Vendedor", (s) => s.sellerName ?? ""],
-      ["Comprobante", (s) => s.id.slice(-6).toUpperCase()],
+      ["Comprobante", (s) => saleCode(s) ?? s.id.slice(-6).toUpperCase()],
     ]);
     showToast(`${filtered.length} ${filtered.length === 1 ? "venta exportada" : "ventas exportadas"}`, "success");
   }
@@ -432,6 +442,7 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
   const [payOpen, setPayOpen] = useState(false);
   const [warrantyOpen, setWarrantyOpen] = useState(false);
   const businessName = useWorkspaceStore((s) => s.activeWorkspace?.name) ?? "";
+  const code = saleCode(sale);
 
   const reload = useCallback(() => {
     api.getSale(sale.id).then(setDetail).catch(() => {});
@@ -469,7 +480,7 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
         <header style={{ padding: `${space[4]} ${space[5]}`, borderBottom: `1px solid ${color.border}`, display: "flex", alignItems: "flex-start", gap: space[3], flexShrink: 0 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 2 }}>
-              Venta
+              Venta{code ? ` · ${code}` : ""}
             </div>
             <h2 style={{ margin: 0, fontSize: text.lg, fontWeight: weight.bold, color: color.text, letterSpacing: "-0.3px" }}>
               {sale.customerName || "Consumidor final"}

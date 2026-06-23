@@ -416,6 +416,8 @@ interface SaleRaw {
   notes?: string | null;
   sale_date?: string | null;
   created_at?: string | null;
+  order_seq?: number | null;
+  order_day?: string | null;
 }
 function mapSale(r: SaleRaw): Sale {
   return {
@@ -432,6 +434,8 @@ function mapSale(r: SaleRaw): Sale {
     notes: r.notes ?? undefined,
     saleDate: r.sale_date ?? undefined,
     createdAt: r.created_at ?? undefined,
+    orderSeq: r.order_seq ?? null,
+    orderDay: r.order_day ?? null,
   };
 }
 

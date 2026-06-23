@@ -6,7 +6,7 @@
  * NO es una factura fiscal (sin CAE/AFIP). Es un comprobante de compra.
  */
 import { formatMoney } from "./format";
-import { PAYMENT_METHOD_LABELS } from "./types";
+import { PAYMENT_METHOD_LABELS, saleCode } from "./types";
 import type { SaleDetail } from "./types";
 
 export interface ComprobanteBusiness {
@@ -35,7 +35,7 @@ function payLabel(method: string): string {
 }
 
 function buildHtml(business: ComprobanteBusiness, sale: SaleDetail): string {
-  const ref = sale.id.slice(-6).toUpperCase();
+  const ref = saleCode(sale) ?? sale.id.slice(-6).toUpperCase();
   const rows = sale.items
     .map((it) => {
       const unit = it.quantity > 0 ? it.subtotal / it.quantity : it.subtotal;
@@ -117,7 +117,7 @@ function buildHtml(business: ComprobanteBusiness, sale: SaleDetail): string {
 
 /** Comprobante en TEXTO plano (con formato WhatsApp) para compartir por chat. */
 export function buildComprobanteText(business: ComprobanteBusiness, sale: SaleDetail): string {
-  const ref = sale.id.slice(-6).toUpperCase();
+  const ref = saleCode(sale) ?? sale.id.slice(-6).toUpperCase();
   const L: string[] = [];
   L.push(`🧾 *${business.name || "Comprobante"}*`);
   L.push(`Comprobante N° ${ref}`);
