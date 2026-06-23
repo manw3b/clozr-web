@@ -377,6 +377,10 @@ export interface PipelineItem {
   priority: LeadPriority;
   source?: LeadSource;
   createdAt?: string;
+  /** Fase ④: visita agendada + próxima acción (del pipeline), para la Agenda. */
+  visitAt?: string | null;
+  nextActionAt?: string | null;
+  nextActionLabel?: string | null;
 }
 
 /** Semilla de etapas para un workspace nuevo (las 7 canónicas del desktop). */

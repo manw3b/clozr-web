@@ -64,7 +64,25 @@ const PERIOD_FILTERS = [
  * chart lateral, export CSV, mensaje/comprobante por WhatsApp, banner de
  * regularización.
  */
-export function Ventas({ onNewSale, customers = [] }: { onNewSale: () => void; customers?: Customer[] }) {
+/** Etiqueta corta del turno para la lista, ej "3 jul · 14:00". appointmentAt es
+ *  wall-clock local → new Date lo parsea en hora local (sin corrimiento UTC). */
+function turnoShort(at: string): string {
+  const d = new Date(at);
+  if (isNaN(d.getTime())) return at;
+  return `${d.toLocaleDateString("es-AR", { day: "numeric", month: "short" })} · ${formatTime(at)}`;
+}
+
+export function Ventas({
+  onNewSale,
+  customers = [],
+  initialOpenSaleId,
+  onConsumeInitial,
+}: {
+  onNewSale: () => void;
+  customers?: Customer[];
+  initialOpenSaleId?: string | null;
+  onConsumeInitial?: () => void;
+}) {
   const { showToast } = useUIStore();
   const blue = useBlueRate();
   const { can } = usePermissions();
@@ -87,6 +105,14 @@ export function Ventas({ onNewSale, customers = [] }: { onNewSale: () => void; c
     direction: "desc",
   });
   const [openId, setOpenId] = useState<string | null>(null);
+  // Abrir una venta puntual al entrar desde la Agenda (click en un turno).
+  useEffect(() => {
+    if (initialOpenSaleId) {
+      setOpenId(initialOpenSaleId);
+      onConsumeInitial?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOpenSaleId]);
   const ctxMenu = useContextMenu();
   const [ctxSale, setCtxSale] = useState<Sale | null>(null);
 
@@ -166,6 +192,11 @@ export function Ventas({ onNewSale, customers = [] }: { onNewSale: () => void; c
                 {code && (
                   <div style={{ fontSize: 10, color: color.textMuted, fontVariantNumeric: "tabular-nums", letterSpacing: "0.5px", marginTop: 1 }}>
                     {code}
+                  </div>
+                )}
+                {s.appointmentAt && (
+                  <div style={{ fontSize: 10, color: color.primary, fontWeight: weight.semibold, display: "flex", alignItems: "center", gap: 3, marginTop: 1 }}>
+                    <CalendarClock size={10} /> {turnoShort(s.appointmentAt)}
                   </div>
                 )}
               </div>
@@ -574,6 +605,8 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
         <Section title="Detalle">
           <Row label="Forma de pago" value={sale.paymentMethod ? PAYMENT_METHOD_LABELS[sale.paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? sale.paymentMethod : "—"} />
           {(sale.createdAt || sale.saleDate) && <Row label="Fecha" value={`${formatDateLong((sale.createdAt ?? sale.saleDate)!)} · ${formatTime((sale.createdAt ?? sale.saleDate)!)}`} />}
+          {sale.appointmentAt && <Row label="Turno" value={`${formatDateLong(sale.appointmentAt)} · ${formatTime(sale.appointmentAt)}`} />}
+          {sale.origin && <Row label="Origen" value={sale.origin} />}
           {sale.sellerName && <Row label="Vendedor" value={sale.sellerName} />}
         </Section>
 
