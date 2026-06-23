@@ -123,6 +123,9 @@ export default function Crm({
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Click en un turno de la Agenda → abrir esa venta en la vista Ventas.
+  const [pendingSaleId, setPendingSaleId] = useState<string | null>(null);
+  const openSaleFromAgenda = (id: string) => { setPendingSaleId(id); setView("sales"); };
 
   function flash(msg: string) {
     setToast(msg);
@@ -291,9 +294,15 @@ export default function Crm({
         ) : view === "customers" ? (
           <ClientesView key={activeWs.id} onNewSale={() => setModal({ kind: "sale" })} />
         ) : view === "sales" ? (
-          <VentasView key={activeWs.id} customers={customers} onNewSale={() => setModal({ kind: "sale" })} />
+          <VentasView
+            key={activeWs.id}
+            customers={customers}
+            onNewSale={() => setModal({ kind: "sale" })}
+            initialOpenSaleId={pendingSaleId}
+            onConsumeInitial={() => setPendingSaleId(null)}
+          />
         ) : view === "agenda" ? (
-          <Agenda key={activeWs.id} sales={sales} />
+          <Agenda key={activeWs.id} sales={sales} items={items} onOpenSale={openSaleFromAgenda} onOpenPipeline={() => setView("pipeline")} />
         ) : view === "tasks" ? (
           <Tareas key={activeWs.id} />
         ) : view === "deudas" ? (

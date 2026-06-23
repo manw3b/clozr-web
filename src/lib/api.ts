@@ -332,6 +332,9 @@ interface ItemRaw {
   product?: string | null;
   priority?: string | null;
   lead_source?: string | null;
+  visit_at?: string | null;
+  next_action_at?: string | null;
+  next_action_label?: string | null;
   created_at?: string | null;
 }
 function mapItem(r: ItemRaw): PipelineItem {
@@ -347,6 +350,9 @@ function mapItem(r: ItemRaw): PipelineItem {
     product: r.product ?? undefined,
     priority: (r.priority as LeadPriority) ?? "medium",
     source: (r.lead_source as LeadSource) ?? undefined,
+    visitAt: r.visit_at ?? null,
+    nextActionAt: r.next_action_at ?? null,
+    nextActionLabel: r.next_action_label ?? null,
     createdAt: r.created_at ?? undefined,
   };
 }
