@@ -49,6 +49,14 @@ export interface Workspace {
   planStatus?: string;
   /** Crecimiento: si este espacio está cubierto por el plan de otro, su id. null = independiente. */
   coveredBy?: string | null;
+  /** Fase ①: dirección del local (para el "Estamos en …" del mensaje de turno). */
+  address?: string | null;
+}
+
+/** Origen ("viene de") gestionable por workspace — ej "MobileZone", "Instagram". */
+export interface Origin {
+  id: string;
+  name: string;
 }
 
 /* ───────── Planes / billing (T3) ─────────
@@ -571,6 +579,10 @@ export interface Sale {
   orderSeq?: number | null;
   /** Día local AR (YYYY-MM-DD) al que pertenece el Nº de orden. */
   orderDay?: string | null;
+  /** Fase ①: fecha/hora del turno (wall-clock local, ej "2026-07-03T14:00"). */
+  appointmentAt?: string | null;
+  /** Fase ①: origen "viene de" (nombre elegido de la lista de orígenes). */
+  origin?: string | null;
 }
 
 /** Venta con items + pagos (GET de una venta). */

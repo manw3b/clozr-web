@@ -12,7 +12,7 @@ import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import { roleLabel } from "@/lib/permissions";
-import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage } from "@/lib/types";
+import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage, Origin } from "@/lib/types";
 import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, ESPACIO_USD, ANNUAL_MONTHS_PAID, ANNUAL_MONTHS_FREE, formatArs, formatUsd, discountTargetLabel, type PlanId, type PlanInfo } from "@/lib/types";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchDolares } from "@/lib/dolar";
@@ -83,6 +83,30 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
       showToast("No se pudo guardar el objetivo", "error");
     } finally {
       setSavingGoal(false);
+    }
+  }
+
+  /* ── Espacio: dirección del local (Fase ①, para el mensaje de turno) ── */
+  const [address, setAddress] = useState(activeWorkspace?.address ?? "");
+  const [savingAddress, setSavingAddress] = useState(false);
+  useEffect(() => {
+    setAddress(activeWorkspace?.address ?? "");
+  }, [activeWorkspace?.id, activeWorkspace?.address]);
+
+  async function saveAddress() {
+    const a = address.trim();
+    if (a === (activeWorkspace?.address ?? "")) return;
+    setSavingAddress(true);
+    try {
+      await api.updateWorkspace({ address: a || null });
+      useWorkspaceStore.setState((s) => ({
+        activeWorkspace: s.activeWorkspace ? { ...s.activeWorkspace, address: a || null } : s.activeWorkspace,
+      }));
+      showToast("Dirección guardada", "success");
+    } catch {
+      showToast("No se pudo guardar la dirección", "error");
+    } finally {
+      setSavingAddress(false);
     }
   }
 
@@ -340,8 +364,33 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
         </div>
         <Hint>Se muestra en Mi Día como meta del equipo.</Hint>
 
+        {/* Dirección del local (Fase ①) */}
+        <div style={{ display: "flex", gap: space[2], alignItems: "flex-end", marginTop: space[4] }}>
+          <div style={{ flex: 1 }}>
+            <Label>Dirección del local</Label>
+            <Input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Ej: calle 44 e/ 17 y 18 Nº 1136 (Timbre 101)"
+              disabled={!canManage}
+            />
+          </div>
+          <Button
+            variant="primary"
+            onClick={saveAddress}
+            loading={savingAddress}
+            disabled={!canManage || address.trim() === (activeWorkspace?.address ?? "")}
+          >
+            Guardar
+          </Button>
+        </div>
+        <Hint>Aparece en el mensaje de turno al cliente ("Estamos en …").</Hint>
+
         {!canManage && <Hint>Solo el dueño o un encargado pueden editar el espacio.</Hint>}
       </Card>
+
+      {/* Orígenes ("viene de") */}
+      <OriginsCard />
 
       {/* Plan y facturación */}
       <PlanCard />
@@ -628,6 +677,116 @@ function ReferralCard() {
  * espacios suyos (Free) a la misma suscripción por ESPACIO_USD/mes c/u. El
  * espacio cubierto copia el plan y no paga aparte. Si el espacio activo está
  * cubierto por otro, mostramos solo una nota. */
+/** Orígenes ("viene de") — lista gestionable usada al generar turnos. Fase ①. */
+function OriginsCard() {
+  const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canManage = can("settings.manage");
+  const [origins, setOrigins] = useState<Origin[]>([]);
+  const [name, setName] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const load = useCallback(() => {
+    api.listOrigins().then(setOrigins).catch(() => {});
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function add() {
+    const n = name.trim();
+    if (!n) return;
+    setAdding(true);
+    try {
+      const o = await api.createOrigin(n);
+      setOrigins((prev) =>
+        prev.some((x) => x.id === o.id) ? prev : [...prev, o].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setName("");
+      showToast("Origen agregado", "success");
+    } catch {
+      showToast("No se pudo agregar", "error");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function remove(o: Origin) {
+    const ok = await confirmAsync({
+      title: `¿Eliminar "${o.name}"?`,
+      message: "Dejará de estar disponible para nuevas ventas.",
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api.deleteOrigin(o.id);
+      setOrigins((prev) => prev.filter((x) => x.id !== o.id));
+    } catch {
+      showToast("No se pudo eliminar", "error");
+    }
+  }
+
+  return (
+    <Card padding={5}>
+      <SectionTitle>Orígenes (Viene de)</SectionTitle>
+      <Hint>De dónde vienen tus clientes (ej. otra tienda, redes). Lo elegís al generar un turno.</Hint>
+      <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginTop: space[4] }}>
+        {origins.length === 0 && (
+          <div style={{ fontSize: text.sm, color: color.textMuted }}>Todavía no hay orígenes.</div>
+        )}
+        {origins.map((o) => (
+          <div
+            key={o.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: `${space[2]} ${space[3]}`,
+              background: color.surface2,
+              border: `1px solid ${color.border}`,
+              borderRadius: radius.md,
+            }}
+          >
+            <span style={{ fontSize: text.sm, color: color.text }}>{o.name}</span>
+            {canManage && (
+              <button
+                onClick={() => void remove(o)}
+                aria-label="Eliminar"
+                className="btn-icon muted"
+                style={{ width: 26, height: 26, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {canManage && (
+        <div style={{ display: "flex", gap: space[2], alignItems: "flex-end", marginTop: space[4] }}>
+          <div style={{ flex: 1 }}>
+            <Label>Nuevo origen</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ej: MobileZone"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void add();
+                }
+              }}
+            />
+          </div>
+          <Button variant="primary" iconLeft={<Plus size={15} />} onClick={() => void add()} loading={adding} disabled={!name.trim()}>
+            Agregar
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function EspaciosCard() {
   const showToast = useUIStore((s) => s.showToast);
   const ws = useWorkspaceStore((s) => s.activeWorkspace);
