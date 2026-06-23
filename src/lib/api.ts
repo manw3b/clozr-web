@@ -1101,6 +1101,15 @@ export async function deleteOrigin(id: string): Promise<void> {
   await req(`/workspaces/${ws()}/origins/${id}`, { method: "DELETE" });
 }
 
+/* ---------- workspace settings (KV: plantillas, etc) ---------- */
+export async function getSettings(): Promise<Record<string, string>> {
+  const r = await req<{ settings: Record<string, string> }>(`/workspaces/${ws()}/settings`);
+  return r.settings ?? {};
+}
+export async function setSettings(patch: Record<string, string>): Promise<void> {
+  await req(`/workspaces/${ws()}/settings`, { method: "PUT", body: JSON.stringify({ settings: patch }) });
+}
+
 /* ---------- followups (seguimientos) + last contact (Mi Día) ---------- */
 interface FollowupRaw {
   id: string;

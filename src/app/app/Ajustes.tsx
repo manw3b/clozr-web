@@ -17,6 +17,15 @@ import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, ESPACIO_USD, 
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchDolares } from "@/lib/dolar";
 import { Stepper } from "@/components/Stepper";
+import {
+  applyTurnoTemplate,
+  resolveTurnoTemplate,
+  DEFAULT_TURNO_CLIENTE,
+  DEFAULT_TURNO_INTERNO,
+  TURNO_TEMPLATE_KEYS,
+  TURNO_PLACEHOLDER_HELP,
+  TURNO_SAMPLE,
+} from "@/lib/turnoTemplates";
 
 /**
  * Vista Ajustes — config del workspace con backend real (worker):
@@ -392,6 +401,9 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
       {/* Orígenes ("viene de") */}
       <OriginsCard />
 
+      {/* Plantillas de turno (editables por negocio) */}
+      <TurnoTemplatesCard />
+
       {/* Plan y facturación */}
       <PlanCard />
 
@@ -677,6 +689,149 @@ function ReferralCard() {
  * espacios suyos (Free) a la misma suscripción por ESPACIO_USD/mes c/u. El
  * espacio cubierto copia el plan y no paga aparte. Si el espacio activo está
  * cubierto por otro, mostramos solo una nota. */
+/** Editor de plantillas de turno por negocio (Fase ②). Guarda en workspace_settings. */
+function TurnoTemplatesCard() {
+  const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canManage = can("settings.manage");
+  const [cliente, setCliente] = useState(DEFAULT_TURNO_CLIENTE);
+  const [interno, setInterno] = useState(DEFAULT_TURNO_INTERNO);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api
+      .getSettings()
+      .then((s) => {
+        setCliente(resolveTurnoTemplate("cliente", s));
+        setInterno(resolveTurnoTemplate("interno", s));
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.setSettings({
+        [TURNO_TEMPLATE_KEYS.cliente]: cliente,
+        [TURNO_TEMPLATE_KEYS.interno]: interno,
+      });
+      showToast("Plantillas guardadas", "success");
+    } catch {
+      showToast("No se pudieron guardar", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card padding={5}>
+      <SectionTitle>Plantillas de turno</SectionTitle>
+      <Hint>Editá los mensajes que se generan al crear un turno. Usá las variables entre llaves.</Hint>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: space[2], marginTop: space[3] }}>
+        {TURNO_PLACEHOLDER_HELP.map((p) => (
+          <span
+            key={p.token}
+            title={p.label}
+            style={{
+              fontSize: text.xs,
+              fontFamily: "monospace",
+              padding: `2px ${space[2]}`,
+              background: color.surface2,
+              border: `1px solid ${color.border}`,
+              borderRadius: radius.sm,
+              color: color.textMuted,
+            }}
+          >
+            {p.token}
+          </span>
+        ))}
+      </div>
+
+      <TemplateEditor label="Para el cliente" value={cliente} onChange={setCliente} disabled={!canManage} />
+      <TemplateEditor label="Interno (anúnciate)" value={interno} onChange={setInterno} disabled={!canManage} />
+
+      {canManage ? (
+        <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end", marginTop: space[4] }}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setCliente(DEFAULT_TURNO_CLIENTE);
+              setInterno(DEFAULT_TURNO_INTERNO);
+            }}
+          >
+            Restaurar por defecto
+          </Button>
+          <Button variant="primary" onClick={save} loading={saving} disabled={!loaded}>
+            Guardar plantillas
+          </Button>
+        </div>
+      ) : (
+        <Hint>Solo el dueño o un encargado pueden editar las plantillas.</Hint>
+      )}
+    </Card>
+  );
+}
+
+/** Textarea de plantilla + preview en vivo (con datos de muestra). */
+function TemplateEditor({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+}) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ marginTop: space[4] }}>
+      <Label>{label}</Label>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: space[3] }}>
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          rows={9}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            resize: "vertical",
+            padding: space[3],
+            background: color.surface,
+            border: `1px solid ${color.border}`,
+            borderRadius: radius.md,
+            fontSize: text.sm,
+            color: color.text,
+            fontFamily: "inherit",
+            lineHeight: 1.5,
+          }}
+        />
+        <pre
+          aria-label="Vista previa"
+          style={{
+            margin: 0,
+            padding: space[3],
+            background: color.surface2,
+            border: `1px solid ${color.border}`,
+            borderRadius: radius.md,
+            fontSize: text.sm,
+            color: color.text,
+            fontFamily: "inherit",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {applyTurnoTemplate(value, TURNO_SAMPLE)}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 /** Orígenes ("viene de") — lista gestionable usada al generar turnos. Fase ①. */
 function OriginsCard() {
   const { showToast } = useUIStore();

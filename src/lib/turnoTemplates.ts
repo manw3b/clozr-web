@@ -36,6 +36,23 @@ USD {usd}
 
 VUELTO:`;
 
+/** Claves en workspace_settings (Fase ②) para las plantillas editables. */
+export const TURNO_TEMPLATE_KEYS = {
+  cliente: "turno_template_cliente",
+  interno: "turno_template_interno",
+} as const;
+
+/** Plantilla guardada por el negocio (si hay texto) o el default. */
+export function resolveTurnoTemplate(
+  kind: "cliente" | "interno",
+  settings: Record<string, string> | null | undefined,
+): string {
+  const key = kind === "cliente" ? TURNO_TEMPLATE_KEYS.cliente : TURNO_TEMPLATE_KEYS.interno;
+  const saved = settings?.[key];
+  if (saved && saved.trim()) return saved;
+  return kind === "cliente" ? DEFAULT_TURNO_CLIENTE : DEFAULT_TURNO_INTERNO;
+}
+
 export const TURNO_PLACEHOLDER_HELP = [
   { token: "{nombre}", label: "Nombre del cliente" },
   { token: "{equipo}", label: "Ítems con precio (USD)" },
@@ -103,6 +120,21 @@ export function applyTurnoTemplate(body: string, d: TurnoData): string {
     .replace(/\{ars\}/g, fb(d.ars, "—"))
     .replace(/\{negocio\}/g, fb(d.negocio, ""));
 }
+
+/** Datos de muestra para previsualizar plantillas en el editor (Ajustes). */
+export const TURNO_SAMPLE: TurnoData = {
+  nombre: "Juan Manuel",
+  equipo: "iPhone 17 Black 810 USD y cargador 35 USD",
+  pedido: "iPhone 17 Black, cargador",
+  dia: "Miércoles 3",
+  hora: "14:00",
+  vieneDe: "MobileZone",
+  direccion: "calle 44 e/ 17 y 18 Nº 1136 (Timbre 101)",
+  codigo: "GP-1236",
+  usd: "845",
+  ars: "$ 1.235.000",
+  negocio: "Mi Negocio",
+};
 
 /** Prefijo de cantidad solo cuando qty != 1 (ej "2x "). */
 function qtyPrefix(qty: number): string {
