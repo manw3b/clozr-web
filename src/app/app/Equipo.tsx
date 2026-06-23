@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Plus, ShieldCheck, UserMinus, Mail, RefreshCw, KeyRound, Copy, CreditCard, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
@@ -15,6 +15,8 @@ import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import { roleLabel, ALL_PERMISSIONS, PERMISSION_LABELS, SENSITIVE_PERMISSIONS, type Permission, type CustomRole } from "@/lib/permissions";
 import { useRolePermsStore } from "@/store/rolePermsStore";
+import { useHomeLayoutStore } from "@/store/homeLayoutStore";
+import { HOME_BLOCKS, HOME_SECTIONS, defaultBlocksFor, type HomeBlockKey } from "@/lib/homeBlocks";
 import type { Member, User } from "@/lib/types";
 import { PLANS, SEATS_UNLIMITED, type PlanId } from "@/lib/types";
 
@@ -434,6 +436,9 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
 
       {/* Roles personalizados — solo el dueño (Fase ⑤.B) */}
       <CustomRolesCard onSaved={setCustomRoles} />
+
+      {/* Home por rol — qué ve cada rol en Mi Día (Fase ⑧, solo el dueño) */}
+      <HomeLayoutCard />
 
       {members === null ? (
         <div style={{ fontSize: text.sm, color: color.textDim, padding: space[6] }}>
@@ -873,6 +878,150 @@ function RolePermissionsCard() {
                     ))}
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ───────── Home por rol (Fase ⑧) — qué bloques ve cada rol en Mi Día ───────── */
+function HomeLayoutCard() {
+  const { showToast } = useUIStore();
+  const activeWs = useWorkspaceStore((s) => s.activeWorkspace);
+  const isOwner = activeWs?.role === "owner";
+  const setStoreLayouts = useHomeLayoutStore((s) => s.setLayouts);
+
+  type RoleCol = { key: string; label: string };
+  const [roleCols, setRoleCols] = useState<RoleCol[] | null>(null);
+  const [sel, setSel] = useState<Record<string, Set<HomeBlockKey>> | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      api.getHomeLayouts().catch(() => ({ layouts: {} as Record<string, string[]> })),
+      api
+        .getCustomRoles()
+        .catch(() => ({ roles: [] as Array<{ id: string; name: string; permissions: string[] }>, all: [] as string[] })),
+    ]).then(([hl, cr]) => {
+      if (!alive) return;
+      const cols: RoleCol[] = [
+        { key: "owner", label: roleLabel("owner") },
+        { key: "admin", label: roleLabel("admin") },
+        { key: "vendedor", label: roleLabel("vendedor") },
+        { key: "viewer", label: roleLabel("viewer") },
+        ...cr.roles.map((r) => ({ key: r.id, label: r.name })),
+      ];
+      const next: Record<string, Set<HomeBlockKey>> = {};
+      for (const col of cols) {
+        const stored = hl.layouts[col.key];
+        const base = stored && stored.length ? stored : defaultBlocksFor(col.key);
+        next[col.key] = new Set(base.filter((b): b is HomeBlockKey => HOME_BLOCKS.some((x) => x.key === b)));
+      }
+      setRoleCols(cols);
+      setSel(next);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWs?.id]);
+
+  function toggle(roleKey: string, block: HomeBlockKey) {
+    setSel((prev) => {
+      if (!prev) return prev;
+      const cur = new Set(prev[roleKey] ?? []);
+      if (cur.has(block)) cur.delete(block);
+      else cur.add(block);
+      return { ...prev, [roleKey]: cur };
+    });
+  }
+
+  async function save() {
+    if (!sel || !activeWs || !roleCols) return;
+    setSaving(true);
+    try {
+      const payload: Record<string, string[]> = {};
+      for (const col of roleCols) payload[col.key] = [...(sel[col.key] ?? [])];
+      await api.setHomeLayouts(payload);
+      setStoreLayouts(activeWs.id, payload);
+      showToast("Home actualizado", "success");
+    } catch {
+      showToast("No se pudo guardar", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: space[4] }}>
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2], marginBottom: 6 }}>
+          <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>Home por rol</div>
+          {isOwner && (
+            <Button size="sm" variant="primary" onClick={save} loading={saving} disabled={!sel}>
+              Guardar
+            </Button>
+          )}
+        </div>
+        <div style={{ fontSize: text.xs, color: color.textDim, marginBottom: 12 }}>
+          {isOwner
+            ? "Elegí qué ve cada rol al abrir la app (Mi Día). Los bloques de negocio no aplican al Vendedor (solo ve lo suyo)."
+            : "Solo el dueño puede configurar el home de los roles."}
+        </div>
+        {!sel || !roleCols ? (
+          <div style={{ fontSize: text.sm, color: color.textDim }}>Cargando…</div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: text.sm }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", padding: space[2], color: color.textMuted, fontWeight: weight.medium, minWidth: 200 }}>Bloque</th>
+                  {roleCols.map((c) => (
+                    <th key={c.key} style={{ padding: space[2], color: color.textMuted, fontWeight: weight.medium, textAlign: "center", whiteSpace: "nowrap" }}>
+                      {c.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {HOME_SECTIONS.map((section) => {
+                  const blocks = HOME_BLOCKS.filter((b) => b.section === section);
+                  return (
+                    <Fragment key={section}>
+                      <tr>
+                        <td colSpan={roleCols.length + 1} style={{ padding: `${space[3]} ${space[2]} 4px`, fontSize: 10, color: color.textDim, textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: weight.semibold }}>
+                          {section}
+                        </td>
+                      </tr>
+                      {blocks.map((b) => (
+                        <tr key={b.key} style={{ borderTop: `1px solid ${color.border}` }}>
+                          <td style={{ padding: space[2], color: color.text }}>
+                            {b.label}
+                            <div style={{ fontSize: text.xs, color: color.textDim }}>{b.description}</div>
+                          </td>
+                          {roleCols.map((c) => {
+                            const naVendedor = b.scope === "global" && c.key === "vendedor";
+                            return (
+                              <td key={c.key} style={{ padding: space[2], textAlign: "center" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={(sel[c.key]?.has(b.key) ?? false) && !naVendedor}
+                                  disabled={!isOwner || naVendedor}
+                                  onChange={() => toggle(c.key, b.key)}
+                                  title={naVendedor ? "No aplica al vendedor (solo ve lo suyo)" : undefined}
+                                />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
