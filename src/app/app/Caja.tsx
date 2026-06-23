@@ -26,6 +26,10 @@ const PERIODS: { value: Period; label: string }[] = [
   { value: "month", label: "Mes" },
 ];
 
+// Métodos de caja (buckets): cómo entra/sale la plata. Crypto se trata como
+// USD (USDT ≈ USD) pero se ve como línea aparte en el desglose.
+const CASH_METHODS = ["Efectivo", "Transferencia", "Crypto", "Tarjeta", "Otro"];
+
 function inPeriod(movedAt: string | null | undefined, period: Period): boolean {
   if (!movedAt) return false;
   const d = new Date(movedAt);
@@ -144,6 +148,22 @@ export function Caja() {
     return { income, expense, balance: income - expense, usd };
   }, [periodMovements]);
 
+  // Desglose del período por método × moneda (billetes ARS, transferencia ARS,
+  // efectivo USD, crypto…). Son saldos reales por bucket, sin conversión.
+  const breakdown = useMemo(() => {
+    const map = new Map<string, { method: string; currency: Currency; net: number }>();
+    for (const m of periodMovements) {
+      const method = m.paymentMethod || "Otro";
+      const key = `${method}·${m.currency}`;
+      const cur = map.get(key) ?? { method, currency: m.currency, net: 0 };
+      cur.net += m.kind === "income" ? m.amount : -m.amount;
+      map.set(key, cur);
+    }
+    return Array.from(map.values())
+      .filter((b) => b.net !== 0)
+      .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+  }, [periodMovements]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = [...periodMovements].sort((a, b) => (b.movedAt ?? "").localeCompare(a.movedAt ?? ""));
@@ -221,10 +241,44 @@ export function Caja() {
         />
       </div>
 
-      {totals.usd !== 0 && (
-        <div style={{ fontSize: text.xs, color: color.textMuted }}>
-          Balance en dólares del período: <strong style={{ color: color.text }}>{formatMoney(totals.usd, "USD")}</strong>
-        </div>
+      {breakdown.length > 0 && (
+        <Card padding={4}>
+          <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: space[3] }}>
+            Desglose del período · por método y moneda
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
+            {breakdown.map((b) => (
+              <div
+                key={`${b.method}·${b.currency}`}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                  padding: `${space[2]} ${space[3]}`,
+                  background: color.surface2,
+                  border: `1px solid ${color.border}`,
+                  borderRadius: radius.md,
+                  minWidth: 132,
+                }}
+              >
+                <span style={{ fontSize: text.xs, color: color.textMuted }}>
+                  {b.method} · {b.currency}
+                </span>
+                <span
+                  style={{
+                    fontSize: text.sm,
+                    fontWeight: weight.bold,
+                    color: b.net >= 0 ? color.success : color.danger,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {b.net >= 0 ? "+" : "−"}
+                  {formatMoney(Math.abs(b.net), b.currency)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: space[3], flexWrap: "wrap" }}>
@@ -284,6 +338,7 @@ export function Caja() {
                     </div>
                     <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: 2 }}>
                       {m.movedAt ? new Date(m.movedAt).toLocaleDateString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                      {m.paymentMethod ? ` · ${m.paymentMethod}` : ""}
                       {m.category ? ` · ${m.category}` : ""}
                     </div>
                   </div>
@@ -338,6 +393,7 @@ function NewMovementModal({
   const { showToast } = useUIStore();
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<Currency>("ARS");
+  const [method, setMethod] = useState("Efectivo");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [saving, setSaving] = useState(false);
@@ -346,6 +402,7 @@ function NewMovementModal({
     if (open) {
       setAmount("");
       setCurrency("ARS");
+      setMethod("Efectivo");
       setDescription("");
       setCategory("");
     }
@@ -362,6 +419,7 @@ function NewMovementModal({
         kind,
         amount: Number(amount),
         currency,
+        paymentMethod: method,
         description: description.trim() || null,
         category: category.trim() || null,
       });
@@ -393,6 +451,24 @@ function NewMovementModal({
         </>
       }
     >
+      <ModalField label="Método">
+        <select
+          value={method}
+          onChange={(e) => {
+            const v = e.target.value;
+            setMethod(v);
+            if (v === "Crypto") setCurrency("USD");
+          }}
+          className="select-trigger"
+          style={{ width: "100%", height: 38, borderRadius: radius.md, color: color.text, padding: `0 ${space[2]}` }}
+        >
+          {CASH_METHODS.map((mtd) => (
+            <option key={mtd} value={mtd}>
+              {mtd}
+            </option>
+          ))}
+        </select>
+      </ModalField>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: space[3] }}>
         <ModalField label="Monto" required>
           <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
