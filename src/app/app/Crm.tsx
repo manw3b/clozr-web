@@ -53,6 +53,7 @@ import { CommandPalette } from "./CommandPalette";
 import { ClozrAi } from "./ClozrAi";
 import { Clientes as ClientesView } from "./Clientes";
 import { Ventas as VentasView } from "./Ventas";
+import { Agenda } from "./Agenda";
 import { Pipeline as PipelineView } from "./Pipeline";
 import { UndoToastHost } from "@/components/UndoToastHost";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
@@ -87,6 +88,7 @@ type View =
   | "pipeline"
   | "customers"
   | "sales"
+  | "agenda"
   | "cash"
   | "deudas"
   | "inventory"
@@ -290,6 +292,8 @@ export default function Crm({
           <ClientesView key={activeWs.id} onNewSale={() => setModal({ kind: "sale" })} />
         ) : view === "sales" ? (
           <VentasView key={activeWs.id} customers={customers} onNewSale={() => setModal({ kind: "sale" })} />
+        ) : view === "agenda" ? (
+          <Agenda key={activeWs.id} sales={sales} />
         ) : view === "tasks" ? (
           <Tareas key={activeWs.id} />
         ) : view === "deudas" ? (
