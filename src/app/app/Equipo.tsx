@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, ShieldCheck, UserMinus, Mail, RefreshCw, KeyRound, Copy, CreditCard } from "lucide-react";
+import { Plus, ShieldCheck, UserMinus, Mail, RefreshCw, KeyRound, Copy, CreditCard, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -13,7 +13,7 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
-import { roleLabel, ALL_PERMISSIONS, PERMISSION_LABELS, SENSITIVE_PERMISSIONS, type Permission } from "@/lib/permissions";
+import { roleLabel, ALL_PERMISSIONS, PERMISSION_LABELS, SENSITIVE_PERMISSIONS, type Permission, type CustomRole } from "@/lib/permissions";
 import { useRolePermsStore } from "@/store/rolePermsStore";
 import type { Member, User } from "@/lib/types";
 import { PLANS, SEATS_UNLIMITED, type PlanId } from "@/lib/types";
@@ -67,7 +67,7 @@ export function Equipo({ user, onUpgrade }: { user: User; onUpgrade?: () => void
   const [loading, setLoading] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "vendedor" | "viewer">("vendedor");
+  const [inviteRole, setInviteRole] = useState<string>("vendedor");
   const [submitting, setSubmitting] = useState(false);
   const [codeModal, setCodeModal] = useState<
     null | { email: string; code: string; expiresInMin: number; generating?: boolean }
@@ -93,6 +93,14 @@ export function Equipo({ user, onUpgrade }: { user: User; onUpgrade?: () => void
   useEffect(() => {
     load();
   }, [load]);
+
+  // Roles personalizados del negocio (para selectores + etiquetas). Fase ⑤.B.
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
+  useEffect(() => {
+    api.getCustomRoles().then((r) => setCustomRoles(r.roles as CustomRole[])).catch(() => {});
+  }, [activeWs?.id]);
+  /** Etiqueta de un rol: nombre del rol custom si aplica, si no el built-in. */
+  const labelFor = (roleId: string) => customRoles.find((r) => r.id === roleId)?.name ?? roleLabel(roleId);
 
   async function invite(e: React.FormEvent) {
     e.preventDefault();
@@ -124,7 +132,7 @@ export function Equipo({ user, onUpgrade }: { user: User; onUpgrade?: () => void
   async function changeRole(m: Member, newRole: string) {
     try {
       await api.patchMemberRole(m.id, newRole);
-      showToast(`Rol actualizado a ${roleLabel(newRole)}`, "success");
+      showToast(`Rol actualizado a ${labelFor(newRole)}`, "success");
       load();
     } catch (e) {
       showToast(errMsg(e, "No se pudo cambiar el rol"), "error");
@@ -352,6 +360,34 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
                   </div>
                 </label>
               ))}
+              {customRoles.map((r) => (
+                <label
+                  key={r.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: space[3],
+                    padding: `${space[2]} ${space[3]}`,
+                    borderRadius: radius.md,
+                    background: inviteRole === r.id ? color.primaryBg : color.surface2,
+                    border: `1px solid ${inviteRole === r.id ? color.primary : color.border}`,
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="invite-role"
+                    value={r.id}
+                    checked={inviteRole === r.id}
+                    onChange={() => setInviteRole(r.id)}
+                    style={{ marginTop: 3 }}
+                  />
+                  <div>
+                    <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>{r.name}</div>
+                    <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>Rol personalizado</div>
+                  </div>
+                </label>
+              ))}
             </div>
             <div style={{ display: "flex", gap: space[2] }}>
               <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
@@ -396,6 +432,9 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
       {/* Permisos por rol — editable solo por el dueño (Fase ⑤) */}
       <RolePermissionsCard />
 
+      {/* Roles personalizados — solo el dueño (Fase ⑤.B) */}
+      <CustomRolesCard onSaved={setCustomRoles} />
+
       {members === null ? (
         <div style={{ fontSize: text.sm, color: color.textDim, padding: space[6] }}>
           {loading ? "Cargando equipo…" : ""}
@@ -433,7 +472,7 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
                       {isSelf && <span style={{ fontSize: text.xs, color: color.textDim, fontWeight: weight.regular }}>(vos)</span>}
                     </div>
                     <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2, display: "flex", gap: space[2], alignItems: "center" }}>
-                      <strong style={{ color: color.textMuted }}>{roleLabel(m.role)}</strong>
+                      <strong style={{ color: color.textMuted }}>{labelFor(m.role)}</strong>
                       {!isOwner && (
                         <span style={{ color: color.textDim }}>
                           · {m.source === "code" ? "por código" : "invitado"}
@@ -472,6 +511,13 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
                         <option value="admin">Encargado</option>
                         <option value="vendedor">Vendedor</option>
                         <option value="viewer">Solo lectura</option>
+                        {customRoles.length > 0 && (
+                          <optgroup label="Roles personalizados">
+                            {customRoles.map((r) => (
+                              <option key={r.id} value={r.id}>{r.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                       <Button
                         variant="ghost"
@@ -605,6 +651,123 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+/** Gestión de roles personalizados — solo el dueño (Fase ⑤.B). */
+function CustomRolesCard({ onSaved }: { onSaved: (roles: CustomRole[]) => void }) {
+  const { showToast } = useUIStore();
+  const activeWs = useWorkspaceStore((s) => s.activeWorkspace);
+  const [roles, setRoles] = useState<Array<{ id: string; name: string; permissions: Set<string> }> | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api
+      .getCustomRoles()
+      .then((r) => setRoles(r.roles.map((x) => ({ id: x.id, name: x.name, permissions: new Set(x.permissions) }))))
+      .catch(() => setRoles([]));
+  }, [activeWs?.id]);
+
+  if (activeWs?.role !== "owner") return null;
+
+  function rename(id: string, name: string) {
+    setRoles((prev) => (prev ?? []).map((r) => (r.id === id ? { ...r, name } : r)));
+  }
+  function toggle(id: string, perm: Permission) {
+    setRoles((prev) =>
+      (prev ?? []).map((r) => {
+        if (r.id !== id) return r;
+        const p = new Set(r.permissions);
+        if (p.has(perm)) p.delete(perm);
+        else p.add(perm);
+        return { ...r, permissions: p };
+      }),
+    );
+  }
+
+  async function save() {
+    if (!roles) return;
+    for (const r of roles) {
+      if (!r.name.trim()) {
+        showToast("Poné un nombre a cada rol", "error");
+        return;
+      }
+    }
+    setSaving(true);
+    try {
+      const payload = roles.map((r) => ({ id: r.id, name: r.name.trim(), permissions: [...r.permissions] }));
+      await api.setCustomRoles(payload);
+      onSaved(payload.map((r) => ({ id: r.id, name: r.name, permissions: r.permissions as Permission[] })));
+      showToast("Roles guardados", "success");
+    } catch (e) {
+      const code = e instanceof api.ApiError ? e.code : "";
+      showToast(code === "role_in_use" ? "Ese rol está asignado a alguien; reasignalo primero" : "No se pudieron guardar", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: space[4] }}>
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2], marginBottom: 6 }}>
+          <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>Roles personalizados</div>
+          <Button size="sm" variant="primary" onClick={save} loading={saving} disabled={!roles}>
+            Guardar
+          </Button>
+        </div>
+        <div style={{ fontSize: text.xs, color: color.textDim, marginBottom: 12 }}>
+          Creá roles a medida (ej "Cajero") y elegí qué pueden hacer. Después asignalos al invitar o cambiar el rol de un miembro.
+        </div>
+        {!roles ? (
+          <div style={{ fontSize: text.sm, color: color.textDim }}>Cargando…</div>
+        ) : roles.length === 0 ? (
+          <div style={{ fontSize: text.sm, color: color.textDim, marginBottom: 12 }}>Todavía no hay roles personalizados.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+            {roles.map((r) => (
+              <div key={r.id} style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[3] }}>
+                <div style={{ display: "flex", gap: space[2], alignItems: "center", marginBottom: space[2] }}>
+                  <div style={{ flex: 1 }}>
+                    <Input value={r.name} onChange={(e) => rename(r.id, e.target.value)} placeholder="Nombre del rol (ej: Cajero)" />
+                  </div>
+                  <button
+                    onClick={() => setRoles((prev) => (prev ?? []).filter((x) => x.id !== r.id))}
+                    aria-label="Eliminar"
+                    className="btn-icon muted"
+                    style={{ width: 30, height: 30, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
+                  {ALL_PERMISSIONS.map((perm) => (
+                    <label
+                      key={perm}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: text.xs, color: color.text, padding: `2px ${space[2]}`, border: `1px solid ${color.border}`, borderRadius: radius.sm, cursor: "pointer" }}
+                    >
+                      <input type="checkbox" checked={r.permissions.has(perm)} onChange={() => toggle(r.id, perm)} />
+                      {PERMISSION_LABELS[perm]}
+                      {SENSITIVE_PERMISSIONS.has(perm) && <span style={{ color: color.warning, fontWeight: weight.semibold }}>•</span>}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ marginTop: space[3] }}>
+          <Button
+            size="sm"
+            variant="ghost"
+            iconLeft={<Plus size={14} />}
+            onClick={() => setRoles((prev) => [...(prev ?? []), { id: crypto.randomUUID(), name: "", permissions: new Set() }])}
+          >
+            Agregar rol
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }
