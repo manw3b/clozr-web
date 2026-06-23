@@ -33,6 +33,7 @@ import type {
   TaskType,
   User,
   Workspace,
+  Origin,
 } from "./types";
 import { stagesForIndustry } from "./types";
 
@@ -122,6 +123,7 @@ interface MeRaw {
     plan_status?: string | null;
     billing_interval?: string | null;
     covered_by?: string | null;
+    address?: string | null;
   }>;
 }
 export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }> {
@@ -153,6 +155,7 @@ export async function fetchMe(): Promise<{ user: User; workspaces: Workspace[] }
       planStatus: w.plan_status ?? "active",
       billingInterval: w.billing_interval ?? "monthly",
       coveredBy: w.covered_by ?? null,
+      address: w.address ?? null,
     })),
   };
 }
@@ -418,6 +421,8 @@ interface SaleRaw {
   created_at?: string | null;
   order_seq?: number | null;
   order_day?: string | null;
+  appointment_at?: string | null;
+  origin?: string | null;
 }
 function mapSale(r: SaleRaw): Sale {
   return {
@@ -436,6 +441,8 @@ function mapSale(r: SaleRaw): Sale {
     createdAt: r.created_at ?? undefined,
     orderSeq: r.order_seq ?? null,
     orderDay: r.order_day ?? null,
+    appointmentAt: r.appointment_at ?? null,
+    origin: r.origin ?? null,
   };
 }
 
@@ -1054,6 +1061,7 @@ export async function updateWorkspace(patch: {
   dailyGoal?: number;
   dailyGoalCurrency?: string;
   dailyGoalCount?: number;
+  address?: string | null;
 }): Promise<void> {
   const body: Record<string, unknown> = {};
   if (patch.name !== undefined) body.name = patch.name;
@@ -1062,7 +1070,35 @@ export async function updateWorkspace(patch: {
   if (patch.dailyGoal !== undefined) body.daily_goal = patch.dailyGoal;
   if (patch.dailyGoalCurrency !== undefined) body.daily_goal_currency = patch.dailyGoalCurrency;
   if (patch.dailyGoalCount !== undefined) body.daily_goal_count = patch.dailyGoalCount;
+  if (patch.address !== undefined) body.address = patch.address;
   await req(`/workspaces/${ws()}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+/* ---------- turno: PATCH venta (appointment + origin) ---------- */
+export async function updateSale(
+  id: string,
+  patch: { appointmentAt?: string | null; origin?: string | null },
+): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (patch.appointmentAt !== undefined) body.appointment_at = patch.appointmentAt;
+  if (patch.origin !== undefined) body.origin = patch.origin;
+  await req(`/workspaces/${ws()}/sales/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+/* ---------- origins ("viene de") ---------- */
+export async function listOrigins(): Promise<Origin[]> {
+  const r = await req<{ origins: Array<{ id: string; name: string }> }>(`/workspaces/${ws()}/origins`);
+  return (r.origins ?? []).map((o) => ({ id: o.id, name: o.name }));
+}
+export async function createOrigin(name: string): Promise<Origin> {
+  const r = await req<{ origin: { id: string; name: string } }>(`/workspaces/${ws()}/origins`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  return { id: r.origin.id, name: r.origin.name };
+}
+export async function deleteOrigin(id: string): Promise<void> {
+  await req(`/workspaces/${ws()}/origins/${id}`, { method: "DELETE" });
 }
 
 /* ---------- followups (seguimientos) + last contact (Mi Día) ---------- */

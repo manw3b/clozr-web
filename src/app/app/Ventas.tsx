@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Search, Plus, MoreHorizontal, Check, Copy, Eye, Trash2, CheckCircle2, Clock, AlertCircle, Package, ShieldCheck, Download, FileText } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Check, Copy, Eye, Trash2, CheckCircle2, Clock, AlertCircle, Package, ShieldCheck, Download, FileText, CalendarClock } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Input, Select } from "@/components/Input";
@@ -30,6 +30,7 @@ import { exportToCsv, timestamp } from "@/lib/csv";
 import { buildComprobanteText, printComprobante } from "@/lib/comprobante";
 import { shareOnWhatsApp } from "@/lib/openExternal";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { TurnoDialog } from "./TurnoDialog";
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_MANUAL, saleCode } from "@/lib/types";
 import type { Currency, Customer, Sale, SaleDetail } from "@/lib/types";
 
@@ -441,6 +442,7 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
   const [detail, setDetail] = useState<SaleDetail | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [warrantyOpen, setWarrantyOpen] = useState(false);
+  const [turnoOpen, setTurnoOpen] = useState(false);
   const businessName = useWorkspaceStore((s) => s.activeWorkspace?.name) ?? "";
   const code = saleCode(sale);
 
@@ -512,6 +514,11 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
             </Button>
             <Button variant="ghost" size="md" iconLeft={<FileText size={15} />} onClick={() => detail && printComprobante({ name: businessName }, detail)} disabled={!detail} title="Comprobante en PDF" />
           </div>
+          {canWrite && (
+            <Button variant="secondary" size="md" iconLeft={<CalendarClock size={15} />} onClick={() => setTurnoOpen(true)} disabled={!detail} fullWidth>
+              Generar turno
+            </Button>
+          )}
           {canWrite && (
             <Button variant="ghost" size="md" iconLeft={<ShieldCheck size={15} />} onClick={() => setWarrantyOpen(true)} fullWidth>
               Enviar garantía por mail
@@ -612,6 +619,15 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
         businessName={businessName}
         onClose={() => setWarrantyOpen(false)}
       />
+
+      {turnoOpen && detail && (
+        <TurnoDialog
+          sale={detail}
+          customerPhone={customerPhone}
+          onClose={() => setTurnoOpen(false)}
+          onSaved={() => { reload(); onChanged(); }}
+        />
+      )}
     </Drawer>
   );
 }
