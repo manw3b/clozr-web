@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as api from "@/lib/api";
 import { displayName } from "@/lib/format";
-import { color, radius, shadow } from "@/tokens";
+import { color, radius, shadow, space, text, weight } from "@/tokens";
 import {
   CLIENT_TYPE_LABELS,
   CLIENT_TYPES,
@@ -374,7 +374,10 @@ export default function Crm({
       {/* Modales */}
       {modal?.kind === "customer" && (
         <CustomerModal
+          key={modal.id ?? "new"}
           customer={modal.id ? customers.find((c) => c.id === modal.id) : undefined}
+          customers={customers}
+          onOpenExisting={(id) => setModal({ kind: "customer", id })}
           onClose={() => setModal(null)}
           onSaved={(msg) => { setModal(null); refreshCustomers(); flash(msg); }}
         />
@@ -502,11 +505,15 @@ const labelCls = "text-xs font-semibold text-text-muted";
 function CustomerModal({
   customer,
   initialName,
+  customers = [],
+  onOpenExisting,
   onClose,
   onSaved,
 }: {
   customer?: Customer;
   initialName?: string;
+  customers?: Customer[];
+  onOpenExisting?: (id: string) => void;
   onClose: () => void;
   onSaved: (msg: string, createdId?: string) => void;
 }) {
@@ -516,6 +523,14 @@ function CustomerModal({
   const [type, setType] = useState<ClientType>(customer?.type ?? "final");
   const [notes, setNotes] = useState(customer?.notes ?? "");
   const [busy, setBusy] = useState(false);
+
+  // Tel-first anti-duplicado: al crear, si el teléfono coincide con un cliente
+  // existente (últimos 8 dígitos), ofrecemos abrir su ficha en vez de duplicar.
+  const digits = (p?: string | null) => (p ?? "").replace(/\D/g, "");
+  const phoneDigits = digits(phone);
+  const dupe = !customer && phoneDigits.length >= 6
+    ? customers.find((c) => { const d = digits(c.phone); return d.length >= 6 && d.slice(-8) === phoneDigits.slice(-8); })
+    : null;
 
   async function save() {
     if (!name.trim()) return;
@@ -564,6 +579,16 @@ function CustomerModal({
             </select>
           </label>
         </div>
+        {dupe && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2], padding: `${space[2]} ${space[3]}`, background: color.warningBg, border: `1px solid ${color.warning}`, borderRadius: radius.md }}>
+            <span style={{ fontSize: text.sm, color: color.warning }}>Ya existe un cliente con ese teléfono: <strong>{dupe.name}</strong></span>
+            {onOpenExisting && (
+              <button type="button" onClick={() => onOpenExisting(dupe.id)} style={{ background: "none", border: "none", color: color.warning, fontWeight: weight.semibold, fontSize: text.sm, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}>
+                Ver ficha
+              </button>
+            )}
+          </div>
+        )}
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Email</span>
           <input value={email} onChange={(e) => setEmail(e.target.value)} className={fieldCls} />
