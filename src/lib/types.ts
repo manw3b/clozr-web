@@ -316,6 +316,9 @@ export interface CashMovement {
   movedAt?: string | null;
 }
 
+/** Saldos por bucket (método × moneda): { "Efectivo·ARS": 1000, "Crypto·USD": 200 }. */
+export type CashBuckets = Record<string, number>;
+
 /** Sesión de caja del día (apertura/cierre + arqueo). Una por día por workspace. */
 export interface CashSession {
   id: string;
@@ -323,9 +326,13 @@ export interface CashSession {
   openedAt: string;
   openedBalanceArs: number;
   openedBalanceUsd: number;
+  /** Nivel B: saldos de apertura por bucket. Los *BalanceArs/Usd son la suma. */
+  openedBuckets?: CashBuckets | null;
   closedAt?: string | null;
   closedBalanceArs?: number | null;
   closedBalanceUsd?: number | null;
+  /** Nivel B: arqueo (contado) por bucket. */
+  closedBuckets?: CashBuckets | null;
 }
 
 export interface Customer {
