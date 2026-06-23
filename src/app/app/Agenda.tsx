@@ -96,7 +96,11 @@ export function Agenda({
         onClick: canWrite ? () => setForm({ initial: a }) : undefined,
       });
     }
+    // Ventas que ya tienen un turno-entidad vinculado: se muestran como ese
+    // turno (no duplicamos la fila de la venta).
+    const linkedSaleIds = new Set(appointments.map((a) => a.saleId).filter(Boolean) as string[]);
     for (const s of sales) {
+      if (linkedSaleIds.has(s.id)) continue;
       if (typeof s.appointmentAt === "string" && s.appointmentAt.trim()) {
         out.push({
           key: `s_${s.id}`,

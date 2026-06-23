@@ -62,6 +62,8 @@ export interface Origin {
 /** Turno (Fase ④) — entidad propia del cliente, no atada a una venta. */
 export interface Appointment {
   id: string;
+  /** Si el turno se generó desde una venta, su id (Fase ④). */
+  saleId?: string | null;
   customerId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;

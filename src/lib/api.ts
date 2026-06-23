@@ -1112,6 +1112,7 @@ export async function deleteOrigin(id: string): Promise<void> {
 /* ---------- turnos (appointments) — Fase ④ ---------- */
 interface AppointmentRaw {
   id: string;
+  sale_id?: string | null;
   customer_id?: string | null;
   customer_name?: string | null;
   customer_phone?: string | null;
@@ -1127,6 +1128,7 @@ interface AppointmentRaw {
 function mapAppointment(r: AppointmentRaw): Appointment {
   return {
     id: r.id,
+    saleId: r.sale_id ?? null,
     customerId: r.customer_id ?? null,
     customerName: r.customer_name ?? null,
     customerPhone: r.customer_phone ?? null,
@@ -1141,6 +1143,7 @@ function mapAppointment(r: AppointmentRaw): Appointment {
   };
 }
 export interface AppointmentInput {
+  saleId?: string | null;
   customerId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
@@ -1153,6 +1156,7 @@ export interface AppointmentInput {
 }
 function appointmentBody(input: Partial<AppointmentInput>): Record<string, unknown> {
   const b: Record<string, unknown> = {};
+  if (input.saleId !== undefined) b.sale_id = input.saleId;
   if (input.customerId !== undefined) b.customer_id = input.customerId;
   if (input.customerName !== undefined) b.customer_name = input.customerName;
   if (input.customerPhone !== undefined) b.customer_phone = input.customerPhone;

@@ -7,10 +7,11 @@ import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { color, radius, space, text, weight } from "@/tokens";
 import { useUIStore } from "@/store/uiStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
 import { shareOnWhatsApp } from "@/lib/openExternal";
-import { applyTurnoTemplate, resolveTurnoTemplate, buildTurnoDataFromAppointment } from "@/lib/turnoTemplates";
-import type { Appointment, AppointmentType, Customer, Origin } from "@/lib/types";
+import { applyTurnoTemplate, resolveTurnoTemplate, buildTurnoData, buildTurnoDataFromAppointment } from "@/lib/turnoTemplates";
+import type { Appointment, AppointmentType, Customer, Origin, SaleDetail } from "@/lib/types";
 
 /**
  * Alta/edición de un turno (Fase ④). El turno es del CLIENTE y puede ser para
@@ -21,25 +22,31 @@ export function TurnoFormDialog({
   customers,
   initial,
   presetCustomer,
+  sale,
+  salePhone,
   onClose,
   onSaved,
 }: {
   customers: Customer[];
   initial?: Appointment | null;
   presetCustomer?: { id: string; name: string; phone?: string } | null;
+  /** Si se abre desde una venta: prefill + mensaje rico + persiste en la venta. */
+  sale?: SaleDetail | null;
+  salePhone?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { showToast } = useUIStore();
   const ws = useWorkspaceStore((s) => s.activeWorkspace);
+  const blue = useBlueRate();
 
   const [savedId, setSavedId] = useState<string | null>(initial?.id ?? null);
-  const [customerId, setCustomerId] = useState(initial?.customerId ?? presetCustomer?.id ?? "");
-  const [customerName, setCustomerName] = useState(initial?.customerName ?? presetCustomer?.name ?? "");
-  const [customerPhone, setCustomerPhone] = useState(initial?.customerPhone ?? presetCustomer?.phone ?? "");
-  const [appointmentAt, setAppointmentAt] = useState(initial?.appointmentAt ?? "");
-  const [type, setType] = useState(initial?.type ?? "");
-  const [origin, setOrigin] = useState(initial?.origin ?? "");
+  const [customerId, setCustomerId] = useState(sale?.customerId ?? initial?.customerId ?? presetCustomer?.id ?? "");
+  const [customerName, setCustomerName] = useState(sale?.customerName ?? initial?.customerName ?? presetCustomer?.name ?? "");
+  const [customerPhone, setCustomerPhone] = useState(salePhone ?? initial?.customerPhone ?? presetCustomer?.phone ?? "");
+  const [appointmentAt, setAppointmentAt] = useState(sale?.appointmentAt ?? initial?.appointmentAt ?? "");
+  const [type, setType] = useState(initial?.type ?? (sale ? "Venta" : ""));
+  const [origin, setOrigin] = useState(sale?.origin ?? initial?.origin ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -98,8 +105,14 @@ export function TurnoFormDialog({
   }
 
   const clienteMsg = useMemo(
-    () => applyTurnoTemplate(resolveTurnoTemplate("cliente", settings), buildTurnoDataFromAppointment({ customerName, appointmentAt, origin, type, notes }, ws)),
-    [customerName, appointmentAt, origin, type, notes, ws, settings],
+    () =>
+      applyTurnoTemplate(
+        resolveTurnoTemplate("cliente", settings),
+        sale
+          ? buildTurnoData(sale, ws, blue, { appointmentAt, origin })
+          : buildTurnoDataFromAppointment({ customerName, appointmentAt, origin, type, notes }, ws),
+      ),
+    [sale, blue, customerName, appointmentAt, origin, type, notes, ws, settings],
   );
 
   const valid = appointmentAt.trim() !== "" && customerName.trim() !== "";
@@ -112,6 +125,7 @@ export function TurnoFormDialog({
     setSaving(true);
     try {
       const input = {
+        saleId: sale?.id ?? initial?.saleId ?? null,
         customerId: customerId || null,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || null,
@@ -126,6 +140,8 @@ export function TurnoFormDialog({
         const r = await api.createAppointment(input);
         setSavedId(r.id);
       }
+      // Desde una venta: persistimos también en la venta (chip + back-compat).
+      if (sale) await api.updateSale(sale.id, { appointmentAt: appointmentAt || null, origin: origin || null });
       onSaved();
       if (!silent) showToast("Turno guardado", "success");
       return true;
@@ -145,7 +161,7 @@ export function TurnoFormDialog({
       open
       onClose={onClose}
       maxWidth={640}
-      title={initial ? "Editar turno" : "Nuevo turno"}
+      title={sale ? "Generar turno" : initial ? "Editar turno" : "Nuevo turno"}
       subtitle={customerName || undefined}
       footer={
         <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
@@ -156,24 +172,32 @@ export function TurnoFormDialog({
         </div>
       }
     >
-      <ModalField label="Cliente">
-        <Select value={customerId} onChange={(e) => selectCustomer(e.target.value)}>
-          <option value="">— Sin registrar (escribir) —</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </Select>
-      </ModalField>
+      {sale ? (
+        <ModalField label="Cliente">
+          <div style={{ fontSize: text.sm, color: color.text, padding: `${space[2]} 0` }}>{customerName || "Consumidor final"}</div>
+        </ModalField>
+      ) : (
+        <>
+          <ModalField label="Cliente">
+            <Select value={customerId} onChange={(e) => selectCustomer(e.target.value)}>
+              <option value="">— Sin registrar (escribir) —</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </Select>
+          </ModalField>
 
-      {!customerId && (
-        <div style={{ display: "flex", gap: space[2] }}>
-          <ModalField label="Nombre del cliente">
-            <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Ej: Juan Pérez" />
-          </ModalField>
-          <ModalField label="Teléfono (para WhatsApp)">
-            <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="11 5555 5555" />
-          </ModalField>
-        </div>
+          {!customerId && (
+            <div style={{ display: "flex", gap: space[2] }}>
+              <ModalField label="Nombre del cliente">
+                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Ej: Juan Pérez" />
+              </ModalField>
+              <ModalField label="Teléfono (para WhatsApp)">
+                <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="11 5555 5555" />
+              </ModalField>
+            </div>
+          )}
+        </>
       )}
 
       <ModalField label="Día y horario del turno">
