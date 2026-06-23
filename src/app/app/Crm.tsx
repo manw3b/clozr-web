@@ -54,6 +54,7 @@ import { ClozrAi } from "./ClozrAi";
 import { Clientes as ClientesView } from "./Clientes";
 import { Ventas as VentasView } from "./Ventas";
 import { Agenda } from "./Agenda";
+import { Repairs } from "./Repairs";
 import { Pipeline as PipelineView } from "./Pipeline";
 import { UndoToastHost } from "@/components/UndoToastHost";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
@@ -92,6 +93,7 @@ type View =
   | "cash"
   | "deudas"
   | "inventory"
+  | "repairs"
   | "tasks"
   | "reportes"
   | "team"
@@ -303,6 +305,8 @@ export default function Crm({
           />
         ) : view === "agenda" ? (
           <Agenda key={activeWs.id} sales={sales} items={items} customers={customers} onOpenSale={openSaleFromAgenda} onOpenPipeline={() => setView("pipeline")} />
+        ) : view === "repairs" ? (
+          <Repairs key={activeWs.id} customers={customers} />
         ) : view === "tasks" ? (
           <Tareas key={activeWs.id} />
         ) : view === "deudas" ? (
