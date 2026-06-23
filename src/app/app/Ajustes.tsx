@@ -12,7 +12,7 @@ import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import { roleLabel } from "@/lib/permissions";
-import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage, Origin } from "@/lib/types";
+import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage, Origin, AppointmentType } from "@/lib/types";
 import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, ESPACIO_USD, ANNUAL_MONTHS_PAID, ANNUAL_MONTHS_FREE, formatArs, formatUsd, discountTargetLabel, type PlanId, type PlanInfo } from "@/lib/types";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchDolares } from "@/lib/dolar";
@@ -408,6 +408,9 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
 
       {/* Orígenes ("viene de") */}
       <OriginsCard />
+
+      {/* Tipos de turno (editables) — Fase ④ */}
+      <AppointmentTypesCard />
 
       {/* Plantillas de turno (editables por negocio) */}
       <TurnoTemplatesCard />
@@ -1063,6 +1066,83 @@ function OriginsCard() {
                 }
               }}
             />
+          </div>
+          <Button variant="primary" iconLeft={<Plus size={15} />} onClick={() => void add()} loading={adding} disabled={!name.trim()}>
+            Agregar
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Tipos de turno (Reparación, Plan canje, …) — lista editable. Fase ④. */
+function AppointmentTypesCard() {
+  const { showToast } = useUIStore();
+  const { can } = usePermissions();
+  const canManage = can("settings.manage");
+  const [types, setTypes] = useState<AppointmentType[]>([]);
+  const [name, setName] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  useEffect(() => {
+    api.listAppointmentTypes().then(setTypes).catch(() => {});
+  }, []);
+
+  async function add() {
+    const n = name.trim();
+    if (!n) return;
+    setAdding(true);
+    try {
+      const t = await api.createAppointmentType(n);
+      setTypes((prev) => (prev.some((x) => x.id === t.id) ? prev : [...prev, t].sort((a, b) => a.name.localeCompare(b.name))));
+      setName("");
+      showToast("Tipo agregado", "success");
+    } catch {
+      showToast("No se pudo agregar", "error");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function remove(t: AppointmentType) {
+    const ok = await confirmAsync({
+      title: `¿Eliminar "${t.name}"?`,
+      message: "Dejará de estar disponible para nuevos turnos.",
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api.deleteAppointmentType(t.id);
+      setTypes((prev) => prev.filter((x) => x.id !== t.id));
+    } catch {
+      showToast("No se pudo eliminar", "error");
+    }
+  }
+
+  return (
+    <Card padding={5}>
+      <SectionTitle>Tipos de turno</SectionTitle>
+      <Hint>Para qué es el turno (ej. Reparación, Plan canje, Venta). Lo elegís al agendar.</Hint>
+      <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginTop: space[4] }}>
+        {types.length === 0 && <div style={{ fontSize: text.sm, color: color.textMuted }}>Todavía no hay tipos.</div>}
+        {types.map((t) => (
+          <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${space[2]} ${space[3]}`, background: color.surface2, border: `1px solid ${color.border}`, borderRadius: radius.md }}>
+            <span style={{ fontSize: text.sm, color: color.text }}>{t.name}</span>
+            {canManage && (
+              <button onClick={() => void remove(t)} aria-label="Eliminar" className="btn-icon muted" style={{ width: 26, height: 26, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {canManage && (
+        <div style={{ display: "flex", gap: space[2], alignItems: "flex-end", marginTop: space[4] }}>
+          <div style={{ flex: 1 }}>
+            <Label>Nuevo tipo</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: Reparación" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void add(); } }} />
           </div>
           <Button variant="primary" iconLeft={<Plus size={15} />} onClick={() => void add()} loading={adding} disabled={!name.trim()}>
             Agregar
