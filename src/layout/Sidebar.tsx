@@ -3,6 +3,7 @@ import {
   Users,
   GitBranch,
   ShoppingCart,
+  CalendarDays,
   Wallet,
   Package,
   CheckSquare,
@@ -46,6 +47,7 @@ const SECTIONS: { title?: string; items: SidebarItem[] }[] = [
       { id: 'pipeline', label: 'Pipeline', icon: GitBranch, accent: 'var(--mod-pipeline)', accentBg: 'var(--mod-pipeline-bg)' },
       { id: 'customers', label: 'Clientes', icon: Users, accent: 'var(--mod-clientes)', accentBg: 'var(--mod-clientes-bg)' },
       { id: 'sales', label: 'Ventas', icon: ShoppingCart },
+      { id: 'agenda', label: 'Agenda', icon: CalendarDays },
     ],
   },
   {
