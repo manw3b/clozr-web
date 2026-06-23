@@ -13,6 +13,8 @@ import {
   Zap,
   UserMinus,
   Phone,
+  Star,
+  Flame,
 } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Badge } from "@/components/Badge";
@@ -404,6 +406,8 @@ export function MiDia({
           >
             {greeting}, {userName}
           </h1>
+
+          <CoachCard score={score} scoreItems={scoreItems} streak={streak} dailyMap={dailyMap} todayKey={todayKey} nowMs={nowMs} />
 
           {/* OBJETIVO */}
           <div style={{ maxWidth: 460, marginBottom: space[4] }}>
@@ -971,6 +975,92 @@ function Sparkline({ data }: { data: number[] }) {
           />
         );
       })}
+    </div>
+  );
+}
+
+/* ───────── Entrenador personal (home gamificado · Fase ⑦.3) ───────── */
+function CoachCard({ score, scoreItems, streak, dailyMap, todayKey, nowMs }: {
+  score: number;
+  scoreItems: Array<{ label: string; done: boolean }>;
+  streak: number;
+  dailyMap: Map<string, number>;
+  todayKey: string;
+  nowMs: number;
+}) {
+  void score;
+  const completed = scoreItems.filter((r) => r.done).length;
+  const remaining = scoreItems.length - completed;
+  const motiv = remaining === 0 ? "¡Día completo! 🔥" : completed === 0 ? "¡Vamos, vos podés!" : "Vas muy bien, seguí así";
+  const sub = remaining === 0
+    ? "Cumpliste todos los retos de hoy"
+    : `Estás a ${remaining} ${remaining === 1 ? "reto" : "retos"} de completar el día`;
+  const titles = ["Venta", "Rutinas", "Caja", "Seguimiento"];
+
+  // Racha semanal (lunes→domingo): día "cumplido" = hubo ventas.
+  const now = new Date(nowMs);
+  const dow = (now.getDay() + 6) % 7; // 0 = lunes
+  const monday = nowMs - dow * 86_400_000;
+  const letters = ["L", "M", "X", "J", "V", "S", "D"];
+  const week = letters.map((ltr, i) => {
+    const key = toLocalISODate(new Date(monday + i * 86_400_000));
+    return { ltr, key, done: (dailyMap.get(key) ?? 0) > 0, isToday: key === todayKey, future: key > todayKey };
+  });
+
+  return (
+    <div style={{ marginBottom: space[5], borderRadius: radius.lg, overflow: "hidden", border: `1px solid ${color.border}` }}>
+      <div style={{ background: `linear-gradient(135deg, ${color.primary}, #9f1239)`, padding: space[4], color: "#fff" }}>
+        <div style={{ fontSize: text.xs, fontWeight: weight.semibold, textTransform: "uppercase", letterSpacing: 0.6, opacity: 0.85 }}>Entrenador personal</div>
+        <div style={{ fontSize: text.lg, fontWeight: weight.bold, marginTop: 2, lineHeight: 1.15 }}>{motiv}</div>
+        <div style={{ fontSize: text.sm, opacity: 0.9, marginTop: 4 }}>{sub}</div>
+      </div>
+
+      <div style={{ background: color.surface, padding: space[4] }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: space[2] }}>
+          {scoreItems.map((r, i) => (
+            <div key={i} style={{ background: color.surface2, border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[3], textAlign: "center" }}>
+              <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>{titles[i] ?? r.label}</div>
+              <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: space[2] }}>
+                {[0, 1].map((s) => (
+                  <Star key={s} size={18} color={r.done ? color.primary : color.textDim} fill={r.done ? color.primary : "none"} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: space[4], gap: space[3], flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: space[2] }}>
+            {week.map((d) => (
+              <div
+                key={d.key}
+                title={d.key}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: text.xs,
+                  fontWeight: weight.semibold,
+                  background: d.done ? color.primary : "transparent",
+                  color: d.done ? "#fff" : d.future ? color.textDim : color.textMuted,
+                  border: d.isToday ? `2px solid ${color.primary}` : `1px solid ${color.border}`,
+                  opacity: d.future ? 0.5 : 1,
+                }}
+              >
+                {d.ltr}
+              </div>
+            ))}
+          </div>
+          {streak > 0 && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: text.sm, fontWeight: weight.semibold, color: color.primary }}>
+              <Flame size={16} /> Racha {streak} {streak === 1 ? "día" : "días"}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
