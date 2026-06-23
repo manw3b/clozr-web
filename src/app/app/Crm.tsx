@@ -133,6 +133,7 @@ export default function Crm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const activeWs = useWorkspaceStore((s) => s.activeWorkspace) ?? workspace;
+  const blue = useBlueRate(); // para sembrar el precio (USD→ARS) en la venta rápida
   // Caja restringida a managers (decisión de producto): ocultamos el item del
   // sidebar y la vista para vendedor/viewer (el server además devuelve 403).
   const isManager = activeWs.role === "owner" || activeWs.role === "admin";
@@ -288,7 +289,7 @@ export default function Crm({
         ) : view === "customers" ? (
           <ClientesView key={activeWs.id} onNewSale={() => setModal({ kind: "sale" })} />
         ) : view === "sales" ? (
-          <VentasView key={activeWs.id} onNewSale={() => setModal({ kind: "sale" })} />
+          <VentasView key={activeWs.id} customers={customers} onNewSale={() => setModal({ kind: "sale" })} />
         ) : view === "tasks" ? (
           <Tareas key={activeWs.id} />
         ) : view === "deudas" ? (
@@ -306,7 +307,31 @@ export default function Crm({
             <EmptyState title="Sin acceso" description="Los reportes del negocio son solo para dueños y encargados." />
           )
         ) : view === "inventory" ? (
-          <Inventario key={activeWs.id} />
+          <Inventario
+            key={activeWs.id}
+            onQuickSale={
+              can("sales.write")
+                ? (p) =>
+                    setModal({
+                      kind: "sale",
+                      preset: {
+                        lines: [
+                          {
+                            description: p.name,
+                            quantity: "1",
+                            // El SaleModal trabaja en ARS y convierte USD al blue:
+                            // sembramos el precio ya convertido para no cobrar US$ como $.
+                            unitPrice:
+                              p.currency === "USD" && blue && blue > 0
+                                ? String(Math.round(p.price * blue))
+                                : String(p.price || 0),
+                          },
+                        ],
+                      },
+                    })
+                : undefined
+            }
+          />
         ) : view === "settings" ? (
           <Ajustes key={activeWs.id} user={user} onLogout={onLogout} />
         ) : view === "console" ? (

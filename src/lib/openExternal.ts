@@ -15,6 +15,16 @@ export function openWhatsApp(phone: string, text?: string): void {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+/**
+ * Comparte un texto por WhatsApp. Si hay teléfono lo prefilla; si no, abre el
+ * selector de contactos de WhatsApp con el mensaje ya escrito (útil para ventas
+ * a consumidor final sin cliente cargado).
+ */
+export function shareOnWhatsApp(text: string, phone?: string): void {
+  const p = phone ? digits(phone) : "";
+  window.open(`https://wa.me/${p}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+}
+
 export function openTel(phone: string): void {
   const p = phone.replace(/[^\d+]/g, "");
   if (!p) return;
