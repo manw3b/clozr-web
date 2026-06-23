@@ -73,6 +73,10 @@ export function Equipo({ user, onUpgrade }: { user: User; onUpgrade?: () => void
   >(null);
   // T3: el invite pegó el seat-gate (402). Mostramos un CTA para mejorar el plan.
   const [seatLimit, setSeatLimit] = useState(false);
+  // Código de la tienda (join-by-code): cualquiera con el código entra como empleado.
+  const [storeCode, setStoreCode] = useState<
+    null | { code: string; role: string; expiresAt: string; generating?: boolean }
+  >(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -167,6 +171,33 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
     );
   }
 
+  const roleLabel = (r: string) => (r === "admin" ? "Encargado" : r === "viewer" ? "Solo lectura" : "Vendedor");
+
+  async function genStoreCode() {
+    setStoreCode({ code: "", role: "vendedor", expiresAt: "", generating: true });
+    try {
+      const r = await api.createJoinCode("vendedor");
+      setStoreCode(r);
+    } catch (e) {
+      setStoreCode(null);
+      showToast(errMsg(e, "No se pudo generar el código"), "error");
+    }
+  }
+
+  function copyStoreInstructions() {
+    if (!storeCode || !storeCode.code) return;
+    const venceTxt = storeCode.expiresAt ? new Date(storeCode.expiresAt).toLocaleDateString("es-AR") : "";
+    const txt = `Hola! Te sumo a mi tienda en Clozr como ${roleLabel(storeCode.role)}.
+
+1) Entrá a https://www.clozr.online/app
+2) Iniciá sesión con tu email (te llega un código por mail)
+3) Tocá "Ya me invitaron — entrar con código" y pegá: ${storeCode.code}${venceTxt ? `\n\nEl código vence el ${venceTxt}.` : ""}`;
+    navigator.clipboard.writeText(txt).then(
+      () => showToast("Invitación copiada", "success"),
+      () => showToast("No se pudo copiar", "error"),
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[5], height: "100%" }}>
       <PageHeader
@@ -181,6 +212,16 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
               onClick={load}
               disabled={loading}
             />
+            {canManage && (
+              <Button
+                variant="secondary"
+                size="md"
+                iconLeft={<KeyRound size={14} />}
+                onClick={genStoreCode}
+              >
+                Código de la tienda
+              </Button>
+            )}
             {canManage && (
               <Button
                 variant="primary"
@@ -446,6 +487,56 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
             <p style={{ fontSize: text.xs, color: color.textDim, margin: 0, lineHeight: 1.5 }}>
               Vence en <strong style={{ color: color.textMuted }}>{codeModal.expiresInMin} minutos</strong>. La
               persona entra en clozr.online/app con su email + este código.
+            </p>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={!!storeCode}
+        onClose={() => setStoreCode(null)}
+        title="Código de la tienda"
+        subtitle="Cualquiera con este código entra como empleado de tu tienda."
+        maxWidth={460}
+      >
+        {storeCode?.generating ? (
+          <div style={{ textAlign: "center", padding: space[8], color: color.textDim, fontSize: text.sm }}>
+            Generando código…
+          </div>
+        ) : storeCode ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 32,
+                fontWeight: weight.bold,
+                letterSpacing: 6,
+                padding: `${space[4]} ${space[5]}`,
+                background: color.surface2,
+                border: `2px solid ${color.borderStrong}`,
+                borderRadius: radius.lg,
+                textAlign: "center",
+                color: color.text,
+                userSelect: "all",
+              }}
+            >
+              {storeCode.code}
+            </div>
+            <Button variant="primary" iconLeft={<Copy size={14} />} onClick={copyStoreInstructions} fullWidth>
+              Copiar invitación
+            </Button>
+            <p style={{ fontSize: text.xs, color: color.textDim, margin: 0, lineHeight: 1.5 }}>
+              Entra como <strong style={{ color: color.textMuted }}>{roleLabel(storeCode.role)}</strong>.
+              {storeCode.expiresAt ? (
+                <>
+                  {" "}Vence el{" "}
+                  <strong style={{ color: color.textMuted }}>
+                    {new Date(storeCode.expiresAt).toLocaleDateString("es-AR")}
+                  </strong>
+                  .
+                </>
+              ) : null}
+              {" "}Generar uno nuevo invalida el anterior.
             </p>
           </div>
         ) : null}

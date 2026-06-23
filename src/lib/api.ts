@@ -790,6 +790,32 @@ export async function issueAccessCode(
   return req(`/workspaces/${ws()}/members/${memberId}/access-code`, { method: "POST" });
 }
 
+/**
+ * POST /workspaces/:wid/join-codes — el dueño/encargado genera un código de la
+ * tienda. Cualquiera logueado que lo canjee (redeemJoinCode) entra como empleado
+ * con ese rol, sin pre-cargar su email. Genera revoca el código anterior.
+ */
+export async function createJoinCode(
+  role: "admin" | "vendedor" | "viewer" = "vendedor",
+  expiresInDays = 7,
+): Promise<{ code: string; role: string; expiresAt: string }> {
+  return req(`/workspaces/${ws()}/join-codes`, {
+    method: "POST",
+    body: JSON.stringify({ role, expiresInDays }),
+  });
+}
+
+/**
+ * POST /join — canjear un código de tienda. NO usa ws(): el código define a qué
+ * tienda entrás. Devuelve el workspace al que te uniste. ApiError posibles:
+ * invalid_code / expired / seat_limit. `already` = ya eras miembro.
+ */
+export async function redeemJoinCode(
+  code: string,
+): Promise<{ workspaceId: string; workspaceName: string; role: string; already?: boolean }> {
+  return req(`/join`, { method: "POST", body: JSON.stringify({ code }) });
+}
+
 /* ---------- catalog / inventory (CRUD simple; IMEIs diferidos) ---------- */
 interface ProductRaw {
   id: string;

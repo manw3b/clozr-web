@@ -137,6 +137,12 @@ export default function AppClient() {
           setWorkspaces((prev) => [...prev, w]);
           setPhase("ready");
         }}
+        onJoined={(wid) => {
+          // Se unió a una tienda existente con código: refrescamos /me y entramos.
+          setWorkspaceId(wid);
+          setPhase("loading");
+          loadMe();
+        }}
       />
     );
   }
