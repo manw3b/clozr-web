@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { CalendarDays, MapPin, Clock, GitBranch, Plus } from "lucide-react";
+import { useEffect, useMemo, useState, useCallback, type CSSProperties } from "react";
+import { CalendarDays, MapPin, Clock, GitBranch, Plus, CheckCircle2, XCircle, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
 import { Tabs } from "@/components/Tabs";
-import { color, space, text, weight } from "@/tokens";
+import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, formatTime, formatDateLong, toLocalISODate } from "@/lib/format";
 import { usePermissions } from "@/store/usePermissions";
+import { useUIStore } from "@/store/uiStore";
 import * as api from "@/lib/api";
 import { TurnoFormDialog } from "./TurnoFormDialog";
 import type { Sale, PipelineItem, Customer, Appointment } from "@/lib/types";
@@ -33,11 +34,13 @@ interface Entry {
   amount?: number;
   isPaid?: boolean;
   status?: Appointment["status"];
+  apptId?: string;
   onClick?: () => void;
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const hasTime = (at: string) => /\d{2}:\d{2}/.test(at);
+const qBtn: CSSProperties = { width: 28, height: 28, borderRadius: radius.sm, display: "inline-flex", alignItems: "center", justifyContent: "center" };
 
 export function Agenda({
   sales,
@@ -53,6 +56,7 @@ export function Agenda({
   onOpenPipeline: () => void;
 }) {
   const { can } = usePermissions();
+  const { showToast } = useUIStore();
   const canWrite = can("sales.write");
   const [filter, setFilter] = useState<Filter>("upcoming");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -66,6 +70,18 @@ export function Agenda({
   }, []);
   useEffect(() => { loadAppointments(); }, [loadAppointments]);
 
+  const setStatus = useCallback(
+    async (id: string, status: Appointment["status"]) => {
+      try {
+        await api.updateAppointment(id, { status });
+        loadAppointments();
+      } catch {
+        showToast("No se pudo actualizar el turno", "error");
+      }
+    },
+    [loadAppointments, showToast],
+  );
+
   const all = useMemo<Entry[]>(() => {
     const out: Entry[] = [];
     for (const a of appointments) {
@@ -76,6 +92,7 @@ export function Agenda({
         customerName: a.customerName || "Sin cliente",
         meta: [a.type, a.origin].filter(Boolean).join(" · ") || null,
         status: a.status,
+        apptId: a.id,
         onClick: canWrite ? () => setForm({ initial: a }) : undefined,
       });
     }
@@ -197,12 +214,30 @@ export function Agenda({
                           </div>
                         )}
                       </div>
-                      {e.kind === "turno" && typeof e.amount === "number" && (
+                      {e.apptId && canWrite ? (
+                        <div onClick={(ev) => ev.stopPropagation()} style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                          {e.status !== "done" && (
+                            <button title="Marcar hecho" aria-label="Marcar hecho" className="btn-icon muted" onClick={() => setStatus(e.apptId!, "done")} style={qBtn}>
+                              <CheckCircle2 size={15} />
+                            </button>
+                          )}
+                          {e.status !== "cancelled" && (
+                            <button title="Cancelar turno" aria-label="Cancelar turno" className="btn-icon muted" onClick={() => setStatus(e.apptId!, "cancelled")} style={qBtn}>
+                              <XCircle size={15} />
+                            </button>
+                          )}
+                          {e.status !== "pending" && (
+                            <button title="Reabrir" aria-label="Reabrir" className="btn-icon muted" onClick={() => setStatus(e.apptId!, "pending")} style={qBtn}>
+                              <RotateCcw size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ) : e.kind === "turno" && typeof e.amount === "number" ? (
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
                           <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>{formatMoney(e.amount)}</div>
                           <Badge tone={e.isPaid ? "success" : "warning"} variant="soft" size="sm">{e.isPaid ? "Pagado" : "Pendiente"}</Badge>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </Card>
                 ))}
