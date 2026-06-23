@@ -14,6 +14,7 @@ import {
   Zap,
   CalendarClock,
   Wrench,
+  ShoppingCart,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
@@ -48,7 +49,7 @@ import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, formatDateLong } from "@/lib/format";
 import * as api from "@/lib/api";
 import { CLIENT_TYPE_LABELS, CLIENT_TYPES } from "@/lib/types";
-import type { ClientType, Customer, Sale } from "@/lib/types";
+import type { ClientType, Customer, Sale, Appointment, Repair } from "@/lib/types";
 
 interface CustomerStats {
   purchases: number;
@@ -580,7 +581,7 @@ function ClientDrawer({
   canSell: boolean;
   canRepair: boolean;
 }) {
-  const [tab, setTab] = useState<"info" | "ventas">("info");
+  const [tab, setTab] = useState<"info" | "ventas" | "actividad">("info");
 
   return (
     <Drawer
@@ -666,10 +667,11 @@ function ClientDrawer({
           variant="underline"
           size="sm"
           value={tab}
-          onChange={(v) => setTab(v as "info" | "ventas")}
+          onChange={(v) => setTab(v as "info" | "ventas" | "actividad")}
           items={[
             { value: "info", label: "Info" },
             { value: "ventas", label: "Ventas", count: sales.length },
+            { value: "actividad", label: "Actividad" },
           ]}
         />
       </div>
@@ -694,6 +696,8 @@ function ClientDrawer({
             <AiSummary customer={customer} sales={sales} stats={stats} />
             <AiSuggestions customer={customer} />
           </div>
+        ) : tab === "actividad" ? (
+          <CustomerActivity customer={customer} sales={sales} />
         ) : sales.length === 0 ? (
           <EmptyState size="compact" title="Sin ventas registradas" description="Cuando le vendás algo, va a aparecer acá." />
         ) : (
@@ -719,6 +723,80 @@ function ClientDrawer({
         )}
       </div>
     </Drawer>
+  );
+}
+
+/* ───────── Timeline de actividad del cliente (Fase ⑦.4) ───────── */
+
+const REPAIR_STATUS_LABEL: Record<string, string> = {
+  received: "Recibido", diagnosing: "Diagnóstico", quoted: "Presupuestado", approved: "Aprobado",
+  repairing: "En reparación", ready: "Listo", delivered: "Entregado", cancelled: "Cancelado",
+};
+
+function fmtActivityDate(at: string): string {
+  const d = new Date(at);
+  if (isNaN(d.getTime())) return at;
+  const date = d.toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
+  return /\d{2}:\d{2}/.test(at) ? `${date} · ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}` : date;
+}
+
+interface ActivityEvent { key: string; at: string; icon: ReactNode; title: string; sub?: string; tint: string; }
+
+function CustomerActivity({ customer, sales }: { customer: Customer; sales: Sale[] }) {
+  const [appts, setAppts] = useState<Appointment[]>([]);
+  const [repairs, setRepairs] = useState<Repair[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      api.listAppointments().catch(() => [] as Appointment[]),
+      api.listRepairs().catch(() => [] as Repair[]),
+    ]).then(([a, r]) => {
+      if (!alive) return;
+      setAppts(a.filter((x) => x.customerId === customer.id));
+      setRepairs(r.filter((x) => x.customerId === customer.id));
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, [customer.id]);
+
+  const events = useMemo<ActivityEvent[]>(() => {
+    const ev: ActivityEvent[] = [];
+    for (const s of sales) {
+      const at = s.saleDate ?? s.createdAt;
+      if (at) ev.push({ key: `s_${s.id}`, at, icon: <ShoppingCart size={14} />, title: `Venta ${formatMoney(s.total)}`, sub: s.isPaid ? "Pagada" : `Debe ${formatMoney(s.balance)}`, tint: color.primary });
+    }
+    for (const a of appts) {
+      if (a.appointmentAt) ev.push({ key: `a_${a.id}`, at: a.appointmentAt, icon: <CalendarClock size={14} />, title: `Turno${a.type ? ": " + a.type : ""}`, sub: a.status === "done" ? "Hecho" : a.status === "cancelled" ? "Cancelado" : "Pendiente", tint: color.info });
+    }
+    for (const r of repairs) {
+      const at = r.receivedAt ?? r.createdAt;
+      if (at) ev.push({ key: `r_${r.id}`, at, icon: <Wrench size={14} />, title: `Reparación${r.deviceModel ? " " + r.deviceModel : ""}`, sub: REPAIR_STATUS_LABEL[r.status] ?? r.status, tint: color.warning });
+    }
+    if (customer.createdAt) ev.push({ key: "created", at: customer.createdAt, icon: <Users size={14} />, title: "Cliente creado", tint: color.textMuted });
+    return ev.sort((a, b) => b.at.localeCompare(a.at));
+  }, [customer, sales, appts, repairs]);
+
+  if (loading && events.length === 0) return <div style={{ fontSize: text.sm, color: color.textDim }}>Cargando…</div>;
+  if (events.length === 0) return <EmptyState size="compact" title="Sin actividad" description="Ventas, turnos y reparaciones de este cliente van a aparecer acá." />;
+
+  return (
+    <div>
+      {events.map((e, i) => (
+        <div key={e.key} style={{ display: "flex", gap: space[3] }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: color.surface2, border: `1px solid ${color.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: e.tint, flexShrink: 0 }}>{e.icon}</div>
+            {i < events.length - 1 && <div style={{ flex: 1, width: 2, background: color.border, minHeight: 14 }} />}
+          </div>
+          <div style={{ paddingBottom: space[4], minWidth: 0 }}>
+            <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>{e.title}</div>
+            {e.sub && <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: 1 }}>{e.sub}</div>}
+            <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>{fmtActivityDate(e.at)}</div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
