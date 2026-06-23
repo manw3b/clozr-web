@@ -11,6 +11,7 @@ import {
   Copy,
   DollarSign,
   Upload,
+  Zap,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
@@ -32,6 +33,7 @@ import {
 } from "@/components/ContextMenu";
 import { DataTable, applySort, type ColumnDef } from "@/components/data-table";
 import { ImportClientsModal } from "./ImportClientsModal";
+import { QuickWhatsAppPicker } from "./QuickWhatsAppPicker";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { openWhatsApp, openTel, openMail, openInstagram, instagramHandle } from "@/lib/openExternal";
 import { AiSuggestions } from "./AiSuggestions";
@@ -94,6 +96,7 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
     direction: "asc",
   });
   const [openId, setOpenId] = useState<string | null>(null);
+  const [quickFor, setQuickFor] = useState<Customer | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
@@ -398,6 +401,8 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
         />
       )}
 
+      {quickFor && <QuickWhatsAppPicker customer={quickFor} onClose={() => setQuickFor(null)} />}
+
       <ClientFormModal
         open={formOpen}
         customer={editing}
@@ -425,6 +430,9 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
             <>
               <ContextMenuItem icon={<WhatsAppIcon size={13} color="var(--success)" />} onClick={() => { if (ctxCustomer.phone) openWhatsApp(ctxCustomer.phone); ctxMenu.close(); }}>
                 WhatsApp
+              </ContextMenuItem>
+              <ContextMenuItem icon={<Zap size={14} />} onClick={() => { setQuickFor(ctxCustomer); ctxMenu.close(); }}>
+                WhatsApp rápido
               </ContextMenuItem>
               <ContextMenuItem icon={<Phone size={14} />} onClick={() => { if (ctxCustomer.phone) openTel(ctxCustomer.phone); ctxMenu.close(); }}>
                 Llamar
