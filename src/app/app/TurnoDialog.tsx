@@ -10,12 +10,7 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
 import { shareOnWhatsApp } from "@/lib/openExternal";
-import {
-  applyTurnoTemplate,
-  buildTurnoData,
-  DEFAULT_TURNO_CLIENTE,
-  DEFAULT_TURNO_INTERNO,
-} from "@/lib/turnoTemplates";
+import { applyTurnoTemplate, buildTurnoData, resolveTurnoTemplate } from "@/lib/turnoTemplates";
 import type { Origin, SaleDetail } from "@/lib/types";
 
 /**
@@ -44,17 +39,19 @@ export function TurnoDialog({
   const [addingOrigin, setAddingOrigin] = useState(false);
   const [newOrigin, setNewOrigin] = useState("");
   const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState<Record<string, string> | null>(null);
 
   useEffect(() => {
     api.listOrigins().then(setOrigins).catch(() => {});
+    api.getSettings().then(setSettings).catch(() => setSettings({}));
   }, []);
 
   const data = useMemo(
     () => buildTurnoData(sale, ws, blue, { appointmentAt, origin }),
     [sale, ws, blue, appointmentAt, origin],
   );
-  const clienteMsg = useMemo(() => applyTurnoTemplate(DEFAULT_TURNO_CLIENTE, data), [data]);
-  const internoMsg = useMemo(() => applyTurnoTemplate(DEFAULT_TURNO_INTERNO, data), [data]);
+  const clienteMsg = useMemo(() => applyTurnoTemplate(resolveTurnoTemplate("cliente", settings), data), [data, settings]);
+  const internoMsg = useMemo(() => applyTurnoTemplate(resolveTurnoTemplate("interno", settings), data), [data, settings]);
 
   async function addOrigin() {
     const name = newOrigin.trim();
