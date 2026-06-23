@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, type CSSProperties } from "react";
-import { CalendarDays, MapPin, Clock, GitBranch, Plus, CheckCircle2, XCircle, RotateCcw } from "lucide-react";
+import { CalendarDays, MapPin, Clock, GitBranch, Plus, CheckCircle2, XCircle, RotateCcw, Wrench } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
@@ -12,6 +12,7 @@ import { usePermissions } from "@/store/usePermissions";
 import { useUIStore } from "@/store/uiStore";
 import * as api from "@/lib/api";
 import { TurnoFormDialog } from "./TurnoFormDialog";
+import { RepairDialog } from "./Repairs";
 import type { Sale, PipelineItem, Customer, Appointment } from "@/lib/types";
 
 /**
@@ -35,6 +36,7 @@ interface Entry {
   isPaid?: boolean;
   status?: Appointment["status"];
   apptId?: string;
+  repair?: { customerId?: string | null; customerName?: string | null; customerPhone?: string | null; appointmentId: string; problem?: string | null };
   onClick?: () => void;
 }
 
@@ -58,6 +60,8 @@ export function Agenda({
   const { can } = usePermissions();
   const { showToast } = useUIStore();
   const canWrite = can("sales.write");
+  const canRepair = can("repairs.write");
+  const [repairForm, setRepairForm] = useState<Entry["repair"] | null>(null);
   const [filter, setFilter] = useState<Filter>("upcoming");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [form, setForm] = useState<null | { initial?: Appointment }>(null);
@@ -93,6 +97,9 @@ export function Agenda({
         meta: [a.type, a.origin].filter(Boolean).join(" · ") || null,
         status: a.status,
         apptId: a.id,
+        repair: (a.type ?? "").toLowerCase().includes("reparaci")
+          ? { customerId: a.customerId, customerName: a.customerName, customerPhone: a.customerPhone, appointmentId: a.id, problem: a.notes }
+          : undefined,
         onClick: canWrite ? () => setForm({ initial: a }) : undefined,
       });
     }
@@ -218,19 +225,24 @@ export function Agenda({
                           </div>
                         )}
                       </div>
-                      {e.apptId && canWrite ? (
+                      {e.apptId && (canWrite || (e.repair && canRepair)) ? (
                         <div onClick={(ev) => ev.stopPropagation()} style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                          {e.status !== "done" && (
+                          {e.repair && canRepair && (
+                            <button title="Crear reparación" aria-label="Crear reparación" className="btn-icon muted" onClick={() => setRepairForm(e.repair!)} style={qBtn}>
+                              <Wrench size={15} />
+                            </button>
+                          )}
+                          {canWrite && e.status !== "done" && (
                             <button title="Marcar hecho" aria-label="Marcar hecho" className="btn-icon muted" onClick={() => setStatus(e.apptId!, "done")} style={qBtn}>
                               <CheckCircle2 size={15} />
                             </button>
                           )}
-                          {e.status !== "cancelled" && (
+                          {canWrite && e.status !== "cancelled" && (
                             <button title="Cancelar turno" aria-label="Cancelar turno" className="btn-icon muted" onClick={() => setStatus(e.apptId!, "cancelled")} style={qBtn}>
                               <XCircle size={15} />
                             </button>
                           )}
-                          {e.status !== "pending" && (
+                          {canWrite && e.status !== "pending" && (
                             <button title="Reabrir" aria-label="Reabrir" className="btn-icon muted" onClick={() => setStatus(e.apptId!, "pending")} style={qBtn}>
                               <RotateCcw size={15} />
                             </button>
@@ -257,6 +269,18 @@ export function Agenda({
           initial={form.initial}
           onClose={() => setForm(null)}
           onSaved={loadAppointments}
+        />
+      )}
+
+      {repairForm && (
+        <RepairDialog
+          customers={customers}
+          presetCustomer={{ id: repairForm.customerId ?? "", name: repairForm.customerName ?? "", phone: repairForm.customerPhone ?? undefined }}
+          presetProblem={repairForm.problem ?? undefined}
+          presetAppointmentId={repairForm.appointmentId}
+          onOpenSale={onOpenSale}
+          onClose={() => setRepairForm(null)}
+          onSaved={() => {}}
         />
       )}
     </div>

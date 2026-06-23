@@ -13,6 +13,7 @@ import {
   Upload,
   Zap,
   CalendarClock,
+  Wrench,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
@@ -36,6 +37,7 @@ import { DataTable, applySort, type ColumnDef } from "@/components/data-table";
 import { ImportClientsModal } from "./ImportClientsModal";
 import { QuickWhatsAppPicker } from "./QuickWhatsAppPicker";
 import { TurnoFormDialog } from "./TurnoFormDialog";
+import { RepairDialog } from "./Repairs";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { openWhatsApp, openTel, openMail, openInstagram, instagramHandle } from "@/lib/openExternal";
 import { AiSuggestions } from "./AiSuggestions";
@@ -88,6 +90,7 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
   const { can } = usePermissions();
   const canWrite = can("customers.write");
   const canSell = can("sales.write");
+  const canRepair = can("repairs.write");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,6 +103,7 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [quickFor, setQuickFor] = useState<Customer | null>(null);
   const [turnoFor, setTurnoFor] = useState<Customer | null>(null);
+  const [repairFor, setRepairFor] = useState<Customer | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
@@ -400,8 +404,10 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
           }}
           onNewSale={onNewSale}
           onSchedule={() => setTurnoFor(openCustomer)}
+          onRepair={() => setRepairFor(openCustomer)}
           canWrite={canWrite}
           canSell={canSell}
+          canRepair={canRepair}
         />
       )}
 
@@ -412,6 +418,15 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
           customers={customers}
           presetCustomer={{ id: turnoFor.id, name: turnoFor.name, phone: turnoFor.phone }}
           onClose={() => setTurnoFor(null)}
+          onSaved={() => {}}
+        />
+      )}
+
+      {repairFor && (
+        <RepairDialog
+          customers={customers}
+          presetCustomer={{ id: repairFor.id, name: repairFor.name, phone: repairFor.phone }}
+          onClose={() => setRepairFor(null)}
           onSaved={() => {}}
         />
       )}
@@ -548,8 +563,10 @@ function ClientDrawer({
   onEdit,
   onNewSale,
   onSchedule,
+  onRepair,
   canWrite,
   canSell,
+  canRepair,
 }: {
   customer: Customer;
   sales: Sale[];
@@ -558,8 +575,10 @@ function ClientDrawer({
   onEdit: () => void;
   onNewSale: () => void;
   onSchedule: () => void;
+  onRepair: () => void;
   canWrite: boolean;
   canSell: boolean;
+  canRepair: boolean;
 }) {
   const [tab, setTab] = useState<"info" | "ventas">("info");
 
@@ -605,22 +624,33 @@ function ClientDrawer({
         </div>
       }
       footer={
-        <div style={{ display: "flex", gap: space[2] }}>
-          <Button variant="secondary" size="md" iconLeft={<WhatsAppIcon size={15} color="var(--success)" />} onClick={() => customer.phone && openWhatsApp(customer.phone)} fullWidth>
-            WhatsApp
-          </Button>
-          {customer.instagram && (
-            <Button variant="secondary" size="md" iconLeft={<InstagramIcon size={15} color="#E1306C" />} onClick={() => customer.instagram && openInstagram(customer.instagram)} aria-label="Instagram" />
-          )}
-          {canSell && (
-            <Button variant="secondary" size="md" iconLeft={<CalendarClock size={15} />} onClick={onSchedule} fullWidth>
-              Agendar turno
+        <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+          <div style={{ display: "flex", gap: space[2] }}>
+            <Button variant="secondary" size="md" iconLeft={<WhatsAppIcon size={15} color="var(--success)" />} onClick={() => customer.phone && openWhatsApp(customer.phone)} fullWidth>
+              WhatsApp
             </Button>
-          )}
-          {canSell && (
-            <Button variant="primary" size="md" iconLeft={<Plus size={15} />} onClick={onNewSale} fullWidth>
-              Nueva venta
-            </Button>
+            {customer.instagram && (
+              <Button variant="secondary" size="md" iconLeft={<InstagramIcon size={15} color="#E1306C" />} onClick={() => customer.instagram && openInstagram(customer.instagram)} aria-label="Instagram" />
+            )}
+          </div>
+          {(canSell || canRepair) && (
+            <div style={{ display: "flex", gap: space[2] }}>
+              {canSell && (
+                <Button variant="secondary" size="md" iconLeft={<CalendarClock size={15} />} onClick={onSchedule} fullWidth>
+                  Turno
+                </Button>
+              )}
+              {canRepair && (
+                <Button variant="secondary" size="md" iconLeft={<Wrench size={15} />} onClick={onRepair} fullWidth>
+                  Reparación
+                </Button>
+              )}
+              {canSell && (
+                <Button variant="primary" size="md" iconLeft={<Plus size={15} />} onClick={onNewSale} fullWidth>
+                  Venta
+                </Button>
+              )}
+            </div>
           )}
         </div>
       }
