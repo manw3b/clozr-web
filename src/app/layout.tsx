@@ -1,6 +1,13 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+
+// Garantiza el meta viewport (este Next no lo inyecta solo). Sin esto, el
+// celular renderiza a ~980px y la app cae al layout de escritorio.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 const inter = Inter({
   variable: "--font-inter",
