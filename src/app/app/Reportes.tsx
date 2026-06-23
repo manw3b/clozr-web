@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DollarSign, ShoppingCart, TrendingDown, HandCoins, Award, Users, Package, Percent, AlertCircle } from "lucide-react";
+import { DollarSign, ShoppingCart, TrendingDown, HandCoins, Award, Users, Package, Percent, AlertCircle, MapPin } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, MetricCard } from "@/components/Card";
 import { Avatar } from "@/components/Avatar";
@@ -103,6 +103,23 @@ export function Reportes() {
       map.set(name, c);
     }
     return [...map.values()].sort((a, b) => b.total - a.total);
+  }, [sales]);
+
+  // Fase ④: facturación por origen ("viene de"). Solo ventas con origen
+  // registrado (las legacy sin origen no ensucian el ranking).
+  const byOrigin = useMemo(() => {
+    const map = new Map<string, { name: string; total: number; count: number }>();
+    for (const s of sales) {
+      const origin = s.origin?.trim();
+      if (!origin) continue;
+      const c = map.get(origin) ?? { name: origin, total: 0, count: 0 };
+      c.total += s.total;
+      c.count += 1;
+      map.set(origin, c);
+    }
+    const rows = [...map.values()].sort((a, b) => b.total - a.total);
+    const total = rows.reduce((s, x) => s + x.total, 0);
+    return { rows, total };
   }, [sales]);
 
   /* ── v2: margen + productos (cruzando ítems con el costo del catálogo) ── */
@@ -436,6 +453,40 @@ export function Reportes() {
           )}
         </Card>
       </div>
+
+      {/* Por origen ("viene de") — Fase ④ */}
+      <Card padding={5}>
+        <h2 style={sectionTitle}>
+          <MapPin size={16} color={color.primary} /> Por origen
+        </h2>
+        {!hasData || byOrigin.rows.length === 0 ? (
+          <EmptyState
+            size="compact"
+            title="Sin datos de origen"
+            description="Elegí el origen (“viene de”) al cargar una venta para ver de dónde vienen tus clientes."
+          />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginTop: space[3] }}>
+            {byOrigin.rows.map((o, i) => {
+              const pct = byOrigin.total > 0 ? Math.round((o.total / byOrigin.total) * 100) : 0;
+              return (
+                <div key={o.name} style={{ display: "flex", alignItems: "center", gap: space[3], padding: `${space[2]} ${space[3]}` }}>
+                  <span style={{ fontSize: text.xs, fontWeight: weight.semibold, color: i === 0 ? color.primary : color.textMuted, width: 34, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                    {pct}%
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: text.sm, fontWeight: weight.medium, color: color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {o.name}
+                    </div>
+                    <div style={{ fontSize: text.xs, color: color.textMuted }}>{o.count} {o.count === 1 ? "venta" : "ventas"}</div>
+                  </div>
+                  <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>{formatMoney(o.total)}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
 
       {kpis.porCobrar > 0 && (
         <div style={{ fontSize: text.xs, color: color.textMuted, display: "inline-flex", alignItems: "center", gap: space[2] }}>
