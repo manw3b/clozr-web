@@ -49,6 +49,8 @@ interface MetricCardProps {
   unit?: string;
   /** Variación porcentual o delta (ej: "+12%", "-3"). Color automático según signo si es número. */
   delta?: { value: string; tone: 'success' | 'danger' | 'neutral' };
+  /** Línea secundaria chica bajo el valor (ej: el equivalente en ARS del dual). */
+  sub?: string | null;
   /** Tono del valor. Por default neutral (blanco). Usá colores con MUCHA moderación. */
   tone?: MetricTone;
   icon?: ReactNode;
@@ -68,6 +70,7 @@ export function MetricCard({
   value,
   unit,
   delta,
+  sub,
   tone = 'neutral',
   icon,
   onClick,
@@ -112,6 +115,12 @@ export function MetricCard({
           </span>
         )}
       </div>
+
+      {sub && (
+        <div style={{ marginTop: 2, fontSize: text.xs, color: color.textDim, fontWeight: weight.medium }}>
+          {sub}
+        </div>
+      )}
 
       {delta && (
         <div

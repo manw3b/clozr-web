@@ -6,7 +6,8 @@ import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, dualMoney } from "@/lib/format";
+import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
 import type { Sale, SaleItemReport, Product } from "@/lib/types";
 
@@ -23,6 +24,7 @@ function monthKey(d: Date): string {
  */
 export function Reportes() {
   const { showToast } = useUIStore();
+  const blue = useBlueRate();
   const [sales, setSales] = useState<Sale[]>([]);
   const [items, setItems] = useState<SaleItemReport[]>([]);
   const [catalog, setCatalog] = useState<Product[]>([]);
@@ -185,19 +187,20 @@ export function Reportes() {
     <div style={{ display: "flex", flexDirection: "column", gap: space[6] }}>
       <PageHeader
         title="Reportes"
-        subtitle={loading ? "Cargando…" : `${kpis.count} venta${kpis.count === 1 ? "" : "s"} · montos en ARS`}
+        subtitle={loading ? "Cargando…" : `${kpis.count} venta${kpis.count === 1 ? "" : "s"} · US$ y ARS (al blue)`}
       />
 
       <div className="cz-metric-grid">
-        <MetricCard label="Facturado" value={formatMoney(kpis.facturado)} icon={<DollarSign size={16} />} />
-        <MetricCard label="Cobrado" value={formatMoney(kpis.cobrado)} tone="success" icon={<HandCoins size={16} />} />
+        <MetricCard label="Facturado" value={dualMoney(kpis.facturado, blue).main} sub={dualMoney(kpis.facturado, blue).sub} icon={<DollarSign size={16} />} />
+        <MetricCard label="Cobrado" value={dualMoney(kpis.cobrado, blue).main} sub={dualMoney(kpis.cobrado, blue).sub} tone="success" icon={<HandCoins size={16} />} />
         <MetricCard
           label="Por cobrar"
-          value={formatMoney(kpis.porCobrar)}
+          value={dualMoney(kpis.porCobrar, blue).main}
+          sub={dualMoney(kpis.porCobrar, blue).sub}
           tone={kpis.porCobrar > 0 ? "warning" : "neutral"}
           icon={<TrendingDown size={16} />}
         />
-        <MetricCard label="Ticket promedio" value={formatMoney(kpis.ticket)} icon={<ShoppingCart size={16} />} />
+        <MetricCard label="Ticket promedio" value={dualMoney(kpis.ticket, blue).main} sub={dualMoney(kpis.ticket, blue).sub} icon={<ShoppingCart size={16} />} />
       </div>
 
       {/* v2 — Margen del mes */}
@@ -206,10 +209,11 @@ export function Reportes() {
           <Percent size={16} color={color.primary} /> Margen del mes
         </h2>
         <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
-          <MetricCard label="Facturado (mes)" value={formatMoney(margin.revThis)} icon={<DollarSign size={16} />} />
+          <MetricCard label="Facturado (mes)" value={dualMoney(margin.revThis, blue).main} sub={dualMoney(margin.revThis, blue).sub} icon={<DollarSign size={16} />} />
           <MetricCard
             label="Margen estimado (mes)"
-            value={margin.hasCosted ? formatMoney(margin.marThis) : "—"}
+            value={margin.hasCosted ? dualMoney(margin.marThis, blue).main : "—"}
+            sub={margin.hasCosted ? dualMoney(margin.marThis, blue).sub : null}
             tone={margin.hasCosted ? "success" : "neutral"}
             icon={<HandCoins size={16} />}
           />
