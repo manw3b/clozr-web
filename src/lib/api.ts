@@ -721,6 +721,7 @@ interface MemberRaw {
   invited_at?: string | null;
   accepted_at?: string | null;
   user_name?: string | null;
+  source?: string | null;
 }
 function mapMember(r: MemberRaw): Member {
   return {
@@ -732,6 +733,7 @@ function mapMember(r: MemberRaw): Member {
     userName: r.user_name ?? undefined,
     invitedAt: r.invited_at ?? undefined,
     acceptedAt: r.accepted_at ?? undefined,
+    source: r.source ?? undefined,
   };
 }
 
@@ -814,6 +816,28 @@ export async function redeemJoinCode(
   code: string,
 ): Promise<{ workspaceId: string; workspaceName: string; role: string; already?: boolean }> {
   return req(`/join`, { method: "POST", body: JSON.stringify({ code }) });
+}
+
+/** GET /workspaces/:wid/join-codes — código de tienda activo, o null si no hay. */
+export async function getActiveJoinCode(): Promise<
+  { code: string; role: string; expiresAt: string; uses: number; createdAt: string | null } | null
+> {
+  const r = await req<{ code: string | null; role?: string; expiresAt?: string; uses?: number; createdAt?: string | null }>(
+    `/workspaces/${ws()}/join-codes`,
+  );
+  if (!r || !r.code) return null;
+  return {
+    code: r.code,
+    role: r.role ?? "vendedor",
+    expiresAt: r.expiresAt ?? "",
+    uses: r.uses ?? 0,
+    createdAt: r.createdAt ?? null,
+  };
+}
+
+/** DELETE /workspaces/:wid/join-codes — revoca el código de tienda activo. */
+export async function revokeJoinCode(): Promise<void> {
+  await req(`/workspaces/${ws()}/join-codes`, { method: "DELETE" });
 }
 
 /* ---------- catalog / inventory (CRUD simple; IMEIs diferidos) ---------- */

@@ -74,9 +74,11 @@ export function Equipo({ user, onUpgrade }: { user: User; onUpgrade?: () => void
   // T3: el invite pegó el seat-gate (402). Mostramos un CTA para mejorar el plan.
   const [seatLimit, setSeatLimit] = useState(false);
   // Código de la tienda (join-by-code): cualquiera con el código entra como empleado.
+  const [storeCodeOpen, setStoreCodeOpen] = useState(false);
   const [storeCode, setStoreCode] = useState<
-    null | { code: string; role: string; expiresAt: string; generating?: boolean }
+    null | { code: string; role: string; expiresAt: string; uses?: number }
   >(null);
+  const [storeCodeBusy, setStoreCodeBusy] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -173,14 +175,41 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
 
   const roleLabel = (r: string) => (r === "admin" ? "Encargado" : r === "viewer" ? "Solo lectura" : "Vendedor");
 
-  async function genStoreCode() {
-    setStoreCode({ code: "", role: "vendedor", expiresAt: "", generating: true });
+  async function openStoreCode() {
+    setStoreCodeOpen(true);
+    setStoreCodeBusy(true);
     try {
-      const r = await api.createJoinCode("vendedor");
-      setStoreCode(r);
+      setStoreCode(await api.getActiveJoinCode());
     } catch (e) {
       setStoreCode(null);
+      showToast(errMsg(e, "No se pudo cargar el código"), "error");
+    } finally {
+      setStoreCodeBusy(false);
+    }
+  }
+
+  async function genStoreCode() {
+    setStoreCodeBusy(true);
+    try {
+      const r = await api.createJoinCode("vendedor");
+      setStoreCode({ code: r.code, role: r.role, expiresAt: r.expiresAt, uses: 0 });
+    } catch (e) {
       showToast(errMsg(e, "No se pudo generar el código"), "error");
+    } finally {
+      setStoreCodeBusy(false);
+    }
+  }
+
+  async function revokeStoreCode() {
+    setStoreCodeBusy(true);
+    try {
+      await api.revokeJoinCode();
+      setStoreCode(null);
+      showToast("Código revocado", "success");
+    } catch (e) {
+      showToast(errMsg(e, "No se pudo revocar el código"), "error");
+    } finally {
+      setStoreCodeBusy(false);
     }
   }
 
@@ -217,7 +246,7 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
                 variant="secondary"
                 size="md"
                 iconLeft={<KeyRound size={14} />}
-                onClick={genStoreCode}
+                onClick={openStoreCode}
               >
                 Código de la tienda
               </Button>
@@ -401,6 +430,11 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
                     </div>
                     <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2, display: "flex", gap: space[2], alignItems: "center" }}>
                       <strong style={{ color: color.textMuted }}>{roleLabel(m.role)}</strong>
+                      {!isOwner && (
+                        <span style={{ color: color.textDim }}>
+                          · {m.source === "code" ? "por código" : "invitado"}
+                        </span>
+                      )}
                       {isPending && (
                         <Badge tone="warning" variant="soft" size="sm">
                           <Mail size={10} /> Invitación pendiente
@@ -493,15 +527,15 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
       </Modal>
 
       <Modal
-        open={!!storeCode}
-        onClose={() => setStoreCode(null)}
+        open={storeCodeOpen}
+        onClose={() => setStoreCodeOpen(false)}
         title="Código de la tienda"
         subtitle="Cualquiera con este código entra como empleado de tu tienda."
         maxWidth={460}
       >
-        {storeCode?.generating ? (
+        {storeCodeBusy && !storeCode ? (
           <div style={{ textAlign: "center", padding: space[8], color: color.textDim, fontSize: text.sm }}>
-            Generando código…
+            Cargando…
           </div>
         ) : storeCode ? (
           <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
@@ -522,9 +556,6 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
             >
               {storeCode.code}
             </div>
-            <Button variant="primary" iconLeft={<Copy size={14} />} onClick={copyStoreInstructions} fullWidth>
-              Copiar invitación
-            </Button>
             <p style={{ fontSize: text.xs, color: color.textDim, margin: 0, lineHeight: 1.5 }}>
               Entra como <strong style={{ color: color.textMuted }}>{roleLabel(storeCode.role)}</strong>.
               {storeCode.expiresAt ? (
@@ -536,10 +567,39 @@ El código vence en ${codeModal.expiresInMin} minutos.`;
                   .
                 </>
               ) : null}
-              {" "}Generar uno nuevo invalida el anterior.
+              {typeof storeCode.uses === "number" ? (
+                <>
+                  {" "}Usado <strong style={{ color: color.textMuted }}>{storeCode.uses}</strong>{" "}
+                  {storeCode.uses === 1 ? "vez" : "veces"}.
+                </>
+              ) : null}
+            </p>
+            <Button variant="primary" iconLeft={<Copy size={14} />} onClick={copyStoreInstructions} fullWidth>
+              Copiar invitación
+            </Button>
+            <div style={{ display: "flex", gap: space[2] }}>
+              <Button variant="secondary" size="sm" onClick={genStoreCode} loading={storeCodeBusy} fullWidth>
+                Generar uno nuevo
+              </Button>
+              <Button variant="ghost" size="sm" onClick={revokeStoreCode} loading={storeCodeBusy} fullWidth>
+                Revocar
+              </Button>
+            </div>
+            <p style={{ fontSize: text.xs, color: color.textDim, margin: 0, lineHeight: 1.4 }}>
+              Generar uno nuevo invalida el anterior.
             </p>
           </div>
-        ) : null}
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+            <p style={{ fontSize: text.sm, color: color.textMuted, margin: 0, lineHeight: 1.5 }}>
+              No hay un código activo. Generá uno y compartilo: quien lo use entra como{" "}
+              <strong>Vendedor</strong>.
+            </p>
+            <Button variant="primary" iconLeft={<KeyRound size={14} />} onClick={genStoreCode} loading={storeCodeBusy} fullWidth>
+              Generar código
+            </Button>
+          </div>
+        )}
       </Modal>
     </div>
   );
