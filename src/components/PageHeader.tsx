@@ -26,9 +26,12 @@ export function PageHeader({ title, subtitle, icon, actions }: PageHeaderProps) 
         justifyContent: 'space-between',
         gap: space[4],
         marginBottom: space[6],
+        // En viewports angostos (mobile/web) las acciones bajan a otra línea
+        // en vez de aplastar el título a ~0px (subtítulo palabra-por-palabra).
+        flexWrap: 'wrap',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[3], minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[3], flex: '1 1 16rem', minWidth: 0 }}>
         {icon && (
           <span
             style={{
@@ -67,7 +70,7 @@ export function PageHeader({ title, subtitle, icon, actions }: PageHeaderProps) 
         </div>
       </div>
       {actions && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {actions}
         </div>
       )}
