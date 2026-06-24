@@ -305,6 +305,26 @@ input[type="datetime-local"]:not(:focus):invalid {
   40%, 60% { transform: translateX(8px); }
 }
 
+/* Bottom sheet de acciones (botón + en mobile) — slide-up + feedback táctil. */
+@keyframes cz-sheet-up {
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.cz-sheet-up { animation: cz-sheet-up 240ms var(--ease) both; }
+.cz-sheet-cta { transition: background 120ms var(--ease), transform 80ms var(--ease); }
+.cz-sheet-cta:hover { background: var(--primary-bg-strong); }
+.cz-sheet-cta:active { transform: scale(0.98); }
+.cz-sheet-tile { transition: background 120ms var(--ease), border-color 120ms var(--ease), transform 80ms var(--ease); }
+.cz-sheet-tile:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.cz-sheet-tile:active { transform: scale(0.97); }
+.cz-sheet-cta:focus-visible,
+.cz-sheet-tile:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) {
+  .cz-sheet-up { animation: none; }
+  .cz-sheet-cta, .cz-sheet-tile { transition: none; }
+  .cz-sheet-cta:active, .cz-sheet-tile:active { transform: none; }
+}
+
 /* Table rows */
 tr.hoverable:hover td {
   background: var(--surface-hover);
