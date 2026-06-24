@@ -8,6 +8,7 @@ import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, dualMoney } from "@/lib/format";
 import { useBlueRate } from "@/store/dollarStore";
+import { useIsMobile } from "@/lib/useIsMobile";
 import * as api from "@/lib/api";
 import type { Sale, SaleItemReport, Product } from "@/lib/types";
 
@@ -25,6 +26,7 @@ function monthKey(d: Date): string {
 export function Reportes() {
   const { showToast } = useUIStore();
   const blue = useBlueRate();
+  const isMobile = useIsMobile();
   const [sales, setSales] = useState<Sale[]>([]);
   const [items, setItems] = useState<SaleItemReport[]>([]);
   const [catalog, setCatalog] = useState<Product[]>([]);
@@ -387,7 +389,7 @@ export function Reportes() {
       </Card>
 
       {/* Top clientes + Por vendedor */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[4] }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: space[4] }}>
         <Card padding={5}>
           <h2 style={sectionTitle}>
             <Award size={16} color={color.primary} /> Top clientes

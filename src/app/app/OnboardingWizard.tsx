@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import * as api from "@/lib/api";
 import { setWorkspaceId } from "@/lib/api";
 import type { User, Workspace } from "@/lib/types";
-import { PLANS, SEATS_UNLIMITED, BILLING_TRIAL_DAYS, INDUSTRY_OPTIONS, formatUsd, type PlanId } from "@/lib/types";
+import { PLANS, SEATS_UNLIMITED, INDUSTRY_OPTIONS, formatUsd, type PlanId } from "@/lib/types";
 
 /**
  * Onboarding guiado (multi-paso) que reemplaza el alta de un solo campo.
@@ -394,7 +394,7 @@ export default function OnboardingWizard({
               })}
             </div>
             <p className="text-center text-xs text-text-dim">
-              Los planes pagos incluyen {BILLING_TRIAL_DAYS} días de prueba y se cobran por Mercado Pago.
+              Los planes pagos se cobran por Mercado Pago.
             </p>
           </Centered>
         )}

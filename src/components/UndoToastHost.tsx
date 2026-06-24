@@ -71,7 +71,7 @@ function UndoToast({ action }: { action: UndoableAction }) {
         border: `1px solid ${color.border}`,
         borderRadius: radius.lg,
         padding: `${space[3]} ${space[4]}`,
-        minWidth: 320,
+        minWidth: "min(320px, calc(100vw - 24px))",
         maxWidth: 480,
         boxShadow: "0 12px 32px rgba(0, 0, 0, 0.45)",
         display: "flex",

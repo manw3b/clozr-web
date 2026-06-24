@@ -125,7 +125,7 @@ export interface Repair {
 /* ───────── Planes / billing (T3) ─────────
  * Espejo del PLAN_CONFIG del worker (cf-worker/src/routes/billing.ts):
  * Free = 1 asiento (gratis); Pro = ARS 25.000/mes · 3 asientos; Team =
- * ARS 60.000/mes · asientos ilimitados. Los pagos tienen 14 días de prueba. */
+ * ARS 60.000/mes · asientos ilimitados. */
 export type PlanId = "free" | "pro" | "team";
 
 export interface PlanInfo {
@@ -142,8 +142,6 @@ export interface PlanInfo {
 
 /** seats === este valor ⇒ "ilimitado" (legacy; hoy ningún plan lo usa). */
 export const SEATS_UNLIMITED = 9999;
-/** Días de prueba de los planes pagos. */
-export const BILLING_TRIAL_DAYS = 14;
 /** Precio mensual (USD) de cada empleado extra, más allá de los del plan. */
 export const EXTRA_SEAT_USD = 5;
 /** Precio mensual (USD) de cada espacio/sucursal adicional sumado al plan. */
