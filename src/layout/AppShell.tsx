@@ -59,7 +59,7 @@ export function AppShell({
     <div
       style={{
         display: 'flex',
-        height: '100vh',
+        height: '100dvh',
         background: color.bg,
         color: color.text,
         overflow: 'hidden',
@@ -108,7 +108,10 @@ export function AppShell({
               flex: 1,
               overflowY: 'auto',
               padding: isMobile ? 'var(--space-4)' : 'var(--space-6) var(--space-8)',
-              paddingBottom: isMobile ? '88px' : undefined,
+              // El bottom-nav (mobile) es position:fixed y mide
+              // 64px + safe-area-inset-bottom; el padding lo iguala (+24px de
+              // aire) para que el último item no quede tapado tras la barra.
+              paddingBottom: isMobile ? 'calc(64px + env(safe-area-inset-bottom) + 24px)' : undefined,
               minWidth: 0,
             }}
           >
