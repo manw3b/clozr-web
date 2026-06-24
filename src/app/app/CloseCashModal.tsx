@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { Calendar, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Modal, ModalField } from "@/components/Modal";
 import { Button } from "@/components/Button";
@@ -182,6 +183,23 @@ function DiffRow({
   diff: number;
   currency: Currency;
 }) {
+  const isMobile = useIsMobile();
+  if (isMobile) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2] }}>
+          <span style={{ fontSize: text.xs, color: color.text, fontWeight: weight.semibold, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {label}
+          </span>
+          <DiffBadge value={diff} currency={currency} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2], fontSize: text.xs, color: color.textDim }}>
+          <span>Sistema: <strong style={{ color: color.textMuted, fontVariantNumeric: "tabular-nums" }}>{formatMoney(expected, currency)}</strong></span>
+          <span>Contado: <strong style={{ color: color.text, fontVariantNumeric: "tabular-nums" }}>{formatMoney(counted, currency)}</strong></span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div style={{ display: "grid", gridTemplateColumns: "150px 1fr 1fr 110px", gap: space[2], alignItems: "center" }}>
       <span style={{ fontSize: text.xs, color: color.text, fontWeight: weight.semibold, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

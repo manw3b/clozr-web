@@ -322,7 +322,8 @@ export function Reportes() {
             description="Cargá ventas eligiendo productos del catálogo para ver el ranking y el margen."
           />
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: space[3] }}>
+          <div className="cz-noscrollbar" style={{ overflowX: "auto", marginTop: space[3] }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 360 }}>
             <div
               style={{
                 display: "grid",
@@ -380,6 +381,7 @@ export function Reportes() {
                 </span>
               </div>
             ))}
+            </div>
           </div>
         )}
       </Card>
