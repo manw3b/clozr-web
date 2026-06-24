@@ -1620,12 +1620,6 @@ function PlanStatusBadge({ status }: { status: string }) {
 }
 
 /* ════════════ Tipos de cliente ════════════ */
-/* ───────── Plan y suscripción ─────────
- * Lee el plan actual del usuario (lo único que hoy expone el Worker vía /me).
- * El cobro real (Mercado Pago) y el plan/asientos por workspace llegan con el
- * backend de billing (ver clozr-handoff/BACKEND-equipos-spec.md, Tarea 3); por
- * eso el CTA de cambio avisa "próximamente" en vez de iniciar un checkout.
- */
 function CustomerTypesCard({ canManage, showToast }: { canManage: boolean; showToast: (m: string, t?: "success" | "error") => void }) {
   const [items, setItems] = useState<CustomerType[]>([]);
   const [name, setName] = useState("");
