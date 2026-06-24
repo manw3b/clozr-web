@@ -560,12 +560,12 @@ const PLANS: {
   {
     name: "Pro", monthly: 20, Icon: Zap,
     perks: ["2 empleados incluidos", "Inventario, deudas y tareas", "Reportes del negocio", "Multi-moneda + WhatsApp", "Roles y permisos"],
-    cta: "Probar 14 días", highlight: true,
+    cta: "Suscribirme", highlight: true,
   },
   {
     name: "Team", monthly: 45, Icon: Rocket,
     perks: ["5 empleados incluidos", "Todo lo de Pro", "Clozr de noche (IA)", "Reportes avanzados", "Soporte prioritario"],
-    cta: "Probar 14 días", highlight: false,
+    cta: "Suscribirme", highlight: false,
   },
 ];
 
@@ -655,7 +655,7 @@ function Pricing() {
       </div>
 
       <p className="mx-auto mt-8 max-w-2xl text-center text-sm text-white/35">
-        + US$ 5 por empleado extra · + US$ 10 por sucursal · 2 meses gratis pagando al año · 14 días de prueba.
+        + US$ 5 por empleado extra · + US$ 10 por sucursal · 2 meses gratis pagando al año.
         <br />
         Precios en dólares — los pagás en pesos con Mercado Pago, al cambio del día.
       </p>

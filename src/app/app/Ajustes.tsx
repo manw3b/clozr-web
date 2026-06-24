@@ -13,7 +13,7 @@ import { color, radius, space, text, weight } from "@/tokens";
 import * as api from "@/lib/api";
 import { roleLabel } from "@/lib/permissions";
 import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage, Origin, AppointmentType } from "@/lib/types";
-import { PLANS, PAID_PLAN_IDS, BILLING_TRIAL_DAYS, EXTRA_SEAT_USD, ESPACIO_USD, ANNUAL_MONTHS_PAID, ANNUAL_MONTHS_FREE, formatArs, formatUsd, discountTargetLabel, type PlanId, type PlanInfo } from "@/lib/types";
+import { PLANS, PAID_PLAN_IDS, EXTRA_SEAT_USD, ESPACIO_USD, ANNUAL_MONTHS_PAID, ANNUAL_MONTHS_FREE, formatArs, formatUsd, discountTargetLabel, type PlanId, type PlanInfo } from "@/lib/types";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchDolares } from "@/lib/dolar";
 import { Stepper } from "@/components/Stepper";
@@ -618,7 +618,7 @@ function PlanCard() {
           </Hint>
         )}
         {isOwner && recommendedId && (
-          <Hint>Precios en USD, se cobran en ARS al dólar blue · {BILLING_TRIAL_DAYS} días de prueba · cancelás cuando quieras.</Hint>
+          <Hint>Precios en USD, se cobran en ARS al dólar blue · cancelás cuando quieras.</Hint>
         )}
         {isOwner && !recommendedId && (
           <Hint>Estás en el plan máximo. ¡Gracias por bancar Clozr! 🙌</Hint>
