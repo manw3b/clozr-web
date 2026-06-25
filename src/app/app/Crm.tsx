@@ -546,11 +546,11 @@ function CustomerModal({
     }
   }
   async function remove() {
-    if (!customer || !confirm("¿Eliminar este cliente?")) return;
+    if (!customer || !confirm("¿Archivar este cliente? Se oculta de tu lista; el historial de ventas se conserva.")) return;
     setBusy(true);
     try {
       await api.deleteCustomer(customer.id);
-      onSaved("Cliente eliminado");
+      onSaved("Cliente archivado");
     } catch {
       setBusy(false);
     }
