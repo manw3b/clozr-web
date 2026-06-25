@@ -36,6 +36,7 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { usePermissions } from "@/store/usePermissions";
 import { useBlueRate } from "@/store/dollarStore";
 import { printComprobante } from "@/lib/comprobante";
+import { isValidDeviceId } from "@/lib/deviceId";
 import { can as canFor } from "@/lib/permissions";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmHost } from "@/components/ConfirmHost";
@@ -1355,7 +1356,7 @@ function SaleModal({
   const balance = total - paidAmount;
   // El canje está "activo" si se empezó a cargar; si es así exige modelo + valor.
   const tradeInActive = tradeInOpen && (tiDesc.trim() !== "" || tiValue.trim() !== "");
-  const tradeInOk = !tradeInActive || (tiDesc.trim() !== "" && tradeInValue > 0);
+  const tradeInOk = !tradeInActive || (tiDesc.trim() !== "" && tradeInValue > 0 && isValidDeviceId(tiImei));
 
   // El modal está sucio si hay datos que se perderían al cerrar → click afuera
   // hace shake (no cierra), igual que en la desktop.
@@ -1807,6 +1808,12 @@ function SaleModal({
                   className={fieldCls}
                 />
               </div>
+              {tradeInActive && tiImei.trim() === "" && (
+                <div style={{ fontSize: text.xs, color: color.textDim }}>El IMEI/serie del equipo recibido es obligatorio — es el “DNI” del celular.</div>
+              )}
+              {tradeInActive && tiImei.trim() !== "" && !isValidDeviceId(tiImei) && (
+                <div style={{ fontSize: text.xs, color: color.danger }}>IMEI inválido: deben ser 15 dígitos. Si no tiene IMEI, usá el N° de serie (con letras).</div>
+              )}
               <input
                 type="number"
                 value={tiValue}
