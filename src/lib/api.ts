@@ -463,6 +463,7 @@ interface SaleItemRaw {
   unit_price?: number | null;
   subtotal?: number | null;
   imei?: string | null;
+  currency?: string | null;
 }
 function mapSaleItem(r: SaleItemRaw): SaleItem {
   return {
@@ -472,6 +473,7 @@ function mapSaleItem(r: SaleItemRaw): SaleItem {
     unitPrice: Number(r.unit_price ?? 0),
     subtotal: Number(r.subtotal ?? 0),
     imei: r.imei ?? null,
+    currency: r.currency === "USD" ? "USD" : "ARS",
   };
 }
 
@@ -513,8 +515,10 @@ export interface NewSaleInput {
   customerName: string;
   sellerName?: string;
   notes?: string;
-  items: Array<{ description: string; quantity: number; unitPrice: number; catalogItemId?: string | null; imei?: string | null; unitCost?: number | null }>;
+  items: Array<{ description: string; quantity: number; unitPrice: number; currency?: Currency; catalogItemId?: string | null; imei?: string | null; unitCost?: number | null }>;
   payments: Array<{ method: string; amount: number; currency: Currency }>;
+  /** Cotización USD→ARS del momento, para convertir a pesos los ítems en USD. */
+  usdToArs?: number;
   /** Plan canje: equipo usado recibido como parte de pago. Se crea como una
    *  unidad de catálogo (costo = valor de toma) al cerrar la venta. El crédito
    *  va aparte, como un pago con method "canje" en `payments`. */
@@ -523,18 +527,24 @@ export interface NewSaleInput {
 
 export async function createSale(input: NewSaleInput): Promise<string> {
   // El Worker NO calcula totales en POST (sí en addPayment) — los mandamos
-  // calculados desde acá. Venta en ARS por ahora (el schema sale no guarda
-  // moneda; la moneda vive en cada pago). Multi-moneda = feature pendiente.
+  // calculados desde acá. El total de la venta es en ARS; cada ítem guarda su
+  // moneda (ARS/USD) y los ítems en USD se convierten al dólar del momento.
+  const rate = input.usdToArs && input.usdToArs > 0 ? input.usdToArs : 0;
   const items = input.items.map((i) => ({
     description: i.description,
     quantity: i.quantity,
     unit_price: i.unitPrice,
-    subtotal: i.quantity * i.unitPrice,
+    subtotal: i.quantity * i.unitPrice, // en la moneda del ítem
+    currency: i.currency ?? "ARS",
     catalog_item_id: i.catalogItemId ?? null,
     imei: i.imei ?? null,
     unit_cost: i.unitCost ?? null,
   }));
-  const subtotal = items.reduce((a, i) => a + i.subtotal, 0);
+  // Total en ARS: los ítems en USD se convierten al dólar del momento.
+  const subtotal = items.reduce(
+    (a, i) => a + (i.currency === "USD" && rate > 0 ? i.subtotal * rate : i.subtotal),
+    0,
+  );
   const total = subtotal;
   const totalPaid = input.payments.reduce((a, p) => a + p.amount, 0);
   const balance = total - totalPaid;

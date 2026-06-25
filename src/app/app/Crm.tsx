@@ -805,7 +805,7 @@ function fmtDate(s?: string) {
 }
 
 /* ───────── Sale modal (crear) ───────── */
-type SaleLine = { description: string; quantity: string; unitPrice: string; catalogItemId?: string; imei?: string; priceAuto?: boolean };
+type SaleLine = { description: string; quantity: string; unitPrice: string; currency?: "ARS" | "USD"; catalogItemId?: string; imei?: string; priceAuto?: boolean };
 
 /** Normaliza un nombre para matchear contra el catálogo: minúsculas, sin
  *  acentos, espacios colapsados. Así "iPhone 15" y "iphone  15" linkean igual. */
@@ -1343,10 +1343,15 @@ function SaleModal({
   // ¿La línea vende una unidad serializada? (producto con IMEIs cargados)
   const isSerialLine = (l: SaleLine) => !!(l.catalogItemId && imeisByItem[l.catalogItemId]?.length);
 
-  const total = lines.reduce(
-    (a, l) => a + (isSerialLine(l) ? 1 : Number(l.quantity) || 0) * (Number(l.unitPrice) || 0),
-    0,
-  );
+  const blue = useBlueRate(); // cotización del dólar blue (para convertir USD→ARS)
+  // Moneda por ítem: subtotal por moneda (cada línea en la suya) + total en ARS
+  // de referencia (los ítems en USD se convierten al dólar blue del momento).
+  const rate = Number(blue) || 0;
+  const lineAmount = (l: SaleLine) =>
+    (isSerialLine(l) ? 1 : Number(l.quantity) || 0) * (Number(l.unitPrice) || 0);
+  const subtotalUsd = lines.reduce((a, l) => a + ((l.currency ?? "ARS") === "USD" ? lineAmount(l) : 0), 0);
+  const subtotalArs = lines.reduce((a, l) => a + ((l.currency ?? "ARS") === "USD" ? 0 : lineAmount(l)), 0);
+  const total = subtotalArs + subtotalUsd * rate;
   // Plan canje: el equipo recibido vale `tradeInValue`, cuenta como pago (baja
   // el saldo) y entra al stock como unidad usada al cerrar la venta.
   const tradeInValue = tradeInOpen ? Math.max(0, Number(tiValue) || 0) : 0;
@@ -1389,7 +1394,6 @@ function SaleModal({
 
   // Precios por tipo de cliente (precios por tipo). Se cargan una vez; el
   // precio sugerido de cada ítem depende del tipo del cliente seleccionado.
-  const blue = useBlueRate(); // cotización del dólar blue (para convertir USD→ARS)
   const [catalogPrices, setCatalogPrices] = useState<CatalogPrice[]>([]);
   useEffect(() => {
     api.listCatalogPrices().then(setCatalogPrices).catch(() => {});
@@ -1565,7 +1569,9 @@ function SaleModal({
   const validLines = lines.filter(
     (l) => l.description.trim() && Number(l.unitPrice) > 0 && Number(l.quantity) > 0,
   );
-  const canSave = validLines.length > 0 && total > 0 && tradeInOk && !busy;
+  // Si hay ítems en USD necesitamos la cotización para convertir el total a pesos.
+  const needsRate = subtotalUsd > 0 && rate <= 0;
+  const canSave = validLines.length > 0 && total > 0 && tradeInOk && !needsRate && !busy;
 
   async function save() {
     if (!canSave) return;
@@ -1586,6 +1592,7 @@ function SaleModal({
         customerName: finalCustomerName,
         sellerName,
         notes: notes.trim() || undefined,
+        usdToArs: rate > 0 ? rate : undefined,
         items: validLines.map((l) => ({
           description: l.description.trim(),
           // validLines garantiza quantity > 0 — sin el ||1 que coerce vacío→1
@@ -1593,6 +1600,7 @@ function SaleModal({
           // unidad por IMEI elegido.
           quantity: isSerialLine(l) ? 1 : Number(l.quantity),
           unitPrice: Number(l.unitPrice) || 0,
+          currency: l.currency ?? "ARS",
           catalogItemId: l.catalogItemId ?? null,
           imei: l.imei?.trim() || null,
           // Snapshot del costo (en pesos, USD→blue) al momento de la venta →
@@ -1700,6 +1708,15 @@ function SaleModal({
                     className={fieldCls}
                     style={{ width: 104, flexShrink: 0 }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setLine(i, { currency: (l.currency ?? "ARS") === "ARS" ? "USD" : "ARS" })}
+                    title="Moneda de la línea — clic para cambiar entre pesos ($) y dólares (US$)"
+                    className={`${fieldCls} font-bold ${(l.currency ?? "ARS") === "USD" ? "text-primary" : "text-text-dim"}`}
+                    style={{ width: 48, flexShrink: 0, cursor: "pointer" }}
+                  >
+                    {(l.currency ?? "ARS") === "USD" ? "US$" : "$"}
+                  </button>
                   <button
                     onClick={() => removeLine(i)}
                     disabled={lines.length === 1}
@@ -1833,6 +1850,25 @@ function SaleModal({
             <span className="text-sm text-text-muted">Total</span>
             <span className="text-xl font-extrabold tracking-tight">{money(total, "ARS")}</span>
           </div>
+          {subtotalUsd > 0 && (
+            <div className="mt-2 border-t border-border pt-2 text-xs">
+              <div className="flex items-baseline justify-between">
+                <span className="text-text-dim">Ítems en dólares</span>
+                <span className="font-semibold">{money(subtotalUsd, "USD")}</span>
+              </div>
+              {subtotalArs > 0 && (
+                <div className="mt-0.5 flex items-baseline justify-between">
+                  <span className="text-text-dim">Ítems en pesos</span>
+                  <span className="font-semibold">{money(subtotalArs, "ARS")}</span>
+                </div>
+              )}
+              <div className="mt-1 text-text-dim">
+                {rate > 0
+                  ? `El total en pesos convierte los USD al dólar ${money(rate, "ARS")}.`
+                  : "⚠ Cargá la cotización del dólar (chip arriba) para convertir los ítems en USD."}
+              </div>
+            </div>
+          )}
           {tradeInValue > 0 && (
             <>
               <div className="mt-1.5 flex items-baseline justify-between text-sm">

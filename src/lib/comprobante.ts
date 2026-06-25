@@ -39,11 +39,12 @@ function buildHtml(business: ComprobanteBusiness, sale: SaleDetail): string {
   const rows = sale.items
     .map((it) => {
       const unit = it.quantity > 0 ? it.subtotal / it.quantity : it.subtotal;
+      const cur = (it.currency ?? "ARS") === "USD" ? "USD" : "ARS";
       return `<tr>
         <td class="c">${it.quantity}</td>
         <td>${esc(it.description)}${it.imei ? `<span class="dim"> · IMEI ${esc(it.imei)}</span>` : ""}</td>
-        <td class="r">${formatMoney(unit, "ARS")}</td>
-        <td class="r">${formatMoney(it.subtotal, "ARS")}</td>
+        <td class="r">${formatMoney(unit, cur)}</td>
+        <td class="r">${formatMoney(it.subtotal, cur)}</td>
       </tr>`;
     })
     .join("");
@@ -57,6 +58,12 @@ function buildHtml(business: ComprobanteBusiness, sale: SaleDetail): string {
   const saldo = sale.balance > 0.01
     ? `<div class="kv total"><span>Saldo pendiente</span><span class="warn">${formatMoney(sale.balance, "ARS")}</span></div>`
     : `<div class="kv"><span>Estado</span><span class="ok">Pagado</span></div>`;
+
+  // Moneda por ítem: subtotales por moneda. El Total queda en pesos (referencia),
+  // ya convertido al dólar del momento por los ítems en USD.
+  const subUsd = sale.items.reduce((a, it) => a + ((it.currency ?? "ARS") === "USD" ? it.subtotal : 0), 0);
+  const subArs = sale.items.reduce((a, it) => a + ((it.currency ?? "ARS") === "USD" ? 0 : it.subtotal), 0);
+  const mixed = subUsd > 0;
 
   return `<!doctype html><html lang="es"><head><meta charset="utf-8">
 <title>Comprobante ${esc(ref)}</title>
@@ -105,7 +112,9 @@ function buildHtml(business: ComprobanteBusiness, sale: SaleDetail): string {
     <tbody>${rows || `<tr><td colspan="4" class="dim">Sin ítems</td></tr>`}</tbody>
   </table>
   <div class="totals">
-    <div class="kv total"><span>Total</span><span>${formatMoney(sale.total, "ARS")}</span></div>
+    ${mixed ? `<div class="kv"><span>Ítems en dólares</span><span>${formatMoney(subUsd, "USD")}</span></div>` : ""}
+    ${mixed && subArs > 0 ? `<div class="kv"><span>Ítems en pesos</span><span>${formatMoney(subArs, "ARS")}</span></div>` : ""}
+    <div class="kv total"><span>Total${mixed ? " (en pesos)" : ""}</span><span>${formatMoney(sale.total, "ARS")}</span></div>
     <div class="kv"><span>Cobrado</span><span>${formatMoney(sale.totalPaid, "ARS")}</span></div>
     ${saldo}
   </div>
@@ -132,11 +141,18 @@ export function buildComprobanteText(business: ComprobanteBusiness, sale: SaleDe
     for (const it of sale.items) {
       const qty = it.quantity > 1 ? `${it.quantity}× ` : "";
       const imei = it.imei ? ` (IMEI ${it.imei})` : "";
-      L.push(`• ${qty}${it.description}${imei} — ${formatMoney(it.subtotal, "ARS")}`);
+      const cur = (it.currency ?? "ARS") === "USD" ? "USD" : "ARS";
+      L.push(`• ${qty}${it.description}${imei} — ${formatMoney(it.subtotal, cur)}`);
     }
   }
   L.push("————————————");
-  L.push(`*Total: ${formatMoney(sale.total, "ARS")}*`);
+  const subUsdT = sale.items.reduce((a, it) => a + ((it.currency ?? "ARS") === "USD" ? it.subtotal : 0), 0);
+  const subArsT = sale.items.reduce((a, it) => a + ((it.currency ?? "ARS") === "USD" ? 0 : it.subtotal), 0);
+  if (subUsdT > 0) {
+    L.push(`Ítems en dólares: ${formatMoney(subUsdT, "USD")}`);
+    if (subArsT > 0) L.push(`Ítems en pesos: ${formatMoney(subArsT, "ARS")}`);
+  }
+  L.push(`*Total${subUsdT > 0 ? " (en pesos)" : ""}: ${formatMoney(sale.total, "ARS")}*`);
   if (sale.balance > 0.01) {
     if (sale.totalPaid > 0) L.push(`Cobrado: ${formatMoney(sale.totalPaid, "ARS")}`);
     L.push(`Saldo pendiente: ${formatMoney(sale.balance, "ARS")}`);
