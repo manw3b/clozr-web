@@ -851,17 +851,24 @@ function ThumbMini({ src }: { src?: string | null }) {
 function ClientPicker({
   customers,
   value,
+  walkInName,
   onChange,
   presetName,
   onCreateNew,
+  onUseWalkIn,
 }: {
   customers: Customer[];
   value: string;
+  walkInName?: string;
   onChange: (id: string) => void;
   presetName?: string;
   onCreateNew?: (name: string) => void;
+  onUseWalkIn?: (name: string) => void;
 }) {
-  const selectedName = value === "" ? "" : customers.find((c) => c.id === value)?.name ?? presetName ?? "";
+  const selectedName =
+    value === ""
+      ? walkInName ?? ""
+      : customers.find((c) => c.id === value)?.name ?? presetName ?? "";
   const [q, setQ] = useState(selectedName);
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
@@ -980,18 +987,35 @@ function ClientPicker({
             {q.trim() !== "" && matches.length === 0 && (
               <div style={{ padding: "9px 12px", fontSize: 13, color: color.textDim }}>Sin clientes con ese nombre</div>
             )}
-            {onCreateNew && q.trim() !== "" && (
-              <button
-                type="button"
-                onMouseDown={(e) => { e.preventDefault(); onCreateNew(q.trim()); setOpen(false); }}
-                style={{
-                  display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "9px 12px",
-                  textAlign: "left", border: "none", borderTop: `1px solid ${color.border}`,
-                  background: "transparent", color: color.primary, fontSize: 14, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                + Crear cliente «{q.trim()}»
-              </button>
+            {q.trim() !== "" && !customers.some((c) => normName(c.name) === normName(q)) && (
+              <>
+                {onUseWalkIn && (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); onUseWalkIn(q.trim()); setOpen(false); }}
+                    style={{
+                      display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "9px 12px",
+                      textAlign: "left", border: "none", borderTop: `1px solid ${color.border}`,
+                      background: "transparent", color: color.text, fontSize: 14, cursor: "pointer",
+                    }}
+                  >
+                    Usar «{q.trim()}» <span style={{ color: color.textDim }}>(mostrador)</span>
+                  </button>
+                )}
+                {onCreateNew && (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); onCreateNew(q.trim()); setOpen(false); }}
+                    style={{
+                      display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "9px 12px",
+                      textAlign: "left", border: "none", borderTop: `1px solid ${color.border}`,
+                      background: "transparent", color: color.primary, fontSize: 14, fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    + Guardar «{q.trim()}» como cliente
+                  </button>
+                )}
+              </>
             )}
           </div>,
           document.body,
@@ -1253,6 +1277,7 @@ function SaleModal({
   onSaved: (msg: string) => void;
 }) {
   const [customerId, setCustomerId] = useState(preset?.customerId ?? ""); // "" = consumidor final
+  const [walkInName, setWalkInName] = useState(""); // nombre suelto de mostrador (cliente no guardado)
   const [lines, setLines] = useState<SaleLine[]>(() => {
     const base: SaleLine[] =
       preset?.lines && preset.lines.length
@@ -1413,6 +1438,7 @@ function SaleModal({
   // autocompletadas (priceAuto), respetando precios editados a mano o del preset.
   function changeCustomer(newId: string) {
     setCustomerId(newId);
+    setWalkInName("");
     const c = customers.find((x) => x.id === newId);
     const newType: ClientType = c?.type ?? "final";
     setPriceType(newType);
@@ -1549,7 +1575,7 @@ function SaleModal({
     const isPresetCust = !!customerId && customerId === preset?.customerId;
     const finalCustomerId = cust?.id ?? (isPresetCust ? customerId : undefined);
     const finalCustomerName =
-      cust?.name || (isPresetCust ? preset?.customerName : "") || "Consumidor final";
+      cust?.name || walkInName.trim() || (isPresetCust ? preset?.customerName : "") || "Consumidor final";
     const payments: Array<{ method: string; amount: number; currency: Currency }> = [];
     if (tradeInValue > 0) payments.push({ method: "canje", amount: tradeInValue, currency: "ARS" });
     if (cashPaid > 0) payments.push({ method, amount: cashPaid, currency: "ARS" });
@@ -1597,9 +1623,11 @@ function SaleModal({
           <ClientPicker
             customers={localCustomers}
             value={customerId}
+            walkInName={walkInName}
             onChange={changeCustomer}
             presetName={preset?.customerName ?? undefined}
             onCreateNew={(name) => setNewClientName(name)}
+            onUseWalkIn={(name) => { changeCustomer(""); setWalkInName(name); }}
           />
         </div>
 
