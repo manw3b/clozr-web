@@ -7,6 +7,7 @@ import {
   Phone,
   Pencil,
   Trash2,
+  Archive,
   Mail,
   Copy,
   DollarSign,
@@ -161,9 +162,9 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
 
   async function remove(c: Customer) {
     const ok = await confirmAsync({
-      title: `Eliminar a ${c.name}`,
-      message: `Vas a eliminar a ${c.name} de tu cartera. El historial de ventas queda en la DB pero sin nombre asociado.`,
-      confirmText: "Eliminar",
+      title: `Archivar a ${c.name}`,
+      message: `${c.name} se va a ocultar de tu lista de clientes. El historial de ventas se conserva intacto (con su nombre). Podés volver a cargarlo cuando quieras.`,
+      confirmText: "Archivar",
       tone: "danger",
     });
     if (!ok) return;
@@ -172,10 +173,10 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
     if (openId === c.id) setOpenId(null);
     try {
       await api.deleteCustomer(c.id);
-      showToast("Cliente eliminado", "success");
+      showToast("Cliente archivado", "success");
     } catch {
       setCustomers(snapshot);
-      showToast("No se pudo eliminar", "error");
+      showToast("No se pudo archivar", "error");
     }
   }
 
@@ -494,8 +495,8 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
               <ContextMenuItem icon={<Pencil size={14} />} onClick={() => { setEditing(ctxCustomer); setFormOpen(true); ctxMenu.close(); }}>
                 Editar
               </ContextMenuItem>
-              <ContextMenuItem tone="danger" icon={<Trash2 size={14} />} onClick={() => { const c = ctxCustomer; ctxMenu.close(); remove(c); }}>
-                Eliminar
+              <ContextMenuItem tone="danger" icon={<Archive size={14} />} onClick={() => { const c = ctxCustomer; ctxMenu.close(); remove(c); }}>
+                Archivar
               </ContextMenuItem>
             </>
           )}

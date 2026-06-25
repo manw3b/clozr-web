@@ -36,6 +36,7 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { usePermissions } from "@/store/usePermissions";
 import { useBlueRate } from "@/store/dollarStore";
 import { printComprobante } from "@/lib/comprobante";
+import { isValidDeviceId } from "@/lib/deviceId";
 import { can as canFor } from "@/lib/permissions";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmHost } from "@/components/ConfirmHost";
@@ -546,11 +547,11 @@ function CustomerModal({
     }
   }
   async function remove() {
-    if (!customer || !confirm("¿Eliminar este cliente?")) return;
+    if (!customer || !confirm("¿Archivar este cliente? Se oculta de tu lista; el historial de ventas se conserva.")) return;
     setBusy(true);
     try {
       await api.deleteCustomer(customer.id);
-      onSaved("Cliente eliminado");
+      onSaved("Cliente archivado");
     } catch {
       setBusy(false);
     }
@@ -804,7 +805,7 @@ function fmtDate(s?: string) {
 }
 
 /* ───────── Sale modal (crear) ───────── */
-type SaleLine = { description: string; quantity: string; unitPrice: string; catalogItemId?: string; imei?: string; priceAuto?: boolean };
+type SaleLine = { description: string; quantity: string; unitPrice: string; currency?: "ARS" | "USD"; catalogItemId?: string; imei?: string; priceAuto?: boolean };
 
 /** Normaliza un nombre para matchear contra el catálogo: minúsculas, sin
  *  acentos, espacios colapsados. Así "iPhone 15" y "iphone  15" linkean igual. */
@@ -851,17 +852,24 @@ function ThumbMini({ src }: { src?: string | null }) {
 function ClientPicker({
   customers,
   value,
+  walkInName,
   onChange,
   presetName,
   onCreateNew,
+  onUseWalkIn,
 }: {
   customers: Customer[];
   value: string;
+  walkInName?: string;
   onChange: (id: string) => void;
   presetName?: string;
   onCreateNew?: (name: string) => void;
+  onUseWalkIn?: (name: string) => void;
 }) {
-  const selectedName = value === "" ? "" : customers.find((c) => c.id === value)?.name ?? presetName ?? "";
+  const selectedName =
+    value === ""
+      ? walkInName ?? ""
+      : customers.find((c) => c.id === value)?.name ?? presetName ?? "";
   const [q, setQ] = useState(selectedName);
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
@@ -980,18 +988,35 @@ function ClientPicker({
             {q.trim() !== "" && matches.length === 0 && (
               <div style={{ padding: "9px 12px", fontSize: 13, color: color.textDim }}>Sin clientes con ese nombre</div>
             )}
-            {onCreateNew && q.trim() !== "" && (
-              <button
-                type="button"
-                onMouseDown={(e) => { e.preventDefault(); onCreateNew(q.trim()); setOpen(false); }}
-                style={{
-                  display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "9px 12px",
-                  textAlign: "left", border: "none", borderTop: `1px solid ${color.border}`,
-                  background: "transparent", color: color.primary, fontSize: 14, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                + Crear cliente «{q.trim()}»
-              </button>
+            {q.trim() !== "" && !customers.some((c) => normName(c.name) === normName(q)) && (
+              <>
+                {onUseWalkIn && (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); onUseWalkIn(q.trim()); setOpen(false); }}
+                    style={{
+                      display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "9px 12px",
+                      textAlign: "left", border: "none", borderTop: `1px solid ${color.border}`,
+                      background: "transparent", color: color.text, fontSize: 14, cursor: "pointer",
+                    }}
+                  >
+                    Usar «{q.trim()}» <span style={{ color: color.textDim }}>(mostrador)</span>
+                  </button>
+                )}
+                {onCreateNew && (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); onCreateNew(q.trim()); setOpen(false); }}
+                    style={{
+                      display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "9px 12px",
+                      textAlign: "left", border: "none", borderTop: `1px solid ${color.border}`,
+                      background: "transparent", color: color.primary, fontSize: 14, fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    + Guardar «{q.trim()}» como cliente
+                  </button>
+                )}
+              </>
             )}
           </div>,
           document.body,
@@ -1253,6 +1278,7 @@ function SaleModal({
   onSaved: (msg: string) => void;
 }) {
   const [customerId, setCustomerId] = useState(preset?.customerId ?? ""); // "" = consumidor final
+  const [walkInName, setWalkInName] = useState(""); // nombre suelto de mostrador (cliente no guardado)
   const [lines, setLines] = useState<SaleLine[]>(() => {
     const base: SaleLine[] =
       preset?.lines && preset.lines.length
@@ -1317,10 +1343,15 @@ function SaleModal({
   // ¿La línea vende una unidad serializada? (producto con IMEIs cargados)
   const isSerialLine = (l: SaleLine) => !!(l.catalogItemId && imeisByItem[l.catalogItemId]?.length);
 
-  const total = lines.reduce(
-    (a, l) => a + (isSerialLine(l) ? 1 : Number(l.quantity) || 0) * (Number(l.unitPrice) || 0),
-    0,
-  );
+  const blue = useBlueRate(); // cotización del dólar blue (para convertir USD→ARS)
+  // Moneda por ítem: subtotal por moneda (cada línea en la suya) + total en ARS
+  // de referencia (los ítems en USD se convierten al dólar blue del momento).
+  const rate = Number(blue) || 0;
+  const lineAmount = (l: SaleLine) =>
+    (isSerialLine(l) ? 1 : Number(l.quantity) || 0) * (Number(l.unitPrice) || 0);
+  const subtotalUsd = lines.reduce((a, l) => a + ((l.currency ?? "ARS") === "USD" ? lineAmount(l) : 0), 0);
+  const subtotalArs = lines.reduce((a, l) => a + ((l.currency ?? "ARS") === "USD" ? 0 : lineAmount(l)), 0);
+  const total = subtotalArs + subtotalUsd * rate;
   // Plan canje: el equipo recibido vale `tradeInValue`, cuenta como pago (baja
   // el saldo) y entra al stock como unidad usada al cerrar la venta.
   const tradeInValue = tradeInOpen ? Math.max(0, Number(tiValue) || 0) : 0;
@@ -1330,7 +1361,7 @@ function SaleModal({
   const balance = total - paidAmount;
   // El canje está "activo" si se empezó a cargar; si es así exige modelo + valor.
   const tradeInActive = tradeInOpen && (tiDesc.trim() !== "" || tiValue.trim() !== "");
-  const tradeInOk = !tradeInActive || (tiDesc.trim() !== "" && tradeInValue > 0);
+  const tradeInOk = !tradeInActive || (tiDesc.trim() !== "" && tradeInValue > 0 && isValidDeviceId(tiImei));
 
   // El modal está sucio si hay datos que se perderían al cerrar → click afuera
   // hace shake (no cierra), igual que en la desktop.
@@ -1363,7 +1394,6 @@ function SaleModal({
 
   // Precios por tipo de cliente (precios por tipo). Se cargan una vez; el
   // precio sugerido de cada ítem depende del tipo del cliente seleccionado.
-  const blue = useBlueRate(); // cotización del dólar blue (para convertir USD→ARS)
   const [catalogPrices, setCatalogPrices] = useState<CatalogPrice[]>([]);
   useEffect(() => {
     api.listCatalogPrices().then(setCatalogPrices).catch(() => {});
@@ -1413,6 +1443,7 @@ function SaleModal({
   // autocompletadas (priceAuto), respetando precios editados a mano o del preset.
   function changeCustomer(newId: string) {
     setCustomerId(newId);
+    setWalkInName("");
     const c = customers.find((x) => x.id === newId);
     const newType: ClientType = c?.type ?? "final";
     setPriceType(newType);
@@ -1538,7 +1569,9 @@ function SaleModal({
   const validLines = lines.filter(
     (l) => l.description.trim() && Number(l.unitPrice) > 0 && Number(l.quantity) > 0,
   );
-  const canSave = validLines.length > 0 && total > 0 && tradeInOk && !busy;
+  // Si hay ítems en USD necesitamos la cotización para convertir el total a pesos.
+  const needsRate = subtotalUsd > 0 && rate <= 0;
+  const canSave = validLines.length > 0 && total > 0 && tradeInOk && !needsRate && !busy;
 
   async function save() {
     if (!canSave) return;
@@ -1549,7 +1582,7 @@ function SaleModal({
     const isPresetCust = !!customerId && customerId === preset?.customerId;
     const finalCustomerId = cust?.id ?? (isPresetCust ? customerId : undefined);
     const finalCustomerName =
-      cust?.name || (isPresetCust ? preset?.customerName : "") || "Consumidor final";
+      cust?.name || walkInName.trim() || (isPresetCust ? preset?.customerName : "") || "Consumidor final";
     const payments: Array<{ method: string; amount: number; currency: Currency }> = [];
     if (tradeInValue > 0) payments.push({ method: "canje", amount: tradeInValue, currency: "ARS" });
     if (cashPaid > 0) payments.push({ method, amount: cashPaid, currency: "ARS" });
@@ -1559,6 +1592,7 @@ function SaleModal({
         customerName: finalCustomerName,
         sellerName,
         notes: notes.trim() || undefined,
+        usdToArs: rate > 0 ? rate : undefined,
         items: validLines.map((l) => ({
           description: l.description.trim(),
           // validLines garantiza quantity > 0 — sin el ||1 que coerce vacío→1
@@ -1566,6 +1600,7 @@ function SaleModal({
           // unidad por IMEI elegido.
           quantity: isSerialLine(l) ? 1 : Number(l.quantity),
           unitPrice: Number(l.unitPrice) || 0,
+          currency: l.currency ?? "ARS",
           catalogItemId: l.catalogItemId ?? null,
           imei: l.imei?.trim() || null,
           // Snapshot del costo (en pesos, USD→blue) al momento de la venta →
@@ -1597,9 +1632,11 @@ function SaleModal({
           <ClientPicker
             customers={localCustomers}
             value={customerId}
+            walkInName={walkInName}
             onChange={changeCustomer}
             presetName={preset?.customerName ?? undefined}
             onCreateNew={(name) => setNewClientName(name)}
+            onUseWalkIn={(name) => { changeCustomer(""); setWalkInName(name); }}
           />
         </div>
 
@@ -1671,6 +1708,15 @@ function SaleModal({
                     className={fieldCls}
                     style={{ width: 104, flexShrink: 0 }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setLine(i, { currency: (l.currency ?? "ARS") === "ARS" ? "USD" : "ARS" })}
+                    title="Moneda de la línea — clic para cambiar entre pesos ($) y dólares (US$)"
+                    className={`${fieldCls} font-bold ${(l.currency ?? "ARS") === "USD" ? "text-primary" : "text-text-dim"}`}
+                    style={{ width: 48, flexShrink: 0, cursor: "pointer" }}
+                  >
+                    {(l.currency ?? "ARS") === "USD" ? "US$" : "$"}
+                  </button>
                   <button
                     onClick={() => removeLine(i)}
                     disabled={lines.length === 1}
@@ -1779,6 +1825,12 @@ function SaleModal({
                   className={fieldCls}
                 />
               </div>
+              {tradeInActive && tiImei.trim() === "" && (
+                <div style={{ fontSize: text.xs, color: color.textDim }}>El IMEI/serie del equipo recibido es obligatorio — es el “DNI” del celular.</div>
+              )}
+              {tradeInActive && tiImei.trim() !== "" && !isValidDeviceId(tiImei) && (
+                <div style={{ fontSize: text.xs, color: color.danger }}>IMEI inválido: deben ser 15 dígitos. Si no tiene IMEI, usá el N° de serie (con letras).</div>
+              )}
               <input
                 type="number"
                 value={tiValue}
@@ -1798,6 +1850,25 @@ function SaleModal({
             <span className="text-sm text-text-muted">Total</span>
             <span className="text-xl font-extrabold tracking-tight">{money(total, "ARS")}</span>
           </div>
+          {subtotalUsd > 0 && (
+            <div className="mt-2 border-t border-border pt-2 text-xs">
+              <div className="flex items-baseline justify-between">
+                <span className="text-text-dim">Ítems en dólares</span>
+                <span className="font-semibold">{money(subtotalUsd, "USD")}</span>
+              </div>
+              {subtotalArs > 0 && (
+                <div className="mt-0.5 flex items-baseline justify-between">
+                  <span className="text-text-dim">Ítems en pesos</span>
+                  <span className="font-semibold">{money(subtotalArs, "ARS")}</span>
+                </div>
+              )}
+              <div className="mt-1 text-text-dim">
+                {rate > 0
+                  ? `El total en pesos convierte los USD al dólar ${money(rate, "ARS")}.`
+                  : "⚠ Cargá la cotización del dólar (chip arriba) para convertir los ítems en USD."}
+              </div>
+            </div>
+          )}
           {tradeInValue > 0 && (
             <>
               <div className="mt-1.5 flex items-baseline justify-between text-sm">

@@ -615,6 +615,8 @@ export interface SaleItem {
   unitPrice: number;
   subtotal: number;
   imei?: string | null;
+  /** Fase ③: moneda de la línea ('ARS' | 'USD'). Default 'ARS' (web ARS-nativa). */
+  currency?: Currency;
 }
 
 export interface SalePayment {

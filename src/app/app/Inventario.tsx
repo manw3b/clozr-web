@@ -24,6 +24,7 @@ import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import { fetchDolares } from "@/lib/dolar";
 import * as api from "@/lib/api";
+import { partitionDeviceIds } from "@/lib/deviceId";
 import type { ClientType, Product } from "@/lib/types";
 import { CLIENT_TYPE_LABELS, CLIENT_TYPES, CATALOG_PACKS, formatUsd, formatArs } from "@/lib/types";
 import type { Currency } from "@/lib/types";
@@ -1027,6 +1028,11 @@ function ProductModal({
       new Set(imeiInput.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean)),
     );
     if (list.length === 0) return;
+    const { invalid } = partitionDeviceIds(list);
+    if (invalid.length > 0) {
+      showToast(`IMEI/Serie inválido: ${invalid.slice(0, 3).join(", ")}${invalid.length > 3 ? "…" : ""}. El IMEI debe tener 15 dígitos; si no tiene, usá un N° de serie.`, "error");
+      return;
+    }
     if (product) {
       try {
         const res = await api.addCatalogImeis(product.id, list);
