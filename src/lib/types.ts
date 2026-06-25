@@ -442,6 +442,8 @@ export interface PipelineItem {
   visitAt?: string | null;
   nextActionAt?: string | null;
   nextActionLabel?: string | null;
+  /** Leyenda/nota corta para la tarjeta del pipeline (recordatorio, aclaración). */
+  shortNote?: string | null;
 }
 
 /** Semilla de etapas para un workspace nuevo (las 7 canónicas del desktop). */

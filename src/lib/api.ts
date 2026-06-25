@@ -339,6 +339,7 @@ interface ItemRaw {
   visit_at?: string | null;
   next_action_at?: string | null;
   next_action_label?: string | null;
+  short_note?: string | null;
   created_at?: string | null;
 }
 function mapItem(r: ItemRaw): PipelineItem {
@@ -357,6 +358,7 @@ function mapItem(r: ItemRaw): PipelineItem {
     visitAt: r.visit_at ?? null,
     nextActionAt: r.next_action_at ?? null,
     nextActionLabel: r.next_action_label ?? null,
+    shortNote: r.short_note ?? null,
     createdAt: r.created_at ?? undefined,
   };
 }
@@ -374,6 +376,7 @@ interface ItemInput {
   product?: string;
   priority: LeadPriority;
   source?: LeadSource;
+  shortNote?: string | null;
 }
 function itemBody(d: Partial<ItemInput>) {
   const body: Record<string, unknown> = {};
@@ -389,6 +392,7 @@ function itemBody(d: Partial<ItemInput>) {
   if (d.product !== undefined) body.product = d.product ?? null;
   if (d.priority !== undefined) body.priority = d.priority;
   if (d.source !== undefined) body.lead_source = d.source ?? null;
+  if (d.shortNote !== undefined) body.short_note = d.shortNote ?? null;
   return body;
 }
 export async function createItem(d: ItemInput): Promise<string> {

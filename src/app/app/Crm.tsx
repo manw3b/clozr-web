@@ -647,6 +647,7 @@ function ItemModal({
 }) {
   const [customerId, setCustomerId] = useState(item?.customerId ?? customers[0]?.id ?? "");
   const [product, setProduct] = useState(item?.product ?? "");
+  const [shortNote, setShortNote] = useState(item?.shortNote ?? "");
   const [amount, setAmount] = useState<string>(item?.amount != null ? String(item.amount) : "");
   const [currency, setCurrency] = useState<Currency>(item?.currency ?? "ARS");
   const [stageId, setStageId] = useState(item?.stageId || presetStageId || stages[0]?.id || "");
@@ -684,6 +685,7 @@ function ItemModal({
       product,
       priority,
       source,
+      shortNote: shortNote.trim() || null,
     };
     try {
       if (item) await api.updateItem(item.id, data);
@@ -720,6 +722,17 @@ function ItemModal({
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Producto / detalle</span>
           <input value={product} onChange={(e) => setProduct(e.target.value)} className={fieldCls} disabled={readOnly} />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className={labelCls}>Leyenda / nota <span className="font-normal text-text-dim">· se ve en la tarjeta</span></span>
+          <textarea
+            value={shortNote}
+            onChange={(e) => setShortNote(e.target.value)}
+            className={fieldCls}
+            disabled={readOnly}
+            rows={2}
+            placeholder="Recordatorio o aclaración (ej: 'llamar después de las 18h', 'seña pagada')…"
+          />
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5">

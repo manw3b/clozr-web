@@ -24,6 +24,7 @@ import {
   Trophy,
   XCircle,
   Trash2,
+  StickyNote,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
@@ -871,6 +872,27 @@ const LeadCardView = forwardRef<HTMLDivElement, LeadCardViewProps>(function Lead
           }}
         >
           {formatMoney(item.amount, item.currency)}
+        </div>
+      )}
+
+      {/* Leyenda / nota: recordatorio o aclaración chica, visible en la tarjeta */}
+      {item.shortNote && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 5,
+            fontSize: text.xs,
+            color: color.textMuted,
+            background: color.surface2,
+            border: `1px solid ${color.border}`,
+            borderRadius: radius.sm,
+            padding: "4px 7px",
+            lineHeight: 1.35,
+          }}
+        >
+          <StickyNote size={12} strokeWidth={2} color={color.textDim} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{item.shortNote}</span>
         </div>
       )}
 
