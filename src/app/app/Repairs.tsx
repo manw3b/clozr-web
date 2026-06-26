@@ -13,7 +13,8 @@ import { formatMoney } from "@/lib/format";
 import { usePermissions } from "@/store/usePermissions";
 import { useUIStore } from "@/store/uiStore";
 import * as api from "@/lib/api";
-import type { Customer, Repair, RepairStatus } from "@/lib/types";
+import type { Customer, Product, Repair, RepairStatus } from "@/lib/types";
+import type { RepairPart } from "@/lib/api";
 
 const STATUS_FLOW: RepairStatus[] = ["received", "diagnosing", "quoted", "approved", "repairing", "ready", "delivered", "cancelled"];
 const STATUS_LABEL: Record<RepairStatus, string> = {
@@ -173,6 +174,62 @@ export function RepairDialog({
   const [estimatedAt, setEstimatedAt] = useState(initial?.estimatedAt ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [saving, setSaving] = useState(false);
+  // Repuestos itemizados (descuentan stock). Solo en una reparación ya guardada.
+  const [catalog, setCatalog] = useState<Product[]>([]);
+  const [parts, setParts] = useState<RepairPart[]>([]);
+  const [npItem, setNpItem] = useState("");
+  const [npDesc, setNpDesc] = useState("");
+  const [npQty, setNpQty] = useState("1");
+  const [npPrice, setNpPrice] = useState("");
+  const [partBusy, setPartBusy] = useState(false);
+
+  useEffect(() => {
+    if (!initial) return;
+    api.listCatalog().then(setCatalog).catch(() => {});
+    api.listRepairParts(initial.id).then((p) => {
+      setParts(p);
+      if (p.length > 0) setPartsCost(String(p.reduce((a, x) => a + x.subtotal, 0)));
+    }).catch(() => {});
+  }, [initial]);
+
+  function pickNewPart(id: string) {
+    setNpItem(id);
+    const c = id ? catalog.find((x) => x.id === id) : null;
+    if (c) { setNpDesc(c.name); if (c.price != null) setNpPrice(String(c.price)); }
+  }
+  async function refreshParts() {
+    if (!initial) return;
+    const p = await api.listRepairParts(initial.id);
+    setParts(p);
+    setPartsCost(String(p.reduce((a, x) => a + x.subtotal, 0)));
+  }
+  async function addPart() {
+    if (!initial) return;
+    const desc = npItem ? (catalog.find((c) => c.id === npItem)?.name ?? "") : npDesc.trim();
+    if (!desc) { showToast("Elegí un repuesto o escribí uno", "error"); return; }
+    setPartBusy(true);
+    try {
+      await api.addRepairPart(initial.id, {
+        catalogItemId: npItem || null,
+        description: desc,
+        quantity: Math.max(1, Number(npQty) || 1),
+        unitPrice: Number(npPrice) || 0,
+      });
+      await refreshParts();
+      setNpItem(""); setNpDesc(""); setNpQty("1"); setNpPrice("");
+      if (npItem) api.listCatalog().then(setCatalog).catch(() => {}); // stock cambió
+    } catch {
+      showToast("No se pudo agregar el repuesto", "error");
+    } finally { setPartBusy(false); }
+  }
+  async function removePart(partId: string, fromStock: boolean) {
+    if (!initial) return;
+    try {
+      await api.removeRepairPart(initial.id, partId);
+      await refreshParts();
+      if (fromStock) api.listCatalog().then(setCatalog).catch(() => {}); // stock repuesto
+    } catch { showToast("No se pudo quitar", "error"); }
+  }
 
   function selectCustomer(id: string) {
     setCustomerId(id);
@@ -310,10 +367,40 @@ export function RepairDialog({
         <ModalField label="Técnico"><Input value={technician} onChange={(e) => setTechnician(e.target.value)} placeholder="Responsable" /></ModalField>
       </div>
 
-      <div style={{ display: "flex", gap: space[2] }}>
-        <ModalField label="Repuestos ($)"><Input type="number" value={partsCost} onChange={(e) => setPartsCost(e.target.value)} placeholder="0" /></ModalField>
-        <ModalField label="Mano de obra ($)"><Input type="number" value={laborCost} onChange={(e) => setLaborCost(e.target.value)} placeholder="0" /></ModalField>
-      </div>
+      {initial ? (
+        <ModalField label="Repuestos (descuentan stock)">
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+            {parts.map((p) => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: space[2], fontSize: text.sm }}>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  {p.quantity > 1 ? `${p.quantity}× ` : ""}{p.description}
+                  <span style={{ color: color.textDim }}>{p.catalogItemId ? " · stock" : " · libre"}</span>
+                </span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatMoney(p.subtotal)}</span>
+                <button type="button" onClick={() => removePart(p.id, !!p.catalogItemId)} title="Quitar" style={{ display: "inline-flex", color: color.textDim, cursor: "pointer" }}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {parts.length === 0 && <span style={{ fontSize: text.xs, color: color.textDim }}>Sin repuestos cargados.</span>}
+            <div style={{ display: "flex", gap: space[2], alignItems: "center" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Select value={npItem} onChange={(e) => pickNewPart(e.target.value)}>
+                  <option value="">— Repuesto libre —</option>
+                  {catalog.map((c) => <option key={c.id} value={c.id}>{c.name} (stock {c.stock})</option>)}
+                </Select>
+              </div>
+              {!npItem && <div style={{ flex: 1, minWidth: 0 }}><Input value={npDesc} onChange={(e) => setNpDesc(e.target.value)} placeholder="Repuesto" /></div>}
+              <div style={{ width: 54, flexShrink: 0 }}><Input type="number" value={npQty} onChange={(e) => setNpQty(e.target.value)} /></div>
+              <div style={{ width: 88, flexShrink: 0 }}><Input type="number" value={npPrice} onChange={(e) => setNpPrice(e.target.value)} placeholder="$" /></div>
+              <Button variant="secondary" size="sm" onClick={addPart} loading={partBusy} disabled={partBusy}>Agregar</Button>
+            </div>
+          </div>
+        </ModalField>
+      ) : (
+        <ModalField label="Repuestos ($)"><Input type="number" value={partsCost} onChange={(e) => setPartsCost(e.target.value)} placeholder="Itemizá del stock al guardar" /></ModalField>
+      )}
+      <ModalField label="Mano de obra ($)"><Input type="number" value={laborCost} onChange={(e) => setLaborCost(e.target.value)} placeholder="0" /></ModalField>
       <div style={{ display: "flex", gap: space[2] }}>
         <ModalField label="Garantía (meses)"><Input type="number" value={warrantyMonths} onChange={(e) => setWarrantyMonths(e.target.value)} placeholder="0" /></ModalField>
         <ModalField label="Entrega estimada"><Input type="datetime-local" value={estimatedAt} onChange={(e) => setEstimatedAt(e.target.value)} /></ModalField>
