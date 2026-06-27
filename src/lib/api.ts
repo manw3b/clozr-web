@@ -1135,6 +1135,7 @@ interface AppointmentRaw {
   appointment_at: string;
   type?: string | null;
   origin?: string | null;
+  product?: string | null;
   notes?: string | null;
   status?: string | null;
   owner_id?: string | null;
@@ -1151,6 +1152,7 @@ function mapAppointment(r: AppointmentRaw): Appointment {
     appointmentAt: r.appointment_at,
     type: r.type ?? null,
     origin: r.origin ?? null,
+    product: r.product ?? null,
     notes: r.notes ?? null,
     status: (r.status as Appointment["status"]) ?? "pending",
     ownerId: r.owner_id ?? null,
@@ -1166,6 +1168,7 @@ export interface AppointmentInput {
   appointmentAt: string;
   type?: string | null;
   origin?: string | null;
+  product?: string | null;
   notes?: string | null;
   status?: Appointment["status"];
   ownerName?: string | null;
@@ -1179,6 +1182,7 @@ function appointmentBody(input: Partial<AppointmentInput>): Record<string, unkno
   if (input.appointmentAt !== undefined) b.appointment_at = input.appointmentAt;
   if (input.type !== undefined) b.type = input.type;
   if (input.origin !== undefined) b.origin = input.origin;
+  if (input.product !== undefined) b.product = input.product;
   if (input.notes !== undefined) b.notes = input.notes;
   if (input.status !== undefined) b.status = input.status;
   if (input.ownerName !== undefined) b.owner_name = input.ownerName;

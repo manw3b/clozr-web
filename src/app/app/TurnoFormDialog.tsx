@@ -47,6 +47,7 @@ export function TurnoFormDialog({
   const [appointmentAt, setAppointmentAt] = useState(sale?.appointmentAt ?? initial?.appointmentAt ?? "");
   const [type, setType] = useState(initial?.type ?? (sale ? "Venta" : ""));
   const [origin, setOrigin] = useState(sale?.origin ?? initial?.origin ?? "");
+  const [product, setProduct] = useState(initial?.product ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -110,9 +111,9 @@ export function TurnoFormDialog({
         resolveTurnoTemplate("cliente", settings),
         sale
           ? buildTurnoData(sale, ws, blue, { appointmentAt, origin })
-          : buildTurnoDataFromAppointment({ customerName, appointmentAt, origin, type, notes }, ws),
+          : buildTurnoDataFromAppointment({ customerName, appointmentAt, origin, type, product, notes }, ws),
       ),
-    [sale, blue, customerName, appointmentAt, origin, type, notes, ws, settings],
+    [sale, blue, customerName, appointmentAt, origin, type, product, notes, ws, settings],
   );
 
   const valid = appointmentAt.trim() !== "" && customerName.trim() !== "";
@@ -132,6 +133,7 @@ export function TurnoFormDialog({
         appointmentAt,
         type: type || null,
         origin: origin || null,
+        product: product.trim() || null,
         notes: notes.trim() || null,
       };
       if (savedId) {
@@ -220,6 +222,10 @@ export function TurnoFormDialog({
             <option value="__new__">➕ Nuevo tipo…</option>
           </Select>
         )}
+      </ModalField>
+
+      <ModalField label="Equipo / producto que viene a ver">
+        <Input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="Ej: iPhone 13 128GB / Parlante JBL Flip" />
       </ModalField>
 
       <ModalField label="Viene de (origen)">
