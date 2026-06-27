@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { DndContext, DragOverlay, PointerSensor, closestCorners, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
-import { Plus, Wrench, Trash2 } from "lucide-react";
+import { Plus, Wrench, Trash2, FileText } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -15,6 +15,8 @@ import { useUIStore } from "@/store/uiStore";
 import * as api from "@/lib/api";
 import { openWhatsApp } from "@/lib/openExternal";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { useWorkspaceStore } from "@/store/workspaceStore";
+import { printRepairComprobante, buildRepairText } from "@/lib/repairComprobante";
 import type { Customer, Product, Repair, RepairStatus } from "@/lib/types";
 import type { RepairPart } from "@/lib/api";
 
@@ -174,6 +176,8 @@ export function RepairDialog({
   onSaved: () => void;
 }) {
   const { showToast } = useUIStore();
+  const ws = useWorkspaceStore((s) => s.activeWorkspace);
+  const business = { name: ws?.name ?? "Mi negocio", logoUrl: ws?.logoKey ? api.assetUrl(ws.logoKey) : null };
   const [customerId, setCustomerId] = useState(initial?.customerId ?? presetCustomer?.id ?? "");
   const [customerName, setCustomerName] = useState(initial?.customerName ?? presetCustomer?.name ?? "");
   const [customerPhone, setCustomerPhone] = useState(initial?.customerPhone ?? presetCustomer?.phone ?? "");
@@ -279,6 +283,25 @@ export function RepairDialog({
       estimatedAt: estimatedAt || null,
       notes: notes.trim() || null,
       appointmentId: initial?.appointmentId ?? presetAppointmentId ?? null,
+    };
+  }
+  // Reparación con los datos actuales del form (para los comprobantes).
+  function currentRepair(): Repair {
+    return {
+      ...(initial as Repair),
+      customerName: customerName.trim() || null,
+      customerPhone: customerPhone.trim() || null,
+      deviceModel: deviceModel.trim() || null,
+      deviceImei: deviceImei.trim() || null,
+      devicePasscode: devicePasscode.trim() || null,
+      accessories: accessories.trim() || null,
+      problem: problem.trim() || null,
+      diagnosis: diagnosis.trim() || null,
+      status,
+      partsCost: num(partsCost),
+      laborCost: num(laborCost),
+      technician: technician.trim() || null,
+      warrantyMonths: num(warrantyMonths),
     };
   }
 
@@ -429,6 +452,26 @@ export function RepairDialog({
       </div>
 
       <ModalField label="Notas"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Observaciones internas" /></ModalField>
+      {initial && (
+        <ModalField label="Comprobantes">
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+              <span style={{ flex: 1, fontSize: text.sm, color: color.textMuted }}>Recibo de ingreso</span>
+              <Button variant="ghost" size="sm" iconLeft={<FileText size={14} />} onClick={() => printRepairComprobante(business, currentRepair(), parts, "intake")}>PDF</Button>
+              {customerPhone.trim() && (
+                <Button variant="ghost" size="sm" iconLeft={<WhatsAppIcon size={14} />} onClick={() => openWhatsApp(customerPhone, buildRepairText(business, currentRepair(), parts, "intake"))}>WhatsApp</Button>
+              )}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+              <span style={{ flex: 1, fontSize: text.sm, color: color.textMuted }}>Entrega (con garantía)</span>
+              <Button variant="ghost" size="sm" iconLeft={<FileText size={14} />} onClick={() => printRepairComprobante(business, currentRepair(), parts, "delivery")}>PDF</Button>
+              {customerPhone.trim() && (
+                <Button variant="ghost" size="sm" iconLeft={<WhatsAppIcon size={14} />} onClick={() => openWhatsApp(customerPhone, buildRepairText(business, currentRepair(), parts, "delivery"))}>WhatsApp</Button>
+              )}
+            </div>
+          </div>
+        </ModalField>
+      )}
     </Modal>
   );
 }
