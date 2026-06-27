@@ -482,7 +482,7 @@ export function MiDia({
                   {a.customerName || "Sin cliente"}
                 </div>
                 <div style={{ fontSize: text.xs, color: color.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
-                  {a.type || "Turno"}
+                  {[a.type || "Turno", a.product].filter(Boolean).join(" · ")}
                   {opts.team && a.ownerName ? ` · ${a.ownerName}` : ""}
                 </div>
               </div>

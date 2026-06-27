@@ -161,6 +161,7 @@ export function RepairDialog({
   initial,
   presetCustomer,
   presetProblem,
+  presetDeviceModel,
   presetAppointmentId,
   onOpenSale,
   onClose,
@@ -170,6 +171,7 @@ export function RepairDialog({
   initial?: Repair | null;
   presetCustomer?: { id: string; name: string; phone?: string } | null;
   presetProblem?: string;
+  presetDeviceModel?: string;
   presetAppointmentId?: string;
   onOpenSale?: (id: string) => void;
   onClose: () => void;
@@ -181,7 +183,7 @@ export function RepairDialog({
   const [customerId, setCustomerId] = useState(initial?.customerId ?? presetCustomer?.id ?? "");
   const [customerName, setCustomerName] = useState(initial?.customerName ?? presetCustomer?.name ?? "");
   const [customerPhone, setCustomerPhone] = useState(initial?.customerPhone ?? presetCustomer?.phone ?? "");
-  const [deviceModel, setDeviceModel] = useState(initial?.deviceModel ?? "");
+  const [deviceModel, setDeviceModel] = useState(initial?.deviceModel ?? presetDeviceModel ?? "");
   const [deviceImei, setDeviceImei] = useState(initial?.deviceImei ?? "");
   const [devicePasscode, setDevicePasscode] = useState(initial?.devicePasscode ?? "");
   const [accessories, setAccessories] = useState(initial?.accessories ?? "");

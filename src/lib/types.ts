@@ -71,6 +71,8 @@ export interface Appointment {
   appointmentAt: string;
   type?: string | null;
   origin?: string | null;
+  /** Equipo / producto que el cliente viene a ver o averiguar (Fase ④). */
+  product?: string | null;
   notes?: string | null;
   status: "pending" | "done" | "cancelled";
   ownerId?: string | null;

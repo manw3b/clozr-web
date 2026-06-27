@@ -127,14 +127,16 @@ export function applyTurnoTemplate(body: string, d: TurnoData): string {
  * campos de venta (código/usd/ars) quedan vacíos.
  */
 export function buildTurnoDataFromAppointment(
-  appt: { customerName?: string | null; appointmentAt?: string | null; origin?: string | null; type?: string | null; notes?: string | null },
+  appt: { customerName?: string | null; appointmentAt?: string | null; origin?: string | null; type?: string | null; product?: string | null; notes?: string | null },
   workspace: { name?: string; address?: string | null } | null,
 ): TurnoData {
   const asunto = [appt.type, appt.notes].map((s) => (s ?? "").trim()).filter(Boolean).join(" — ");
+  const producto = (appt.product ?? "").trim();
   return {
     nombre: appt.customerName ?? "",
-    equipo: asunto,
-    pedido: asunto,
+    // {equipo}: el producto/equipo que viene a ver; si no se cargó, caemos al asunto (tipo — notas).
+    equipo: producto || asunto,
+    pedido: asunto || producto,
     dia: formatTurnoDay(appt.appointmentAt),
     hora: formatTurnoTime(appt.appointmentAt),
     vieneDe: appt.origin ?? "",

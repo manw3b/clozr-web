@@ -37,7 +37,7 @@ interface Entry {
   isPaid?: boolean;
   status?: Appointment["status"];
   apptId?: string;
-  repair?: { customerId?: string | null; customerName?: string | null; customerPhone?: string | null; appointmentId: string; problem?: string | null };
+  repair?: { customerId?: string | null; customerName?: string | null; customerPhone?: string | null; appointmentId: string; problem?: string | null; deviceModel?: string | null };
   onClick?: () => void;
 }
 
@@ -97,11 +97,11 @@ export function Agenda({
         at: a.appointmentAt,
         kind: "turno",
         customerName: a.customerName || "Sin cliente",
-        meta: [a.type, a.origin].filter(Boolean).join(" · ") || null,
+        meta: [a.product, a.type, a.origin].filter(Boolean).join(" · ") || null,
         status: a.status,
         apptId: a.id,
         repair: (a.type ?? "").toLowerCase().includes("reparaci")
-          ? { customerId: a.customerId, customerName: a.customerName, customerPhone: a.customerPhone, appointmentId: a.id, problem: a.notes }
+          ? { customerId: a.customerId, customerName: a.customerName, customerPhone: a.customerPhone, appointmentId: a.id, problem: a.notes, deviceModel: a.product }
           : undefined,
         onClick: canWrite ? () => setForm({ initial: a }) : undefined,
       });
@@ -296,6 +296,7 @@ export function Agenda({
           customers={customers}
           presetCustomer={{ id: repairForm.customerId ?? "", name: repairForm.customerName ?? "", phone: repairForm.customerPhone ?? undefined }}
           presetProblem={repairForm.problem ?? undefined}
+          presetDeviceModel={repairForm.deviceModel ?? undefined}
           presetAppointmentId={repairForm.appointmentId}
           onOpenSale={onOpenSale}
           onClose={() => setRepairForm(null)}
