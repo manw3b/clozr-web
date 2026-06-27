@@ -13,6 +13,8 @@ import { formatMoney } from "@/lib/format";
 import { usePermissions } from "@/store/usePermissions";
 import { useUIStore } from "@/store/uiStore";
 import * as api from "@/lib/api";
+import { openWhatsApp } from "@/lib/openExternal";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import type { Customer, Product, Repair, RepairStatus } from "@/lib/types";
 import type { RepairPart } from "@/lib/api";
 
@@ -40,6 +42,21 @@ const STATUS_COLOR: Record<RepairStatus, string> = {
 
 const quoteTotal = (r: Repair | { partsCost?: number | null; laborCost?: number | null }) =>
   (r.partsCost ?? 0) + (r.laborCost ?? 0);
+
+/** Mensaje de WhatsApp para el cliente, según el estado de la reparación. */
+function repairWaText(status: RepairStatus, name?: string | null, device?: string | null, total = 0): string {
+  const dev = (device || "").trim() || "tu equipo";
+  const greet = (name || "").trim() ? `Hola ${(name || "").trim()}! ` : "¡Hola! ";
+  if (status === "ready") {
+    const tot = total > 0 ? ` Total: ${formatMoney(total)}.` : "";
+    return `${greet}Tu ${dev} ya está listo para retirar.${tot} ¡Gracias!`;
+  }
+  if (status === "quoted") {
+    const tot = total > 0 ? ` El presupuesto es ${formatMoney(total)}.` : "";
+    return `${greet}Te paso novedades de tu ${dev}.${tot}`;
+  }
+  return `${greet}Te escribimos por la reparación de tu ${dev}.`;
+}
 
 export function Repairs({ customers, onOpenSale }: { customers: Customer[]; onOpenSale?: (id: string) => void }) {
   const { can } = usePermissions();
@@ -322,6 +339,11 @@ export function RepairDialog({
             Presupuesto: <strong style={{ color: color.text }}>{formatMoney(total)}</strong>
           </span>
           <div style={{ display: "flex", gap: space[2] }}>
+            {customerPhone.trim() && (
+              <Button variant="ghost" size="md" iconLeft={<WhatsAppIcon size={15} />} onClick={() => openWhatsApp(customerPhone, repairWaText(status, customerName, deviceModel, total))}>
+                WhatsApp
+              </Button>
+            )}
             <Button variant="ghost" size="md" onClick={onClose}>Cerrar</Button>
             {initial?.saleId ? (
               <Button variant="secondary" size="md" onClick={() => { onClose(); onOpenSale?.(initial.saleId!); }}>Ver venta</Button>
@@ -492,9 +514,22 @@ function RepairCardView({ repair: r, canWrite, onEdit, onRemove, onMove }: {
         <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: space[1], overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.problem}</div>
       )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2], marginTop: space[2] }}>
-        {quoteTotal(r) > 0 ? (
-          <span style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>{formatMoney(quoteTotal(r))}</span>
-        ) : <span />}
+        <div style={{ display: "flex", alignItems: "center", gap: space[2], minWidth: 0 }}>
+          {quoteTotal(r) > 0 && (
+            <span style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>{formatMoney(quoteTotal(r))}</span>
+          )}
+          {r.status === "ready" && r.customerPhone && (
+            <button
+              onPointerDown={stopPD}
+              onClick={(e) => { e.stopPropagation(); openWhatsApp(r.customerPhone!, repairWaText(r.status, r.customerName, r.deviceModel, quoteTotal(r))); }}
+              aria-label="Avisar listo por WhatsApp"
+              title="Avisar que está listo por WhatsApp"
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: text.xs, fontWeight: weight.semibold, color: "#16A34A", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+            >
+              <WhatsAppIcon size={14} /> Avisar
+            </button>
+          )}
+        </div>
         {canWrite && onMove && (
           <select
             value={r.status}
