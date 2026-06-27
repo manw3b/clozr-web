@@ -1320,6 +1320,57 @@ export async function deleteRepair(id: string): Promise<void> {
   await req(`/workspaces/${ws()}/repairs/${id}`, { method: "DELETE" });
 }
 
+/* repuestos itemizados de una reparación (descuentan stock del catálogo) */
+export interface RepairPart {
+  id: string;
+  catalogItemId?: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+interface RepairPartRaw {
+  id: string;
+  catalog_item_id?: string | null;
+  description?: string | null;
+  quantity?: number | null;
+  unit_price?: number | null;
+  subtotal?: number | null;
+}
+function mapRepairPart(r: RepairPartRaw): RepairPart {
+  return {
+    id: r.id,
+    catalogItemId: r.catalog_item_id ?? null,
+    description: r.description ?? "",
+    quantity: Number(r.quantity ?? 1),
+    unitPrice: Number(r.unit_price ?? 0),
+    subtotal: Number(r.subtotal ?? 0),
+  };
+}
+export async function listRepairParts(repairId: string): Promise<RepairPart[]> {
+  const r = await req<{ parts: RepairPartRaw[] }>(`/workspaces/${ws()}/repairs/${repairId}/parts`);
+  return (r.parts ?? []).map(mapRepairPart);
+}
+export async function addRepairPart(
+  repairId: string,
+  input: { catalogItemId?: string | null; description: string; quantity: number; unitPrice: number },
+): Promise<{ partsCost: number }> {
+  const r = await req<{ parts_cost?: number }>(`/workspaces/${ws()}/repairs/${repairId}/parts`, {
+    method: "POST",
+    body: JSON.stringify({
+      catalog_item_id: input.catalogItemId ?? null,
+      description: input.description,
+      quantity: input.quantity,
+      unit_price: input.unitPrice,
+    }),
+  });
+  return { partsCost: Number(r.parts_cost ?? 0) };
+}
+export async function removeRepairPart(repairId: string, partId: string): Promise<{ partsCost: number }> {
+  const r = await req<{ parts_cost?: number }>(`/workspaces/${ws()}/repairs/${repairId}/parts/${partId}`, { method: "DELETE" });
+  return { partsCost: Number(r.parts_cost ?? 0) };
+}
+
 /* ---------- workspace settings (KV: plantillas, etc) ---------- */
 export async function getSettings(): Promise<Record<string, string>> {
   const r = await req<{ settings: Record<string, string> }>(`/workspaces/${ws()}/settings`);
