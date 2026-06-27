@@ -58,6 +58,7 @@ import { Ventas as VentasView } from "./Ventas";
 import { Agenda } from "./Agenda";
 import { Repairs } from "./Repairs";
 import { Pipeline as PipelineView } from "./Pipeline";
+import { useStagesChanged } from "@/lib/stageEvents";
 import { UndoToastHost } from "@/components/UndoToastHost";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { WhatsNewModal } from "./WhatsNewModal";
@@ -202,6 +203,9 @@ export default function Crm({
   const refreshSales = () => api.listSales().then(setSales);
   // B: refrescar clientes cuando cambian en cualquier otra pantalla.
   useCustomersChanged(refreshCustomers);
+  // Refrescar etapas cuando se crean/borran en Ajustes — el form de oportunidad
+  // usa esta copia, así no muestra etapas viejas (sin F5).
+  useStagesChanged(() => { api.listStages().then(setStages).catch(() => {}); });
 
   // Refrescar items cuando el Pipeline mueve una oportunidad por drag (o
   // cualquier emisor del evento), para que el ItemModal no arranque con la
@@ -215,6 +219,13 @@ export default function Crm({
   // A: al abrir "nueva venta", refrescar clientes (pudo crearse uno recién en otra pantalla).
   useEffect(() => {
     if (modal?.kind === "sale") refreshCustomers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal?.kind]);
+
+  // Al abrir "agregar/editar oportunidad", refrescar etapas (pudieron crearse o
+  // borrarse en Ajustes mientras esta pantalla seguía montada).
+  useEffect(() => {
+    if (modal?.kind === "item") api.listStages().then(setStages).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modal?.kind]);
 
