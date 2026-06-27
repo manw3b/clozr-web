@@ -155,7 +155,12 @@ export function Pipeline({
     refresh().finally(() => setLoading(false));
     const onChanged = () => refresh();
     window.addEventListener("clozr:item-changed", onChanged);
-    return () => window.removeEventListener("clozr:item-changed", onChanged);
+    // También cuando se editan las etapas en Ajustes (nuevas columnas del board).
+    window.addEventListener("clozr:stage-changed", onChanged);
+    return () => {
+      window.removeEventListener("clozr:item-changed", onChanged);
+      window.removeEventListener("clozr:stage-changed", onChanged);
+    };
   }, [refresh]);
 
   const sensors = useSensors(

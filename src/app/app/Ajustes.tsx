@@ -27,6 +27,7 @@ import {
   TURNO_CODE_HELP,
   TURNO_SAMPLE,
 } from "@/lib/turnoTemplates";
+import { notifyStagesChanged } from "@/lib/stageEvents";
 import {
   parseQuickTemplates,
   serializeQuickTemplates,
@@ -1767,6 +1768,7 @@ function StagesCard({ canManage, showToast }: { canManage: boolean; showToast: (
       await api.createStage({ name: n, color: col, order: maxOrder + 1 });
       setName("");
       load();
+      notifyStagesChanged();
     } catch {
       showToast("No se pudo agregar", "error");
     }
@@ -1779,6 +1781,7 @@ function StagesCard({ canManage, showToast }: { canManage: boolean; showToast: (
     try {
       await api.deleteStage(s.id);
       load();
+      notifyStagesChanged();
     } catch {
       showToast("No se pudo eliminar", "error");
     }
