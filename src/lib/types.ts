@@ -120,6 +120,8 @@ export interface Repair {
   ownerId?: string | null;
   ownerName?: string | null;
   createdAt?: string | null;
+  deposit?: number | null;
+  orderSeq?: number | null;
 }
 
 /* ───────── Planes / billing (T3) ─────────

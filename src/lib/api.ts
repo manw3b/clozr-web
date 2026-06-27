@@ -1229,6 +1229,8 @@ interface RepairRaw {
   status?: string | null;
   parts_cost?: number | null;
   labor_cost?: number | null;
+  deposit?: number | null;
+  order_seq?: number | null;
   technician?: string | null;
   warranty_months?: number | null;
   notes?: string | null;
@@ -1256,6 +1258,8 @@ function mapRepairRow(r: RepairRaw): Repair {
     status: (r.status as RepairStatus) ?? "received",
     partsCost: r.parts_cost ?? null,
     laborCost: r.labor_cost ?? null,
+    deposit: r.deposit ?? null,
+    orderSeq: r.order_seq ?? null,
     technician: r.technician ?? null,
     warrantyMonths: r.warranty_months ?? null,
     notes: r.notes ?? null,
@@ -1282,6 +1286,7 @@ export interface RepairInput {
   status?: RepairStatus;
   partsCost?: number | null;
   laborCost?: number | null;
+  deposit?: number | null;
   technician?: string | null;
   warrantyMonths?: number | null;
   notes?: string | null;
@@ -1295,7 +1300,7 @@ function repairBody(input: Partial<RepairInput>): Record<string, unknown> {
     customerId: "customer_id", customerName: "customer_name", customerPhone: "customer_phone",
     deviceModel: "device_model", deviceImei: "device_imei", devicePasscode: "device_passcode",
     accessories: "accessories", problem: "problem", diagnosis: "diagnosis", status: "status",
-    partsCost: "parts_cost", laborCost: "labor_cost", technician: "technician",
+    partsCost: "parts_cost", laborCost: "labor_cost", deposit: "deposit", technician: "technician",
     warrantyMonths: "warranty_months", notes: "notes", estimatedAt: "estimated_at",
     deliveredAt: "delivered_at", appointmentId: "appointment_id", saleId: "sale_id",
   };
