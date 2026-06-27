@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DollarSign, ShoppingCart, TrendingDown, HandCoins, Award, Users, Package, Percent, AlertCircle, MapPin } from "lucide-react";
+import { DollarSign, ShoppingCart, TrendingDown, HandCoins, Award, Users, Package, Percent, AlertCircle, MapPin, Wrench } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, MetricCard } from "@/components/Card";
 import { Avatar } from "@/components/Avatar";
@@ -10,7 +10,7 @@ import { formatMoney, dualMoney } from "@/lib/format";
 import { useBlueRate } from "@/store/dollarStore";
 import { useIsMobile } from "@/lib/useIsMobile";
 import * as api from "@/lib/api";
-import type { Sale, SaleItemReport, Product } from "@/lib/types";
+import type { Sale, SaleItemReport, Product, Repair } from "@/lib/types";
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -30,6 +30,7 @@ export function Reportes() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [items, setItems] = useState<SaleItemReport[]>([]);
   const [catalog, setCatalog] = useState<Product[]>([]);
+  const [repairs, setRepairs] = useState<Repair[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
@@ -40,11 +41,13 @@ export function Reportes() {
       // los reportes de ventas; margen/productos quedan vacíos.
       api.listSaleItems().catch(() => [] as SaleItemReport[]),
       api.listCatalog().catch(() => [] as Product[]),
+      api.listRepairs().catch(() => [] as Repair[]),
     ])
-      .then(([sl, it, ct]) => {
+      .then(([sl, it, ct, rp]) => {
         setSales(sl);
         setItems(it);
         setCatalog(ct);
+        setRepairs(rp);
       })
       .catch(() => showToast("No se pudieron cargar los reportes", "error"))
       .finally(() => setLoading(false));
@@ -61,6 +64,21 @@ export function Reportes() {
     const ticket = sales.length > 0 ? facturado / sales.length : 0;
     return { facturado, cobrado, porCobrar, ticket, count: sales.length };
   }, [sales]);
+
+  // Ventas vs Service: facturación de reparaciones entregadas vs ventas de
+  // productos. Sin doble conteo: cobrar una reparación crea una venta (saleId),
+  // así que esas ventas se excluyen del lado "productos".
+  const serviceSplit = useMemo(() => {
+    const service = repairs
+      .filter((r) => r.status === "delivered")
+      .reduce((acc, r) => acc + (r.partsCost ?? 0) + (r.laborCost ?? 0), 0);
+    const repairSaleIds = new Set(repairs.map((r) => r.saleId).filter(Boolean) as string[]);
+    const productSales = sales
+      .filter((s) => !repairSaleIds.has(s.id))
+      .reduce((acc, v) => acc + v.total, 0);
+    const total = service + productSales;
+    return { service, productSales, total, servicePct: total > 0 ? (service / total) * 100 : 0 };
+  }, [repairs, sales]);
 
   const monthly = useMemo(() => {
     const now = new Date();
@@ -220,6 +238,29 @@ export function Reportes() {
           icon={<TrendingDown size={16} />}
         />
         <MetricCard label="Ticket promedio" value={dualMoney(kpis.ticket, blue).main} sub={dualMoney(kpis.ticket, blue).sub} icon={<ShoppingCart size={16} />} />
+      </div>
+
+      {/* Ventas vs Service (taller) */}
+      <div>
+        <h2 style={{ ...sectionTitle, marginBottom: space[3] }}>
+          <Wrench size={16} color={color.primary} /> Ventas vs Service
+        </h2>
+        <div className="cz-metric-grid" style={{ ["--cz-cols"]: 2 } as React.CSSProperties}>
+          <MetricCard label="Ventas de productos" value={dualMoney(serviceSplit.productSales, blue).main} sub={dualMoney(serviceSplit.productSales, blue).sub} icon={<ShoppingCart size={16} />} />
+          <MetricCard label="Service (taller)" value={dualMoney(serviceSplit.service, blue).main} sub={dualMoney(serviceSplit.service, blue).sub} tone="success" icon={<Wrench size={16} />} />
+        </div>
+        {serviceSplit.total > 0 && (
+          <div style={{ marginTop: space[3] }}>
+            <div style={{ display: "flex", height: 10, borderRadius: radius.full, overflow: "hidden", background: color.surface2 }}>
+              <div style={{ width: `${100 - serviceSplit.servicePct}%`, background: color.primary }} title="Productos" />
+              <div style={{ width: `${serviceSplit.servicePct}%`, background: color.success }} title="Service" />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: space[1], fontSize: text.xs, color: color.textDim }}>
+              <span>Productos {(100 - serviceSplit.servicePct).toFixed(0)}%</span>
+              <span>Service {serviceSplit.servicePct.toFixed(0)}%</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* v2 — Margen del mes */}
