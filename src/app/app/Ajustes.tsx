@@ -389,7 +389,7 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
             <Input
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="Ej: calle 44 e/ 17 y 18 Nº 1136 (Timbre 101)"
+              placeholder="Ej: Av. Principal 123 (Timbre 5)"
               disabled={!canManage}
             />
           </div>
