@@ -11,6 +11,9 @@ import { categoryEmoji } from "@/lib/productImages";
 import * as api from "@/lib/api";
 import { APPLE_CATALOG } from "@/lib/appleCatalog";
 import type { CatCategory, CatFamily, CatModel } from "@/lib/appleCatalog";
+import { useBlueRate } from "@/store/dollarStore";
+import { formatArs } from "@/lib/types";
+import type { Currency } from "@/lib/types";
 
 /**
  * Picker visual de productos — wizard guiado para cargar al catálogo rápido.
@@ -44,10 +47,14 @@ export function VisualProductPicker({
   onSwitchToManual: () => void;
 }) {
   const { showToast } = useUIStore();
+  const blue = useBlueRate();
   const [step, setStep] = useState<Step>("category");
   const [picked, setPicked] = useState<Picked>({});
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
+  // Moneda del producto (precio + costo). Default USD: una tienda de tecnología
+  // casi siempre piensa el costo/precio en dólares.
+  const [currency, setCurrency] = useState<Currency>("USD");
   const [quantity, setQuantity] = useState("1");
   // Carga por IMEI: para iPhones (equipos serializados) el stock = nº de IMEIs.
   const [serialized, setSerialized] = useState(false);
@@ -60,6 +67,7 @@ export function VisualProductPicker({
       setPicked({});
       setPrice("");
       setCost("");
+      setCurrency("USD");
       setQuantity("1");
       setSerialized(false);
       setImeiText("");
@@ -144,6 +152,7 @@ export function VisualProductPicker({
         category: picked.category.name,
         price: price ? Number(price) : 0,
         cost: cost ? Number(cost) : null,
+        currency,
         trackStock: true,
         stock: serialized ? imeis.length : Math.max(0, Number(quantity) || 0),
         imagePath: finalImage ?? null,
@@ -304,11 +313,38 @@ export function VisualProductPicker({
             </div>
           </div>
 
+          <ModalField label="Moneda">
+            <div style={{ display: "flex", gap: space[2] }}>
+              {(["USD", "ARS"] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCurrency(c)}
+                  style={{
+                    flex: 1,
+                    padding: "8px 10px",
+                    borderRadius: radius.md,
+                    fontSize: text.sm,
+                    fontWeight: weight.medium,
+                    cursor: "pointer",
+                    border: `1px solid ${currency === c ? color.primary : color.border}`,
+                    background: currency === c ? color.primaryBg : color.surface2,
+                    color: currency === c ? color.primary : color.text,
+                  }}
+                >
+                  {c === "USD" ? "US$ Dólares" : "$ Pesos"}
+                </button>
+              ))}
+            </div>
+          </ModalField>
           <div style={{ display: "grid", gridTemplateColumns: serialized ? "1fr 1fr" : "1fr 1fr 120px", gap: space[3] }}>
-            <ModalField label="Precio (ARS)">
+            <ModalField
+              label={`Precio (${currency === "USD" ? "US$" : "$"})`}
+              hint={currency === "USD" && blue && Number(price) > 0 ? `≈ ${formatArs(Number(price) * blue)} al blue` : undefined}
+            >
               <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" autoFocus />
             </ModalField>
-            <ModalField label="Costo (ARS)" hint="Opcional">
+            <ModalField label={`Costo (${currency === "USD" ? "US$" : "$"})`} hint="Opcional">
               <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" />
             </ModalField>
             {!serialized && (
