@@ -31,7 +31,7 @@ function fmtDate(iso?: string | null): string {
 }
 
 function repairRef(r: Repair): string {
-  return r.id.slice(-6).toUpperCase();
+  return r.orderSeq != null ? String(r.orderSeq) : r.id.slice(-6).toUpperCase();
 }
 
 function partsTotal(parts: RepairPart[]): number {
@@ -62,6 +62,8 @@ function buildHtml(business: ComprobanteBusiness, r: Repair, parts: RepairPart[]
   const partsCost = parts.length ? partsTotal(parts) : (r.partsCost ?? 0);
   const laborCost = r.laborCost ?? 0;
   const total = partsCost + laborCost;
+  const deposit = r.deposit ?? 0;
+  const saldo = Math.max(0, total - deposit);
   const date = fmtDate(isDelivery ? (r.deliveredAt ?? new Date().toISOString()) : (r.receivedAt ?? r.createdAt));
   const warranty = warrantyUntil(r);
 
@@ -71,7 +73,11 @@ function buildHtml(business: ComprobanteBusiness, r: Repair, parts: RepairPart[]
 
   const intakeBody = `
     <div class="block"><div class="lbl">Falla declarada</div><div>${esc(r.problem) || "—"}</div></div>
-    ${total > 0 ? `<div class="totals"><div class="kv total"><span>Presupuesto estimado</span><span>${formatMoney(total)}</span></div></div>` : ""}`;
+    ${total > 0 || deposit > 0 ? `<div class="totals">
+      ${total > 0 ? `<div class="kv"><span>Presupuesto estimado</span><span>${formatMoney(total)}</span></div>` : ""}
+      ${deposit > 0 ? `<div class="kv"><span>Seña / anticipo</span><span>${formatMoney(deposit)}</span></div>` : ""}
+      ${deposit > 0 && total > 0 ? `<div class="kv total"><span>Saldo</span><span>${formatMoney(saldo)}</span></div>` : ""}
+    </div>` : ""}`;
 
   const deliveryBody = `
     ${r.diagnosis ? `<div class="block"><div class="lbl">Trabajo realizado</div><div>${esc(r.diagnosis)}</div></div>` : ""}
@@ -79,7 +85,9 @@ function buildHtml(business: ComprobanteBusiness, r: Repair, parts: RepairPart[]
     <div class="totals">
       ${partsCost > 0 ? `<div class="kv"><span>Repuestos</span><span>${formatMoney(partsCost)}</span></div>` : ""}
       ${laborCost > 0 ? `<div class="kv"><span>Mano de obra</span><span>${formatMoney(laborCost)}</span></div>` : ""}
-      <div class="kv total"><span>Total</span><span>${formatMoney(total)}</span></div>
+      ${deposit > 0 ? `<div class="kv"><span>Total</span><span>${formatMoney(total)}</span></div>` : ""}
+      ${deposit > 0 ? `<div class="kv"><span>Seña / anticipo</span><span>− ${formatMoney(deposit)}</span></div>` : ""}
+      <div class="kv total"><span>${deposit > 0 ? "Saldo a pagar" : "Total"}</span><span>${formatMoney(deposit > 0 ? saldo : total)}</span></div>
     </div>
     ${warranty ? `<div class="block"><div class="lbl">Garantía</div><div class="ok">${r.warrantyMonths} ${r.warrantyMonths === 1 ? "mes" : "meses"} — válida hasta ${esc(warranty)}</div></div>` : ""}`;
 
@@ -180,11 +188,23 @@ export function buildRepairText(
     if (r.problem) L.push(`Falla: ${r.problem}`);
     const est = workTotal(r, parts);
     if (est > 0) L.push(`Presupuesto estimado: ${formatMoney(est)}`);
+    if ((r.deposit ?? 0) > 0) {
+      L.push(`Seña: ${formatMoney(r.deposit ?? 0)}`);
+      if (est > 0) L.push(`Saldo: ${formatMoney(Math.max(0, est - (r.deposit ?? 0)))}`);
+    }
     L.push("");
     L.push("Conservá este mensaje para retirar tu equipo. ¡Gracias!");
   } else {
     if (r.diagnosis) L.push(`Trabajo: ${r.diagnosis}`);
-    L.push(`*Total: ${formatMoney(workTotal(r, parts))}*`);
+    const t = workTotal(r, parts);
+    const dep = r.deposit ?? 0;
+    if (dep > 0) {
+      L.push(`Total: ${formatMoney(t)}`);
+      L.push(`Seña: ${formatMoney(dep)}`);
+      L.push(`*Saldo a pagar: ${formatMoney(Math.max(0, t - dep))}*`);
+    } else {
+      L.push(`*Total: ${formatMoney(t)}*`);
+    }
     const w = warrantyUntil(r);
     if (w) L.push(`Garantía: ${r.warrantyMonths} ${r.warrantyMonths === 1 ? "mes" : "meses"} (hasta ${w})`);
     L.push("");

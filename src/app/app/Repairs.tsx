@@ -190,6 +190,7 @@ export function RepairDialog({
   const [status, setStatus] = useState<RepairStatus>(initial?.status ?? "received");
   const [partsCost, setPartsCost] = useState(initial?.partsCost != null ? String(initial.partsCost) : "");
   const [laborCost, setLaborCost] = useState(initial?.laborCost != null ? String(initial.laborCost) : "");
+  const [deposit, setDeposit] = useState(initial?.deposit != null ? String(initial.deposit) : "");
   const [technician, setTechnician] = useState(initial?.technician ?? "");
   const [warrantyMonths, setWarrantyMonths] = useState(initial?.warrantyMonths != null ? String(initial.warrantyMonths) : "");
   const [estimatedAt, setEstimatedAt] = useState(initial?.estimatedAt ?? "");
@@ -278,6 +279,7 @@ export function RepairDialog({
       status,
       partsCost: num(partsCost),
       laborCost: num(laborCost),
+      deposit: num(deposit),
       technician: technician.trim() || null,
       warrantyMonths: num(warrantyMonths),
       estimatedAt: estimatedAt || null,
@@ -300,6 +302,7 @@ export function RepairDialog({
       status,
       partsCost: num(partsCost),
       laborCost: num(laborCost),
+      deposit: num(deposit),
       technician: technician.trim() || null,
       warrantyMonths: num(warrantyMonths),
     };
@@ -354,7 +357,7 @@ export function RepairDialog({
       open
       onClose={onClose}
       maxWidth={680}
-      title={initial ? "Reparación" : "Nueva reparación"}
+      title={initial ? (initial.orderSeq ? `Orden N° ${initial.orderSeq}` : "Reparación") : "Nueva reparación"}
       subtitle={deviceModel || customerName || undefined}
       footer={
         <div style={{ display: "flex", gap: space[2], justifyContent: "space-between", alignItems: "center", width: "100%" }}>
@@ -445,7 +448,10 @@ export function RepairDialog({
       ) : (
         <ModalField label="Repuestos ($)"><Input type="number" value={partsCost} onChange={(e) => setPartsCost(e.target.value)} placeholder="Itemizá del stock al guardar" /></ModalField>
       )}
-      <ModalField label="Mano de obra ($)"><Input type="number" value={laborCost} onChange={(e) => setLaborCost(e.target.value)} placeholder="0" /></ModalField>
+      <div style={{ display: "flex", gap: space[2] }}>
+        <ModalField label="Mano de obra ($)"><Input type="number" value={laborCost} onChange={(e) => setLaborCost(e.target.value)} placeholder="0" /></ModalField>
+        <ModalField label="Seña / anticipo ($)"><Input type="number" value={deposit} onChange={(e) => setDeposit(e.target.value)} placeholder="0" /></ModalField>
+      </div>
       <div style={{ display: "flex", gap: space[2] }}>
         <ModalField label="Garantía (meses)"><Input type="number" value={warrantyMonths} onChange={(e) => setWarrantyMonths(e.target.value)} placeholder="0" /></ModalField>
         <ModalField label="Entrega estimada"><Input type="datetime-local" value={estimatedAt} onChange={(e) => setEstimatedAt(e.target.value)} /></ModalField>
@@ -544,7 +550,7 @@ function RepairCardView({ repair: r, canWrite, onEdit, onRemove, onMove }: {
             {r.deviceModel || "Equipo sin modelo"}
           </div>
           <div style={{ fontSize: text.xs, color: color.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
-            {r.customerName || "Sin cliente"}{r.deviceImei ? ` · ${r.deviceImei}` : ""}
+            {r.orderSeq ? `#${r.orderSeq} · ` : ""}{r.customerName || "Sin cliente"}{r.deviceImei ? ` · ${r.deviceImei}` : ""}
           </div>
         </div>
         {canWrite && onRemove && (
