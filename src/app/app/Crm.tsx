@@ -33,6 +33,7 @@ import type {
 import { AppShell } from "@/layout/AppShell";
 import type { NewAction } from "@/layout/Topbar";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { useCustomersChanged, notifyCustomersChanged } from "@/lib/customerEvents";
 import { usePermissions } from "@/store/usePermissions";
 import { useBlueRate } from "@/store/dollarStore";
 import { printComprobante } from "@/lib/comprobante";
@@ -199,6 +200,8 @@ export default function Crm({
   const refreshCustomers = () => api.listCustomers().then(setCustomers);
   const refreshItems = () => api.listItems().then(setItems);
   const refreshSales = () => api.listSales().then(setSales);
+  // B: refrescar clientes cuando cambian en cualquier otra pantalla.
+  useCustomersChanged(refreshCustomers);
 
   // Refrescar items cuando el Pipeline mueve una oportunidad por drag (o
   // cualquier emisor del evento), para que el ItemModal no arranque con la
@@ -208,6 +211,12 @@ export default function Crm({
     window.addEventListener("clozr:item-changed", onItemChanged);
     return () => window.removeEventListener("clozr:item-changed", onItemChanged);
   }, []);
+
+  // A: al abrir "nueva venta", refrescar clientes (pudo crearse uno recién en otra pantalla).
+  useEffect(() => {
+    if (modal?.kind === "sale") refreshCustomers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal?.kind]);
 
   // Atajos de teclado globales (solo cuando no estás escribiendo). El "?"
   // (ayuda) lo maneja ShortcutsHelp; ⌘K el SearchTrigger del topbar.
@@ -541,6 +550,7 @@ function CustomerModal({
       let createdId: string | undefined;
       if (customer) await api.updateCustomer(customer.id, data);
       else createdId = await api.createCustomer(data);
+      notifyCustomersChanged();
       onSaved(customer ? "Cliente actualizado" : "Cliente creado", createdId);
     } catch {
       setBusy(false);
@@ -551,6 +561,7 @@ function CustomerModal({
     setBusy(true);
     try {
       await api.deleteCustomer(customer.id);
+      notifyCustomersChanged();
       onSaved("Cliente archivado");
     } catch {
       setBusy(false);

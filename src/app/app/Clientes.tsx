@@ -49,6 +49,7 @@ import { usePermissions } from "@/store/usePermissions";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, formatDateLong } from "@/lib/format";
 import * as api from "@/lib/api";
+import { useCustomersChanged, notifyCustomersChanged } from "@/lib/customerEvents";
 import { CLIENT_TYPE_LABELS, CLIENT_TYPES } from "@/lib/types";
 import type { ClientType, Customer, Sale, Appointment, Repair } from "@/lib/types";
 
@@ -94,6 +95,7 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
   const canSell = can("sales.write");
   const canRepair = can("repairs.write");
   const [customers, setCustomers] = useState<Customer[]>([]);
+  useCustomersChanged(() => { api.listCustomers().then(setCustomers).catch(() => {}); });
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -173,6 +175,7 @@ export function Clientes({ onNewSale }: { onNewSale: () => void }) {
     if (openId === c.id) setOpenId(null);
     try {
       await api.deleteCustomer(c.id);
+      notifyCustomersChanged();
       showToast("Cliente archivado", "success");
     } catch {
       setCustomers(snapshot);
@@ -916,6 +919,7 @@ function ClientFormModal({
         await api.createCustomer(payload);
         showToast("Cliente creado", "success");
       }
+      notifyCustomersChanged();
       onSaved();
     } catch {
       showToast("No se pudo guardar", "error");

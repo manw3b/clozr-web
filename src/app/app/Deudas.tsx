@@ -23,6 +23,7 @@ import { color, space, text, weight } from "@/tokens";
 import { dualMoney } from "@/lib/format";
 import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
+import { useCustomersChanged } from "@/lib/customerEvents";
 import type { Customer, Sale } from "@/lib/types";
 
 /**
@@ -51,6 +52,7 @@ export function Deudas() {
   const [ctxRow, setCtxRow] = useState<DeudaRow | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  useCustomersChanged(() => { api.listCustomers().then(setCustomers).catch(() => {}); });
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
