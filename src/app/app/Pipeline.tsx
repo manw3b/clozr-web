@@ -52,6 +52,7 @@ import { useIsMobile } from "@/lib/useIsMobile";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney } from "@/lib/format";
 import * as api from "@/lib/api";
+import { useCustomersChanged } from "@/lib/customerEvents";
 import type { PipelineItem, PipelineStage, LeadPriority, Customer } from "@/lib/types";
 
 /* ───────── prioridad → estilo del pill (tokens, nada hardcodeado) ───────── */
@@ -122,6 +123,7 @@ export function Pipeline({
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  useCustomersChanged(() => { api.listCustomers().then(setCustomers).catch(() => {}); });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("todas");

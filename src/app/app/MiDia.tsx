@@ -35,6 +35,7 @@ import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, dualMoney, greetByHour, greetText, formatDateLong, toLocalISODate, displayName } from "@/lib/format";
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import * as api from "@/lib/api";
+import { useCustomersChanged } from "@/lib/customerEvents";
 import type { Appointment, CashMovement, Customer, Followup, Member, Product, Sale, Task, User } from "@/lib/types";
 import { resolveHomeBlocks, HOME_BLOCK_BY_KEY, type HomeBlockKey } from "@/lib/homeBlocks";
 import { ClozrToday } from "./ClozrToday";
@@ -80,6 +81,7 @@ export function MiDia({
   const [sales, setSales] = useState<Sale[]>([]);
   const [followups, setFollowups] = useState<Followup[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  useCustomersChanged(() => { api.listCustomers().then(setCustomers).catch(() => {}); });
   const [lastContact, setLastContact] = useState<Record<string, string>>({});
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
