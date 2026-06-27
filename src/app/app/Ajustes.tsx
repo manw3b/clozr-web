@@ -24,6 +24,7 @@ import {
   DEFAULT_TURNO_INTERNO,
   TURNO_TEMPLATE_KEYS,
   TURNO_PLACEHOLDER_HELP,
+  TURNO_CODE_HELP,
   TURNO_SAMPLE,
 } from "@/lib/turnoTemplates";
 import {
@@ -761,6 +762,10 @@ function TurnoTemplatesCard() {
             {p.token}
           </span>
         ))}
+      </div>
+
+      <div style={{ marginTop: space[3] }}>
+        <Hint>{TURNO_CODE_HELP}</Hint>
       </div>
 
       <TemplateEditor label="Para el cliente" value={cliente} onChange={setCliente} disabled={!canManage} />

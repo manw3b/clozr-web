@@ -13,6 +13,7 @@ import { useUIStore } from "@/store/uiStore";
 import * as api from "@/lib/api";
 import { TurnoFormDialog } from "./TurnoFormDialog";
 import { RepairDialog } from "./Repairs";
+import { appointmentCode } from "@/lib/types";
 import type { Sale, PipelineItem, Customer, Appointment } from "@/lib/types";
 
 /**
@@ -97,7 +98,7 @@ export function Agenda({
         at: a.appointmentAt,
         kind: "turno",
         customerName: a.customerName || "Sin cliente",
-        meta: [a.product, a.type, a.origin].filter(Boolean).join(" · ") || null,
+        meta: [appointmentCode(a), a.product, a.type, a.origin].filter(Boolean).join(" · ") || null,
         status: a.status,
         apptId: a.id,
         repair: (a.type ?? "").toLowerCase().includes("reparaci")

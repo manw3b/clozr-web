@@ -28,13 +28,17 @@ Viene de: {viene_de}
 
 Estamos en {direccion} (Por favor respetar el turno asignado).`;
 
-export const DEFAULT_TURNO_INTERNO = `Anúnciate con el código
+export const DEFAULT_TURNO_INTERNO = `ANÚNCIATE CON EL CÓDIGO:
 {codigo}
-PEDIDO: {pedido}
-USD {usd}
-{ars}
 
-VUELTO:`;
+PEDIDO:
+{equipo}
+
+TOTAL: {usd}
+PAGA:
+VUELTO:
+
+🏢 Nuestra oficina se encuentra en {direccion}.`;
 
 /** Claves en workspace_settings (Fase ②) para las plantillas editables. */
 export const TURNO_TEMPLATE_KEYS = {
@@ -61,11 +65,19 @@ export const TURNO_PLACEHOLDER_HELP = [
   { token: "{hora}", label: 'Horario ("14:00")' },
   { token: "{viene_de}", label: "Origen del cliente" },
   { token: "{direccion}", label: "Dirección del local" },
-  { token: "{codigo}", label: "Código de la venta" },
+  { token: "{codigo}", label: "Código del turno (ej: P27F1)" },
   { token: "{usd}", label: "Total en USD" },
   { token: "{ars}", label: "Total en ARS" },
   { token: "{negocio}", label: "Nombre del negocio" },
 ];
+
+/**
+ * Explicación del código de turno {codigo} para mostrar en Ajustes.
+ * Formato: inicial de quien toma el turno + día + letra del mes + orden del día.
+ */
+export const TURNO_CODE_HELP =
+  "El {codigo} del turno se arma solo: inicial de quien lo toma · día · letra del mes (A=enero, B=febrero … L=diciembre) · número de orden del día. " +
+  "Ej: P27F1 = Pyter, 27 de junio (F), 1er turno de ese día.";
 
 const DAYS_ES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -127,7 +139,7 @@ export function applyTurnoTemplate(body: string, d: TurnoData): string {
  * campos de venta (código/usd/ars) quedan vacíos.
  */
 export function buildTurnoDataFromAppointment(
-  appt: { customerName?: string | null; appointmentAt?: string | null; origin?: string | null; type?: string | null; product?: string | null; notes?: string | null },
+  appt: { customerName?: string | null; appointmentAt?: string | null; origin?: string | null; type?: string | null; product?: string | null; notes?: string | null; codigo?: string | null },
   workspace: { name?: string; address?: string | null } | null,
 ): TurnoData {
   const asunto = [appt.type, appt.notes].map((s) => (s ?? "").trim()).filter(Boolean).join(" — ");
@@ -141,7 +153,7 @@ export function buildTurnoDataFromAppointment(
     hora: formatTurnoTime(appt.appointmentAt),
     vieneDe: appt.origin ?? "",
     direccion: workspace?.address ?? "",
-    codigo: "",
+    codigo: appt.codigo ?? "",
     usd: "",
     ars: "",
     negocio: workspace?.name ?? "",
@@ -157,7 +169,7 @@ export const TURNO_SAMPLE: TurnoData = {
   hora: "14:00",
   vieneDe: "MobileZone",
   direccion: "calle 44 e/ 17 y 18 Nº 1136 (Timbre 101)",
-  codigo: "GP-1236",
+  codigo: "P27F1",
   usd: "845",
   ars: "$ 1.235.000",
   negocio: "Mi Negocio",
@@ -177,7 +189,7 @@ export function buildTurnoData(
   sale: SaleDetail,
   workspace: { name?: string; address?: string | null } | null,
   blue: number | null,
-  override?: { appointmentAt?: string | null; origin?: string | null },
+  override?: { appointmentAt?: string | null; origin?: string | null; codigo?: string | null },
 ): TurnoData {
   const appointmentAt = override?.appointmentAt ?? sale.appointmentAt ?? null;
   const origin = override?.origin ?? sale.origin ?? null;
@@ -204,7 +216,8 @@ export function buildTurnoData(
     hora: formatTurnoTime(appointmentAt),
     vieneDe: origin,
     direccion: workspace?.address ?? "",
-    codigo: saleCode(sale),
+    // En turnos usamos el código del turno (P27F1); si no se pasa, caemos al código de venta.
+    codigo: override?.codigo ?? saleCode(sale),
     usd,
     ars: formatMoney(sale.total ?? 0, "ARS"),
     negocio: workspace?.name ?? "",
