@@ -83,7 +83,7 @@ export function greetText(g: keyof typeof greetTexts): string {
 /**
  * Nombre presentable para saludos / "vendedor". Usa el nombre cargado; si no
  * hay, arma uno lindo a partir del prefijo del email en vez de mostrarlo crudo:
- *   "pyter.import@gmail.com" → "Pyter Import"  ·  "juan_perez@x.com" → "Juan Perez"
+ *   "maria.gomez@gmail.com" → "Maria Gomez"  ·  "juan_perez@x.com" → "Juan Perez"
  */
 export function displayName(user: { name?: string | null; email?: string | null }): string {
   const name = user.name?.trim();

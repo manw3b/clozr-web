@@ -168,7 +168,7 @@ export const TURNO_SAMPLE: TurnoData = {
   dia: "Miércoles 3",
   hora: "14:00",
   vieneDe: "MobileZone",
-  direccion: "calle 44 e/ 17 y 18 Nº 1136 (Timbre 101)",
+  direccion: "Av. Principal 123 (Timbre 5)",
   codigo: "P27F1",
   usd: "845",
   ars: "$ 1.235.000",
