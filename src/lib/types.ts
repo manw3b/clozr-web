@@ -77,6 +77,8 @@ export interface Appointment {
   status: "pending" | "done" | "cancelled";
   ownerId?: string | null;
   ownerName?: string | null;
+  /** Orden del turno dentro de su día — para el código P27F1 (lo asigna el worker). */
+  daySeq?: number | null;
   createdAt?: string | null;
 }
 
@@ -688,6 +690,34 @@ export function saleCode(s: Pick<Sale, "sellerName" | "orderSeq" | "orderDay" | 
   }
   if (!day || !month) return null;
   return `${initials}-${s.orderSeq}${day}${month}`;
+}
+
+/** Letras de mes para el código de turno: A=enero, B=febrero … L=diciembre. */
+const APPT_MONTH_LETTERS = "ABCDEFGHIJKL";
+
+/**
+ * Código corto del turno: {inicial}{día}{letraMes}{ordenDelDía}.
+ * Ej: Pyter, 27 de junio, 1er turno del día → "P27F1".
+ *  - inicial: primera letra del nombre de quien tomó el turno (ownerName)
+ *  - día: día del turno, 2 dígitos ("27", "05")
+ *  - letraMes: A=enero, B=febrero … F=junio … L=diciembre
+ *  - ordenDelDía: número de orden entre los turnos de ese día (daySeq)
+ * Devuelve null si falta el responsable o el Nº de orden (turnos viejos).
+ */
+export function appointmentCode(a: {
+  ownerName?: string | null;
+  appointmentAt?: string | null;
+  daySeq?: number | null;
+}): string | null {
+  if (a.daySeq == null) return null;
+  const initial = (a.ownerName ?? "").trim().charAt(0).toUpperCase();
+  if (!initial) return null;
+  const at = a.appointmentAt ?? "";
+  if (!/^\d{4}-\d{2}-\d{2}/.test(at)) return null;
+  const day = at.slice(8, 10);
+  const monthLetter = APPT_MONTH_LETTERS[Number(at.slice(5, 7)) - 1] ?? "";
+  if (!monthLetter) return null;
+  return `${initial}${day}${monthLetter}${a.daySeq}`;
 }
 
 /** Precio de un producto para un tipo de cliente (precios por tipo). */

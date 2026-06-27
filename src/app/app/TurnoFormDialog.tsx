@@ -11,6 +11,7 @@ import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
 import { shareOnWhatsApp } from "@/lib/openExternal";
 import { applyTurnoTemplate, resolveTurnoTemplate, buildTurnoData, buildTurnoDataFromAppointment } from "@/lib/turnoTemplates";
+import { appointmentCode } from "@/lib/types";
 import type { Appointment, AppointmentType, Customer, Origin, SaleDetail } from "@/lib/types";
 
 /**
@@ -50,6 +51,10 @@ export function TurnoFormDialog({
   const [product, setProduct] = useState(initial?.product ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [saving, setSaving] = useState(false);
+  // Nombre del usuario logueado → inicial del código del turno (P27F1) en turnos nuevos.
+  const [myName, setMyName] = useState("");
+  // Orden del turno dentro de su día (lo asigna el worker al guardar).
+  const [daySeq, setDaySeq] = useState<number | null>(initial?.daySeq ?? null);
 
   const [types, setTypes] = useState<AppointmentType[]>([]);
   const [origins, setOrigins] = useState<Origin[]>([]);
@@ -63,6 +68,7 @@ export function TurnoFormDialog({
     api.listAppointmentTypes().then(setTypes).catch(() => {});
     api.listOrigins().then(setOrigins).catch(() => {});
     api.getSettings().then(setSettings).catch(() => setSettings({}));
+    api.fetchMe().then((m) => setMyName(m.user.name ?? "")).catch(() => {});
   }, []);
 
   // Si elegís un cliente registrado, tomamos su nombre/teléfono.
@@ -116,12 +122,30 @@ export function TurnoFormDialog({
     [sale, blue, customerName, appointmentAt, origin, type, product, notes, ws, settings],
   );
 
+  // Código del turno (P27F1): inicial del responsable + día + letra de mes + orden del día.
+  // En turnos existentes la inicial sale de quien lo creó; en nuevos, del usuario actual.
+  const ownerNameForCode = initial?.ownerName ?? myName;
+  const codigo = useMemo(
+    () => appointmentCode({ ownerName: ownerNameForCode, appointmentAt, daySeq }),
+    [ownerNameForCode, appointmentAt, daySeq],
+  );
+  const internoMsg = useMemo(
+    () =>
+      applyTurnoTemplate(
+        resolveTurnoTemplate("interno", settings),
+        sale
+          ? buildTurnoData(sale, ws, blue, { appointmentAt, origin, codigo: codigo ?? "" })
+          : buildTurnoDataFromAppointment({ customerName, appointmentAt, origin, type, product, notes, codigo: codigo ?? "" }, ws),
+      ),
+    [sale, blue, customerName, appointmentAt, origin, type, product, notes, ws, settings, codigo],
+  );
+
   const valid = appointmentAt.trim() !== "" && customerName.trim() !== "";
 
-  async function persist(silent = false): Promise<boolean> {
+  async function persist(silent = false): Promise<{ ok: boolean; daySeq: number | null }> {
     if (!valid) {
       if (!silent) showToast("Falta el cliente o la fecha del turno", "error");
-      return false;
+      return { ok: false, daySeq };
     }
     setSaving(true);
     try {
@@ -135,23 +159,45 @@ export function TurnoFormDialog({
         origin: origin || null,
         product: product.trim() || null,
         notes: notes.trim() || null,
+        // Solo se usa al crear (owner_name no es editable); da la inicial del código.
+        ownerName: myName || null,
       };
+      let seq = daySeq;
       if (savedId) {
         await api.updateAppointment(savedId, input);
       } else {
         const r = await api.createAppointment(input);
         setSavedId(r.id);
+        seq = r.daySeq;
+        setDaySeq(r.daySeq);
       }
       // Desde una venta: persistimos también en la venta (chip + back-compat).
       if (sale) await api.updateSale(sale.id, { appointmentAt: appointmentAt || null, origin: origin || null });
       onSaved();
       if (!silent) showToast("Turno guardado", "success");
-      return true;
+      return { ok: true, daySeq: seq };
     } catch {
       showToast("No se pudo guardar el turno", "error");
-      return false;
+      return { ok: false, daySeq };
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Mensaje interno "anúnciate con el código": guarda primero (para tener el Nº de
+  // orden real) y recién ahí arma el texto con el código definitivo.
+  async function sendInterno(channel: "copy" | "wa") {
+    const { ok, daySeq: ds } = await persist(true);
+    if (!ok) return;
+    const code = appointmentCode({ ownerName: ownerNameForCode, appointmentAt, daySeq: ds });
+    const data = sale
+      ? buildTurnoData(sale, ws, blue, { appointmentAt, origin, codigo: code ?? "" })
+      : buildTurnoDataFromAppointment({ customerName, appointmentAt, origin, type, product, notes, codigo: code ?? "" }, ws);
+    const msg = applyTurnoTemplate(resolveTurnoTemplate("interno", settings), data);
+    if (channel === "copy") {
+      navigator.clipboard.writeText(msg).then(() => showToast("Copiado", "success")).catch(() => {});
+    } else {
+      shareOnWhatsApp(msg, customerPhone || undefined);
     }
   }
 
@@ -168,7 +214,7 @@ export function TurnoFormDialog({
       footer={
         <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
           <Button variant="ghost" size="md" onClick={onClose}>Cerrar</Button>
-          <Button variant="primary" size="md" disabled={saving || !valid} onClick={async () => { if (await persist()) onClose(); }}>
+          <Button variant="primary" size="md" disabled={saving || !valid} onClick={async () => { if ((await persist()).ok) onClose(); }}>
             Guardar turno
           </Button>
         </div>
@@ -267,6 +313,29 @@ export function TurnoFormDialog({
         <pre style={{ margin: 0, padding: space[3], background: color.surface2, border: `1px solid ${color.border}`, borderRadius: radius.md, fontSize: text.sm, color: color.text, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
           {clienteMsg}
         </pre>
+      </div>
+
+      <div style={{ marginTop: space[4] }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[2] }}>
+          <span style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>Interno — anúnciate con el código</span>
+          <div style={{ display: "flex", gap: space[2] }}>
+            <Button variant="ghost" size="sm" iconLeft={<Copy size={14} />} disabled={!valid}
+              onClick={() => void sendInterno("copy")}>
+              Copiar
+            </Button>
+            <Button variant="secondary" size="sm" iconLeft={<WhatsAppIcon size={14} color="var(--success)" />} disabled={!valid}
+              onClick={() => void sendInterno("wa")}>
+              WhatsApp
+            </Button>
+          </div>
+        </div>
+        <pre style={{ margin: 0, padding: space[3], background: color.surface2, border: `1px solid ${color.border}`, borderRadius: radius.md, fontSize: text.sm, color: color.text, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+          {internoMsg}
+        </pre>
+        <div style={{ fontSize: text.xs, color: color.textMuted, marginTop: space[2], lineHeight: 1.5 }}>
+          Código <strong style={{ color: color.text }}>{codigo ?? "—"}</strong>: inicial de quien toma el turno · día · letra del mes (A=enero … L=diciembre) · orden del día.
+          {daySeq == null && " El número de orden se asigna al guardar."}
+        </div>
       </div>
     </Modal>
   );

@@ -36,6 +36,7 @@ import { formatMoney, dualMoney, greetByHour, greetText, formatDateLong, toLocal
 import { openWhatsApp, openTel } from "@/lib/openExternal";
 import * as api from "@/lib/api";
 import { useCustomersChanged } from "@/lib/customerEvents";
+import { appointmentCode } from "@/lib/types";
 import type { Appointment, CashMovement, Customer, Followup, Member, Product, Sale, Task, User } from "@/lib/types";
 import { resolveHomeBlocks, HOME_BLOCK_BY_KEY, type HomeBlockKey } from "@/lib/homeBlocks";
 import { ClozrToday } from "./ClozrToday";
@@ -482,7 +483,7 @@ export function MiDia({
                   {a.customerName || "Sin cliente"}
                 </div>
                 <div style={{ fontSize: text.xs, color: color.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
-                  {[a.type || "Turno", a.product].filter(Boolean).join(" · ")}
+                  {[appointmentCode(a), a.type || "Turno", a.product].filter(Boolean).join(" · ")}
                   {opts.team && a.ownerName ? ` · ${a.ownerName}` : ""}
                 </div>
               </div>

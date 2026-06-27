@@ -1140,6 +1140,7 @@ interface AppointmentRaw {
   status?: string | null;
   owner_id?: string | null;
   owner_name?: string | null;
+  day_seq?: number | null;
   created_at?: string | null;
 }
 function mapAppointment(r: AppointmentRaw): Appointment {
@@ -1157,6 +1158,7 @@ function mapAppointment(r: AppointmentRaw): Appointment {
     status: (r.status as Appointment["status"]) ?? "pending",
     ownerId: r.owner_id ?? null,
     ownerName: r.owner_name ?? null,
+    daySeq: r.day_seq ?? null,
     createdAt: r.created_at ?? null,
   };
 }
@@ -1192,8 +1194,9 @@ export async function listAppointments(): Promise<Appointment[]> {
   const r = await req<{ appointments: AppointmentRaw[] }>(`/workspaces/${ws()}/appointments`);
   return (r.appointments ?? []).map(mapAppointment);
 }
-export async function createAppointment(input: AppointmentInput): Promise<{ id: string }> {
-  return req<{ id: string }>(`/workspaces/${ws()}/appointments`, { method: "POST", body: JSON.stringify(appointmentBody(input)) });
+export async function createAppointment(input: AppointmentInput): Promise<{ id: string; daySeq: number | null }> {
+  const r = await req<{ id: string; day_seq?: number | null }>(`/workspaces/${ws()}/appointments`, { method: "POST", body: JSON.stringify(appointmentBody(input)) });
+  return { id: r.id, daySeq: r.day_seq ?? null };
 }
 export async function updateAppointment(id: string, patch: Partial<AppointmentInput>): Promise<void> {
   await req(`/workspaces/${ws()}/appointments/${id}`, { method: "PATCH", body: JSON.stringify(appointmentBody(patch)) });
