@@ -922,9 +922,12 @@ function ClientPicker({
     return list.slice(0, 8);
   }, [q, customers]);
 
-  // index 0 = consumidor final; luego los matches
+  // index 0 = consumidor final; luego los matches (con teléfono para desambiguar)
   const options = useMemo(
-    () => [{ id: "", name: "Consumidor final" }, ...matches.map((c) => ({ id: c.id, name: c.name }))],
+    () => [
+      { id: "", name: "Consumidor final", phone: null as string | null },
+      ...matches.map((c) => ({ id: c.id, name: c.name, phone: c.phone ?? null })),
+    ],
     [matches],
   );
 
@@ -1015,7 +1018,12 @@ function ClientPicker({
                   color: o.id === "" ? color.textMuted : color.text, fontSize: 14,
                 }}
               >
-                {o.name}
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.name}</span>
+                {o.phone && (
+                  <span style={{ color: color.textDim, fontSize: 12, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                    {o.phone}
+                  </span>
+                )}
               </button>
             ))}
             {q.trim() !== "" && matches.length === 0 && (
@@ -1023,6 +1031,19 @@ function ClientPicker({
             )}
             {q.trim() !== "" && !customers.some((c) => normName(c.name) === normName(q)) && (
               <>
+                {matches.length > 0 && (
+                  <div
+                    style={{
+                      padding: "7px 12px",
+                      fontSize: 12,
+                      color: color.warning,
+                      background: color.warningBg,
+                      borderTop: `1px solid ${color.border}`,
+                    }}
+                  >
+                    ¿Es alguno de arriba? Elegilo para no duplicar la ficha.
+                  </div>
+                )}
                 {onUseWalkIn && (
                   <button
                     type="button"
