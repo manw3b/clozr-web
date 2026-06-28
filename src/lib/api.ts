@@ -40,6 +40,7 @@ import type {
   RepairStatus,
 } from "./types";
 import { stagesForIndustry } from "./types";
+import { normalizeRate, toArs, toUsd } from "./money";
 import { useDollarStore } from "@/store/dollarStore";
 
 export const WORKER_URL =
@@ -542,7 +543,7 @@ export async function createSale(input: NewSaleInput): Promise<string> {
   // El Worker NO calcula totales en POST (sí en addPayment) — los mandamos
   // calculados desde acá. El total de la venta es en ARS; cada ítem guarda su
   // moneda (ARS/USD) y los ítems en USD se convierten al dólar del momento.
-  const rate = input.usdToArs && input.usdToArs > 0 ? input.usdToArs : 0;
+  const rate = normalizeRate(input.usdToArs);
   const items = input.items.map((i) => ({
     description: i.description,
     quantity: i.quantity,
@@ -557,14 +558,16 @@ export async function createSale(input: NewSaleInput): Promise<string> {
   // (ítems USD tal cual + ítems ARS ÷ blue) y dejamos las columnas ARS de
   // referencia (× blue). Si no hay blue, queda como venta legacy en pesos (USD null).
   const hasRate = rate > 0;
-  const toUsd = (amount: number, cur: Currency) => (cur === "USD" ? amount : hasRate ? amount / rate : 0);
-  const toArs = (amount: number, cur: Currency) => (cur === "USD" && hasRate ? amount * rate : amount);
-  const total = items.reduce((a, i) => a + toArs(i.subtotal, i.currency as Currency), 0);
+  const total = items.reduce((a, i) => a + toArs(i.subtotal, i.currency as Currency, rate), 0);
   const subtotal = total;
-  const totalPaid = input.payments.reduce((a, p) => a + toArs(p.amount, p.currency), 0);
+  const totalPaid = input.payments.reduce((a, p) => a + toArs(p.amount, p.currency, rate), 0);
   const balance = total - totalPaid;
-  const totalUsd = hasRate ? items.reduce((a, i) => a + toUsd(i.subtotal, i.currency as Currency), 0) : null;
-  const totalPaidUsd = hasRate ? input.payments.reduce((a, p) => a + toUsd(p.amount, p.currency), 0) : null;
+  const totalUsd = hasRate
+    ? items.reduce((a, i) => a + (toUsd(i.subtotal, i.currency as Currency, rate) ?? 0), 0)
+    : null;
+  const totalPaidUsd = hasRate
+    ? input.payments.reduce((a, p) => a + (toUsd(p.amount, p.currency, rate) ?? 0), 0)
+    : null;
   const balanceUsd = hasRate && totalUsd != null && totalPaidUsd != null ? totalUsd - totalPaidUsd : null;
   const isPaid = balanceUsd != null ? (balanceUsd <= 0.01 ? 1 : 0) : (balance <= 0.01 ? 1 : 0);
   const paymentMethod =
@@ -597,7 +600,7 @@ export async function createSale(input: NewSaleInput): Promise<string> {
         method: p.method,
         amount: p.amount,
         currency: p.currency,
-        amount_usd: hasRate ? toUsd(p.amount, p.currency) : null,
+        amount_usd: hasRate ? toUsd(p.amount, p.currency, rate) : null,
         fx_rate: hasRate ? rate : null,
       })),
       trade_in: input.tradeIn
@@ -621,8 +624,8 @@ export async function addPayment(
   // US$ es la moneda madre: congelamos amount_usd + fx_rate en cada pago para
   // que el saldo no se licúe con el blue. Si el pago es en US$, amount_usd = amount.
   // Si es en pesos, lo convertimos al blue del momento (param o store).
-  const rate = p.usdToArs && p.usdToArs > 0 ? p.usdToArs : useDollarStore.getState().blue ?? 0;
-  const amountUsd = p.currency === "USD" ? p.amount : rate > 0 ? p.amount / rate : null;
+  const rate = normalizeRate(p.usdToArs) || normalizeRate(useDollarStore.getState().blue);
+  const amountUsd = toUsd(p.amount, p.currency, rate);
   // El Worker recalcula total_paid/balance/is_paid al agregar el pago.
   await req(`/workspaces/${ws()}/sales/${saleId}/payments`, {
     method: "POST",
