@@ -1,10 +1,11 @@
 import { ReactNode, useState, type CSSProperties } from 'react';
-import { Home, ShoppingCart, Plus, CalendarDays, Menu as MenuIcon, Users, GitBranch, CheckSquare, Wallet, ChevronRight, Package, Wrench, X, type LucideIcon } from 'lucide-react';
+import { Home, ShoppingCart, Plus, CalendarDays, Sparkles, User, Users, GitBranch, CheckSquare, Wallet, ChevronRight, Package, Wrench, X, type LucideIcon } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Topbar, ACTION_TINT, type NewAction, type NotifNavigate } from './Topbar';
 import { color, radius, shadow, space, text, weight } from '../tokens';
 import { useIsMobile } from '../lib/useIsMobile';
 import { usePermissions } from '../store/usePermissions';
+import { useAiStore } from '../store/aiStore';
 import type { Permission } from '../lib/permissions';
 
 interface AppShellProps {
@@ -140,6 +141,7 @@ export function AppShell({
           onNavigate={handleNavigate}
           onNew={() => setNewSheet(true)}
           onMenu={() => setNavOpen(true)}
+          onAssistant={() => useAiStore.getState().openAi()}
         />
       )}
       {isMobile && newSheet && (
@@ -151,13 +153,16 @@ export function AppShell({
 
 /* ───────── Bottom nav (solo mobile) ───────── */
 
-function BottomNav({ active, onNavigate, onNew, onMenu }: {
+function BottomNav({ active, onNavigate, onNew, onMenu, onAssistant }: {
   active: string;
   onNavigate: (id: string) => void;
   onNew: () => void;
   onMenu: () => void;
+  onAssistant: () => void;
 }) {
-  const menuActive = !['home', 'sales', 'agenda'].includes(active);
+  // "Perfil" (drawer) queda activo cuando no estás en Inicio ni Agenda — el resto
+  // de los módulos se llega desde ahí. "Asistente" abre un drawer, no es una vista.
+  const menuActive = !['home', 'agenda'].includes(active);
   const cell = (selected: boolean): CSSProperties => ({
     flex: 1,
     display: 'flex',
@@ -189,11 +194,11 @@ function BottomNav({ active, onNavigate, onNew, onMenu }: {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      <button style={cell(active === 'home')} onClick={() => onNavigate('home')} aria-label="Mi Día">
-        <Home size={20} /><span>Mi Día</span>
+      <button style={cell(active === 'home')} onClick={() => onNavigate('home')} aria-label="Inicio">
+        <Home size={20} /><span>Inicio</span>
       </button>
-      <button style={cell(active === 'sales')} onClick={() => onNavigate('sales')} aria-label="Ventas">
-        <ShoppingCart size={20} /><span>Ventas</span>
+      <button style={cell(false)} onClick={onAssistant} aria-label="Asistente">
+        <Sparkles size={20} /><span>Asistente</span>
       </button>
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <button
@@ -220,8 +225,8 @@ function BottomNav({ active, onNavigate, onNew, onMenu }: {
       <button style={cell(active === 'agenda')} onClick={() => onNavigate('agenda')} aria-label="Agenda">
         <CalendarDays size={20} /><span>Agenda</span>
       </button>
-      <button style={cell(menuActive)} onClick={onMenu} aria-label="Menú">
-        <MenuIcon size={20} /><span>Menú</span>
+      <button style={cell(menuActive)} onClick={onMenu} aria-label="Perfil">
+        <User size={20} /><span>Perfil</span>
       </button>
     </nav>
   );
