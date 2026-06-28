@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, ArrowDownRight, Trash2, Wallet, Search, Lock } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Trash2, Wallet, Search, Lock, Bitcoin } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { Card, MetricCard } from "@/components/Card";
@@ -305,7 +305,8 @@ export function Caja() {
                   minWidth: 132,
                 }}
               >
-                <span style={{ fontSize: text.xs, color: color.textMuted }}>
+                <span style={{ fontSize: text.xs, color: color.textMuted, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  {b.method === "Crypto" && <Bitcoin size={11} color={color.warning} />}
                   {b.method} · {b.currency}
                 </span>
                 <span
@@ -461,6 +462,7 @@ function NewMovementModal({
   }, [open]);
 
   const isIncome = kind === "income";
+  const isCrypto = method === "Crypto";
   const canSubmit = Number(amount) > 0;
 
   async function submit() {
@@ -503,7 +505,7 @@ function NewMovementModal({
         </>
       }
     >
-      <ModalField label="Método">
+      <ModalField label="Método" hint={isCrypto ? "Crypto se registra en dólares (US$)" : undefined}>
         <select
           value={method}
           onChange={(e) => {
@@ -529,8 +531,18 @@ function NewMovementModal({
           <select
             value={currency}
             onChange={(e) => setCurrency(e.target.value as Currency)}
+            disabled={isCrypto}
+            title={isCrypto ? "Crypto siempre va en US$" : undefined}
             className="select-trigger"
-            style={{ width: "100%", height: 38, borderRadius: radius.md, color: color.text, padding: `0 ${space[2]}` }}
+            style={{
+              width: "100%",
+              height: 38,
+              borderRadius: radius.md,
+              color: color.text,
+              padding: `0 ${space[2]}`,
+              opacity: isCrypto ? 0.55 : 1,
+              cursor: isCrypto ? "not-allowed" : "pointer",
+            }}
           >
             <option value="ARS">ARS</option>
             <option value="USD">USD</option>
