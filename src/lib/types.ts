@@ -645,6 +645,12 @@ export interface Sale {
   total: number;
   totalPaid: number;
   balance: number;
+  /** USD-nativo: fuente de verdad en dólares (null en ventas legacy en pesos). */
+  totalUsd?: number | null;
+  totalPaidUsd?: number | null;
+  balanceUsd?: number | null;
+  /** Blue congelado al momento de la venta (para mostrar la referencia ≈ pesos). */
+  fxRate?: number | null;
   isPaid: boolean;
   paymentMethod?: string;
   notes?: string;

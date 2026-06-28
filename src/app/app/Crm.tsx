@@ -1392,6 +1392,11 @@ function SaleModal({
   const cashPaid = paidFull ? due : Math.max(0, Number(partial) || 0);
   const paidAmount = tradeInValue + cashPaid; // total cobrado (canje + efectivo/otro)
   const balance = total - paidAmount;
+  // USD-nativo: el dólar es el número principal; el peso es referencia (≈ al blue).
+  const totalUsd = subtotalUsd + (rate > 0 ? subtotalArs / rate : 0);
+  const tradeInUsd = rate > 0 ? tradeInValue / rate : tradeInValue;
+  const dueUsd = Math.max(0, totalUsd - tradeInUsd);
+  const balanceUsd = totalUsd - (rate > 0 ? paidAmount / rate : paidAmount);
   // El canje está "activo" si se empezó a cargar; si es así exige modelo + valor.
   const tradeInActive = tradeInOpen && (tiDesc.trim() !== "" || tiValue.trim() !== "");
   const tradeInOk = !tradeInActive || (tiDesc.trim() !== "" && tradeInValue > 0 && isValidDeviceId(tiImei));
@@ -1900,7 +1905,10 @@ function SaleModal({
         <div className="rounded-xl bg-surface-2 p-4">
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-text-muted">Total</span>
-            <span className="text-xl font-extrabold tracking-tight">{money(total, "ARS")}</span>
+            <span className="flex flex-col items-end">
+              <span className="text-xl font-extrabold tracking-tight">{rate > 0 ? money(totalUsd, "USD") : money(total, "ARS")}</span>
+              {rate > 0 && <span className="text-xs text-text-dim">≈ {money(total, "ARS")}</span>}
+            </span>
           </div>
           {subtotalUsd > 0 && (
             <div className="mt-2 border-t border-border pt-2 text-xs">
@@ -1916,7 +1924,7 @@ function SaleModal({
               )}
               <div className="mt-1 text-text-dim">
                 {rate > 0
-                  ? `El total en pesos convierte los USD al dólar ${money(rate, "ARS")}.`
+                  ? `Total en US$; la referencia ≈ en pesos usa el blue ${money(rate, "ARS")}.`
                   : "⚠ Cargá la cotización del dólar (chip arriba) para convertir los ítems en USD."}
               </div>
             </div>
@@ -1931,7 +1939,10 @@ function SaleModal({
               </div>
               <div className="mt-1.5 flex items-baseline justify-between border-t border-border pt-2">
                 <span className="text-sm font-medium text-text-muted">A pagar</span>
-                <span className="text-lg font-extrabold tracking-tight">{money(due, "ARS")}</span>
+                <span className="flex flex-col items-end">
+                  <span className="text-lg font-extrabold tracking-tight">{rate > 0 ? money(dueUsd, "USD") : money(due, "ARS")}</span>
+                  {rate > 0 && <span className="text-xs text-text-dim">≈ {money(due, "ARS")}</span>}
+                </span>
               </div>
             </>
           )}
@@ -1985,7 +1996,7 @@ function SaleModal({
               placeholder="0"
               className={fieldCls}
             />
-            <span className="text-xs text-text-dim">Queda debiendo {money(Math.max(0, balance), "ARS")}</span>
+            <span className="text-xs text-text-dim">Queda debiendo {rate > 0 ? money(Math.max(0, balanceUsd), "USD") : money(Math.max(0, balance), "ARS")}{rate > 0 ? ` (≈ ${money(Math.max(0, balance), "ARS")})` : ""}</span>
           </label>
         )}
 
@@ -2097,7 +2108,7 @@ function SaleDetailModal({
                           <span className="ml-1 text-xs text-text-dim">· IMEI {it.imei}</span>
                         )}
                       </span>
-                      <span className="font-semibold">{money(it.subtotal, "ARS")}</span>
+                      <span className="font-semibold">{money(it.subtotal, it.currency ?? "ARS")}</span>
                     </div>
                   ))
                 ) : (
@@ -2109,16 +2120,19 @@ function SaleDetailModal({
             <div className="rounded-lg bg-surface-2 p-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-text-muted">Total</span>
-                <span className="font-bold">{money(sale.total, "ARS")}</span>
+                <span className="flex flex-col items-end">
+                  <span className="font-bold">{sale.totalUsd != null ? money(sale.totalUsd, "USD") : money(sale.total, "ARS")}</span>
+                  {sale.totalUsd != null && <span className="text-xs text-text-dim">≈ {money(sale.total, "ARS")}</span>}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-muted">Cobrado</span>
-                <span>{money(sale.totalPaid, "ARS")}</span>
+                <span>{sale.totalPaidUsd != null ? money(sale.totalPaidUsd, "USD") : money(sale.totalPaid, "ARS")}</span>
               </div>
               <div className="mt-1 flex justify-between border-t border-border pt-1">
                 <span className="text-text-muted">Saldo</span>
                 <span className={`font-bold ${sale.balance > 0.01 ? "text-warning" : "text-success"}`}>
-                  {money(sale.balance, "ARS")}
+                  {sale.balanceUsd != null ? money(sale.balanceUsd, "USD") : money(sale.balance, "ARS")}
                 </span>
               </div>
             </div>
