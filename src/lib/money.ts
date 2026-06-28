@@ -35,3 +35,20 @@ export function toUsd(amount: number, currency: Currency, rate: number): number 
 export function toArs(amount: number, currency: Currency, rate: number): number {
   return currency === "USD" && rate > 0 ? amount * rate : amount;
 }
+
+/**
+ * Resuelve el monto en US$ de una venta para mostrar/sumar en pantalla:
+ *  - si tiene US$ congelado (venta ya migrada) → ese, tal cual (no se licúa).
+ *  - si es legacy (US$ null/undefined) → cae al ARS convertido al blue de HOY,
+ *    como referencia (igual que la versión vieja: nunca peor que antes).
+ *  - sin blue → 0.
+ * `blue` es la cotización de hoy (ARS por 1 US$). OJO: 0 congelado NO es legacy.
+ */
+export function saleAmountUsd(
+  frozenUsd: number | null | undefined,
+  ars: number,
+  blue: number | null | undefined,
+): number {
+  if (frozenUsd != null) return frozenUsd;
+  return blue && blue > 0 ? ars / blue : 0;
+}
