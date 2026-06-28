@@ -1,5 +1,5 @@
 import { ReactNode, useState, type CSSProperties } from 'react';
-import { Home, ShoppingCart, Plus, CalendarDays, Menu as MenuIcon, Users, GitBranch, CheckSquare, Wallet, ChevronRight, Package, Wrench, type LucideIcon } from 'lucide-react';
+import { Home, ShoppingCart, Plus, CalendarDays, Menu as MenuIcon, Users, GitBranch, CheckSquare, Wallet, ChevronRight, Package, Wrench, X, type LucideIcon } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Topbar, ACTION_TINT, type NewAction, type NotifNavigate } from './Topbar';
 import { color, radius, shadow, space, text, weight } from '../tokens';
@@ -282,17 +282,30 @@ function NewActionSheet({ onAction, onClose }: { onAction: (a: NewAction) => voi
           </div>
         ) : (
           <>
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: weight.semibold,
-                color: color.textDim,
-                textTransform: 'uppercase',
-                letterSpacing: '0.7px',
-                margin: `0 2px ${space[3]}`,
-              }}
-            >
-              Crear
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[3], margin: `0 2px ${space[3]}` }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: text.lg, fontWeight: weight.bold, color: color.text }}>Acciones rápidas</div>
+                <div style={{ fontSize: text.sm, color: color.textMuted, marginTop: 1 }}>¿Qué querés hacer hoy?</div>
+              </div>
+              <button
+                onClick={onClose}
+                aria-label="Cerrar"
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: radius.full,
+                  background: color.surface2,
+                  color: color.textMuted,
+                  border: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                <X size={18} />
+              </button>
             </div>
 
             {hero && (
@@ -351,7 +364,7 @@ function NewActionSheet({ onAction, onClose }: { onAction: (a: NewAction) => voi
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      alignItems: 'flex-start',
+                      alignItems: 'stretch',
                       gap: space[2],
                       padding: space[3],
                       minHeight: 92,
@@ -363,20 +376,38 @@ function NewActionSheet({ onAction, onClose }: { onAction: (a: NewAction) => voi
                       cursor: 'pointer',
                     }}
                   >
-                    <span
-                      style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: radius.md,
-                        background: `${ACTION_TINT[a.id]}22`,
-                        color: ACTION_TINT[a.id],
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <a.Icon size={19} strokeWidth={2.2} />
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span
+                        style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: radius.md,
+                          background: `${ACTION_TINT[a.id]}22`,
+                          color: ACTION_TINT[a.id],
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <a.Icon size={19} strokeWidth={2.2} />
+                      </span>
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: radius.full,
+                          background: color.surface,
+                          color: color.textDim,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Plus size={13} strokeWidth={2.4} />
+                      </span>
+                    </div>
                     <span style={{ display: 'block', minWidth: 0 }}>
                       <span style={{ display: 'block', fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>{a.short}</span>
                       <span style={{ display: 'block', fontSize: text.xs, color: color.textMuted, marginTop: 1, lineHeight: 1.3 }}>{a.desc}</span>
