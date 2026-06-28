@@ -44,10 +44,16 @@ import {
   mapSale,
   mapSaleItem,
   mapSalePayment,
+  mapSaleItemReport,
+  mapCashMovement,
+  mapCashSession,
   toIsoUtc,
   type SaleRaw,
   type SaleItemRaw,
   type SalePaymentRaw,
+  type SaleItemReportRaw,
+  type CashMovementRaw,
+  type CashSessionRaw,
 } from "./mappers";
 import { useDollarStore } from "@/store/dollarStore";
 
@@ -577,41 +583,6 @@ export async function sendWarranty(
 }
 
 /* ---------- sale items (bulk, para Reportes v2) ---------- */
-interface SaleItemReportRaw {
-  id: string;
-  sale_id: string;
-  catalog_item_id?: string | null;
-  description?: string | null;
-  quantity?: number | null;
-  unit_price?: number | null;
-  subtotal?: number | null;
-  unit_cost?: number | null;
-  currency?: string | null;
-  fx_rate?: number | null;
-  sale_date?: string | null;
-  sale_created_at?: string | null;
-  seller_name?: string | null;
-}
-function mapSaleItemReport(r: SaleItemReportRaw): SaleItemReport {
-  return {
-    id: r.id,
-    saleId: r.sale_id,
-    catalogItemId: r.catalog_item_id ?? null,
-    description: r.description ?? "",
-    quantity: Number(r.quantity ?? 0),
-    unitPrice: Number(r.unit_price ?? 0),
-    subtotal: Number(r.subtotal ?? 0),
-    // Snapshot del costo al momento de la venta (0 en ventas viejas → el
-    // consumidor cae al costo actual del catálogo como fallback).
-    unitCost: r.unit_cost != null ? Number(r.unit_cost) : null,
-    // Moneda de la línea + blue congelado de la venta → Reportes pasa cada
-    // línea a US$ sin licuar (US$ tal cual; ARS ÷ fx_rate, o ÷ blue si legacy).
-    currency: r.currency === "USD" ? "USD" : r.currency === "ARS" ? "ARS" : null,
-    fxRate: r.fx_rate != null ? Number(r.fx_rate) : null,
-    saleDate: toIsoUtc(r.sale_date ?? r.sale_created_at) || null,
-    sellerName: r.seller_name ?? null,
-  };
-}
 export async function listSaleItems(): Promise<SaleItemReport[]> {
   const data = await req<{ items: SaleItemReportRaw[] }>(`/workspaces/${ws()}/sale-items`);
   return (data.items ?? []).map(mapSaleItemReport);
@@ -1565,34 +1536,6 @@ export function assetUrl(key: string): string {
 }
 
 /* ---------- cash movements (sesión abrir/cerrar diferida) ---------- */
-interface CashMovementRaw {
-  id: string;
-  kind?: string | null;
-  amount?: number | null;
-  currency?: string | null;
-  description?: string | null;
-  category?: string | null;
-  payment_method?: string | null;
-  customer_name?: string | null;
-  sale_id?: string | null;
-  moved_at?: string | null;
-  created_at?: string | null;
-}
-function mapCashMovement(r: CashMovementRaw): CashMovement {
-  return {
-    id: r.id,
-    kind: r.kind === "expense" ? "expense" : "income",
-    amount: Number(r.amount ?? 0),
-    currency: r.currency === "USD" ? "USD" : "ARS",
-    description: r.description ?? undefined,
-    category: r.category ?? undefined,
-    paymentMethod: r.payment_method ?? undefined,
-    customerName: r.customer_name ?? undefined,
-    saleId: r.sale_id ?? undefined,
-    movedAt: toIsoUtc(r.moved_at ?? r.created_at) || undefined,
-  };
-}
-
 export async function listCashMovements(): Promise<CashMovement[]> {
   const data = await req<{ items: CashMovementRaw[] }>(`/workspaces/${ws()}/cash`);
   return (data.items ?? []).map(mapCashMovement);
@@ -1624,50 +1567,6 @@ export async function deleteCashMovement(id: string): Promise<void> {
 }
 
 /* ---------- cash sessions (apertura/cierre diario + arqueo) ---------- */
-interface CashSessionRaw {
-  id: string;
-  session_date?: string | null;
-  opened_at?: string | null;
-  opened_balance_ars?: number | null;
-  opened_balance_usd?: number | null;
-  opened_buckets?: string | null;
-  closed_at?: string | null;
-  closed_balance_ars?: number | null;
-  closed_balance_usd?: number | null;
-  closed_buckets?: string | null;
-}
-/** Parsea el JSON de buckets del Worker ({ "Efectivo·ARS": 1000 }) de forma
- *  tolerante: descarta valores no numéricos y cualquier cosa que no sea objeto. */
-function parseBuckets(s: string | null | undefined): CashBuckets | null {
-  if (!s) return null;
-  try {
-    const o = JSON.parse(s) as unknown;
-    if (!o || typeof o !== "object" || Array.isArray(o)) return null;
-    const out: CashBuckets = {};
-    for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
-      const n = Number(v);
-      if (Number.isFinite(n)) out[k] = n;
-    }
-    return Object.keys(out).length ? out : null;
-  } catch {
-    return null;
-  }
-}
-function mapCashSession(r: CashSessionRaw): CashSession {
-  return {
-    id: r.id,
-    date: r.session_date ?? "",
-    openedAt: toIsoUtc(r.opened_at),
-    openedBalanceArs: Number(r.opened_balance_ars ?? 0),
-    openedBalanceUsd: Number(r.opened_balance_usd ?? 0),
-    openedBuckets: parseBuckets(r.opened_buckets),
-    closedAt: r.closed_at ? toIsoUtc(r.closed_at) : null,
-    closedBalanceArs: r.closed_balance_ars != null ? Number(r.closed_balance_ars) : null,
-    closedBalanceUsd: r.closed_balance_usd != null ? Number(r.closed_balance_usd) : null,
-    closedBuckets: parseBuckets(r.closed_buckets),
-  };
-}
-
 export async function listCashSessions(): Promise<CashSession[]> {
   const data = await req<{ items: CashSessionRaw[] }>(`/workspaces/${ws()}/cash-sessions`);
   return (data.items ?? []).map(mapCashSession);
