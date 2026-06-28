@@ -46,6 +46,7 @@ function isOut(p: Product): boolean {
  */
 export function Inventario({ onQuickSale }: { onQuickSale?: (p: Product) => void }) {
   const { showToast } = useUIStore();
+  const blue = useBlueRate();
   const { can } = usePermissions();
   const canWrite = can("inventory.write");
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
@@ -279,6 +280,27 @@ export function Inventario({ onQuickSale }: { onQuickSale?: (p: Product) => void
                     </Badge>
                   )}
                 </div>
+                {/* Margen (si hay costo cargado) + ≈ pesos de referencia para precios US$ */}
+                {(p.cost != null && p.cost > 0 && p.price > 0) || (p.currency === "USD" && blue && blue > 0) ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2], marginTop: 4, fontSize: text.xs }}>
+                    <span style={{ color: color.textDim, fontVariantNumeric: "tabular-nums" }}>
+                      {p.currency === "USD" && blue && blue > 0 ? `≈ ${formatMoney(Math.round(p.price * blue), "ARS")}` : ""}
+                    </span>
+                    {p.cost != null && p.cost > 0 && p.price > 0 && (
+                      <span
+                        style={{
+                          fontWeight: weight.semibold,
+                          color: p.price - p.cost < 0 ? color.danger : color.success,
+                          fontVariantNumeric: "tabular-nums",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={`Costo ${formatMoney(p.cost, p.currency)} · Precio ${formatMoney(p.price, p.currency)}`}
+                      >
+                        Margen {Math.round(((p.price - p.cost) / p.price) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                ) : null}
                 {onQuickSale && (
                   <div style={{ marginTop: space[3] }}>
                     <Button
