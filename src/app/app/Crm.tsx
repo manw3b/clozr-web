@@ -2040,11 +2040,19 @@ function SaleDetailModal({
   const [busy, setBusy] = useState(false);
   const [payMethod, setPayMethod] = useState<string>("efectivo");
   const [payAmount, setPayAmount] = useState("");
+  // US$ es la moneda madre: al cobrar arrancamos en la moneda nativa de la venta.
+  const [payCurrency, setPayCurrency] = useState<Currency>("ARS");
 
   async function load() {
     setLoadErr(false);
     try {
-      setSale(await api.getSale(saleId));
+      const s = await api.getSale(saleId);
+      setSale(s);
+      // Default a la moneda de la venta (US$ si es US$-nativa) + prefill del saldo.
+      const cur: Currency = s.balanceUsd != null ? "USD" : "ARS";
+      const bal = cur === "USD" ? s.balanceUsd ?? 0 : s.balance;
+      setPayCurrency(cur);
+      setPayAmount(bal > 0.01 ? String(cur === "USD" ? Math.round(bal * 100) / 100 : Math.round(bal)) : "");
     } catch {
       setLoadErr(true);
     }
@@ -2059,7 +2067,7 @@ function SaleDetailModal({
     if (!amt || amt <= 0) return;
     setBusy(true);
     try {
-      await api.addPayment(saleId, { method: payMethod, amount: amt, currency: "ARS" });
+      await api.addPayment(saleId, { method: payMethod, amount: amt, currency: payCurrency });
       setPayAmount("");
       await load();
       onChanged("Pago registrado");
@@ -2155,9 +2163,32 @@ function SaleDetailModal({
 
             {sale.notes && <div className="text-sm text-text-muted">{sale.notes}</div>}
 
-            {sale.balance > 0.01 && (
+            {(sale.balanceUsd != null ? sale.balanceUsd > 0.01 : sale.balance > 0.01) && (
               <div className="rounded-lg border border-border p-3">
                 <div className={`${labelCls} mb-2`}>Registrar un pago</div>
+                {/* Toggle US$/$ sólo en ventas US$-nativas (las legacy quedan en pesos). */}
+                {sale.balanceUsd != null && (
+                  <div className="mb-2 flex gap-1.5">
+                    {(["USD", "ARS"] as const).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => {
+                          setPayCurrency(c);
+                          const bal = c === "USD" ? sale.balanceUsd ?? 0 : sale.balance;
+                          setPayAmount(bal > 0.01 ? String(c === "USD" ? Math.round(bal * 100) / 100 : Math.round(bal)) : "");
+                        }}
+                        className={`flex-1 rounded-lg border px-3 py-1.5 text-sm font-semibold ${
+                          payCurrency === c
+                            ? "border-primary bg-primary-bg text-primary"
+                            : "border-border bg-surface-2 text-text-muted"
+                        }`}
+                      >
+                        {c === "USD" ? "US$ Dólares" : "$ Pesos"}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-end gap-2">
                   <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className={`${fieldCls} flex-1`}>
                     {PAYMENT_METHODS_MANUAL.map((m) => (
