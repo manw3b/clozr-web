@@ -2488,22 +2488,22 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Jet Black",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/watch/series_11_aluminum_jet_black.jpg"
               },
               {
                 "color": "Rose Gold",
                 "colorHex": "#E8B4A0",
-                "image": null
+                "image": "/products/watch/series_11_aluminum_rose_gold.jpg"
               },
               {
                 "color": "Space Gray",
                 "colorHex": "#57534E",
-                "image": null
+                "image": "/products/watch/series_11_aluminum_space_gray.jpg"
               },
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/watch/series_11_aluminum_silver.jpg"
               }
             ],
             "storages": [
@@ -2519,17 +2519,17 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Natural",
                 "colorHex": "#C5B9A8",
-                "image": null
+                "image": "/products/watch/series_11_titanium_natural.jpg"
               },
               {
                 "color": "Slate",
                 "colorHex": "#7A8C8F",
-                "image": null
+                "image": "/products/watch/series_11_titanium_slate.jpg"
               },
               {
                 "color": "Gold",
                 "colorHex": "#B8975A",
-                "image": null
+                "image": "/products/watch/series_11_titanium_gold.jpg"
               }
             ],
             "storages": [
@@ -2550,17 +2550,17 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Jet Black",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/watch/series_10_aluminum_jet_black.jpg"
               },
               {
                 "color": "Rose Gold",
                 "colorHex": "#E8B4A0",
-                "image": null
+                "image": "/products/watch/series_10_aluminum_rose_gold.jpg"
               },
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/watch/series_10_aluminum_silver.jpg"
               }
             ],
             "storages": [
@@ -2576,17 +2576,17 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Natural",
                 "colorHex": "#C5B9A8",
-                "image": null
+                "image": "/products/watch/series_10_titanium_natural.jpg"
               },
               {
                 "color": "Slate",
                 "colorHex": "#7A8C8F",
-                "image": null
+                "image": "/products/watch/series_10_titanium_slate.jpg"
               },
               {
                 "color": "Gold",
                 "colorHex": "#B8975A",
-                "image": null
+                "image": "/products/watch/series_10_titanium_gold.jpg"
               }
             ],
             "storages": [
@@ -2607,7 +2607,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Midnight",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/watch/series_9_aluminum_midnight.jpg"
               }
             ],
             "storages": [
@@ -2629,7 +2629,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Midnight",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/watch/series_8_aluminum_midnight.jpg"
               }
             ],
             "storages": [
@@ -2661,7 +2661,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Green",
                 "colorHex": "#5C6F4D",
-                "image": null
+                "image": "/products/watch/series_7_aluminum_green.jpg"
               },
               {
                 "color": "Blue",
@@ -2708,7 +2708,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Blue",
                 "colorHex": "#3B5C8A",
-                "image": null
+                "image": "/products/watch/series_6_aluminum_blue.jpg"
               },
               {
                 "color": "(PRODUCT)RED",
@@ -2745,7 +2745,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Gold",
                 "colorHex": "#E8C895",
-                "image": null
+                "image": "/products/watch/series_5_aluminum_brush_gold.jpg"
               }
             ],
             "storages": [
@@ -2767,7 +2767,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Gold",
                 "colorHex": "#B8975A",
-                "image": null
+                "image": "/products/watch/series_4_stainless_gold.jpg"
               },
               {
                 "color": "Silver",
@@ -2804,7 +2804,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Space Gray",
                 "colorHex": "#57534E",
-                "image": null
+                "image": "/products/watch/series_3_aluminum_space_gray.jpg"
               },
               {
                 "color": "Gold",
@@ -2831,7 +2831,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/watch/series_2_aluminum_silver.jpg"
               },
               {
                 "color": "Space Gray",
@@ -2868,7 +2868,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Rose Gold",
                 "colorHex": "#E8B5A8",
-                "image": null
+                "image": "/products/watch/series_1_aluminum_rose_gold.jpg"
               },
               {
                 "color": "Space Gray",
@@ -2895,12 +2895,12 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Natural Titanium",
                 "colorHex": "#C5B9A8",
-                "image": null
+                "image": "/products/watch/ultra_3_titanium_natural.jpg"
               },
               {
                 "color": "Black Titanium",
                 "colorHex": "#2C2C2C",
-                "image": null
+                "image": "/products/watch/ultra_3_titanium_black.jpg"
               }
             ],
             "storages": [
@@ -2921,12 +2921,12 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Natural Titanium",
                 "colorHex": "#C5B9A8",
-                "image": null
+                "image": "/products/watch/ultra_2_titanium_natural.jpg"
               },
               {
                 "color": "Black Titanium",
                 "colorHex": "#2C2C2C",
-                "image": null
+                "image": "/products/watch/ultra_2_titanium_black.jpg"
               }
             ],
             "storages": [
@@ -2947,7 +2947,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Natural Titanium",
                 "colorHex": "#C5B9A8",
-                "image": null
+                "image": "/products/watch/ultra_titanium_natural.jpg"
               }
             ],
             "storages": [
@@ -2968,12 +2968,12 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Midnight",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/watch/se_3_aluminum_midnight.jpg"
               },
               {
                 "color": "Starlight",
                 "colorHex": "#F5F0E8",
-                "image": null
+                "image": "/products/watch/se_3_aluminum_starlight.jpg"
               }
             ],
             "storages": [
@@ -2995,17 +2995,17 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Midnight",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/watch/se_2_aluminum_midnight.jpg"
               },
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/watch/se_2_aluminum_silver.jpg"
               },
               {
                 "color": "Starlight",
                 "colorHex": "#F5F0E8",
-                "image": null
+                "image": "/products/watch/se_2_aluminum_starlight.jpg"
               }
             ],
             "storages": [
@@ -3037,7 +3037,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Gold",
                 "colorHex": "#E8C895",
-                "image": null
+                "image": "/products/watch/se_1st_gen_aluminum_brush_gold.jpg"
               }
             ],
             "storages": [
@@ -3066,7 +3066,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "White",
                 "colorHex": "#FAFAFA",
-                "image": null
+                "image": "/products/airpods/AirPods_Pro_3_White.png"
               }
             ],
             "storages": []
@@ -3079,7 +3079,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "White",
                 "colorHex": "#FAFAFA",
-                "image": null
+                "image": "/products/airpods/AirPods_Pro_2_White.png"
               }
             ],
             "storages": [
@@ -3140,7 +3140,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "White",
                 "colorHex": "#FAFAFA",
-                "image": null
+                "image": "/products/airpods/AirPods_4_White.png"
               }
             ],
             "storages": []
@@ -3153,7 +3153,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "White",
                 "colorHex": "#FAFAFA",
-                "image": null
+                "image": "/products/airpods/AirPods_3rd_Gen_White_MagSafe_Case.png"
               }
             ],
             "storages": [
@@ -3169,7 +3169,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "White",
                 "colorHex": "#FAFAFA",
-                "image": null
+                "image": "/products/airpods/AirPods_2nd_Gen_White.png"
               }
             ],
             "storages": []
@@ -3195,22 +3195,22 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_m5_silver.jpg"
               },
               {
                 "color": "Midnight",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_m5_midnight.jpg"
               },
               {
                 "color": "Starlight",
                 "colorHex": "#F5F0E8",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_m5_starlight.jpg"
               },
               {
                 "color": "Sky Blue",
                 "colorHex": "#8BBCD4",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_m5_skyblue.jpg"
               }
             ],
             "storages": [
@@ -3228,22 +3228,22 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_m5_15_silver.jpg"
               },
               {
                 "color": "Midnight",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_m5_15_midnight.jpg"
               },
               {
                 "color": "Starlight",
                 "colorHex": "#F5F0E8",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_m5_15_starlight.jpg"
               },
               {
                 "color": "Sky Blue",
                 "colorHex": "#8BBCD4",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_m5_15_skyblue.jpg"
               }
             ],
             "storages": [
@@ -3261,27 +3261,27 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Sky Blue",
                 "colorHex": "#8BBCD4",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_mx_skyblue.jpg"
               },
               {
                 "color": "Midnight",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_mx_midnight.jpg"
               },
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_mx_silver.jpg"
               },
               {
                 "color": "Starlight",
                 "colorHex": "#F5F0E8",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_mx_starlight.jpg"
               },
               {
                 "color": "Space Gray",
                 "colorHex": "#57534E",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_mx_spacegray.jpg"
               }
             ],
             "storages": [
@@ -3298,27 +3298,27 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Sky Blue",
                 "colorHex": "#8BBCD4",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_mx_15_skyblue.jpg"
               },
               {
                 "color": "Midnight",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_mx_15_midnight.jpg"
               },
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_mx_15_silver.jpg"
               },
               {
                 "color": "Starlight",
                 "colorHex": "#F5F0E8",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_mx_15_starlight.jpg"
               },
               {
                 "color": "Space Gray",
                 "colorHex": "#57534E",
-                "image": null
+                "image": "/products/mac/compare_macbook_air_mx_15_spacegray.jpg"
               }
             ],
             "storages": [
@@ -3340,12 +3340,12 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_macbook_pro_m5_14_silver.jpg"
               },
               {
                 "color": "Space Black",
                 "colorHex": "#1C1C2E",
-                "image": null
+                "image": "/products/mac/compare_macbook_pro_m5_14_spaceblack.jpg"
               }
             ],
             "storages": [
@@ -3362,12 +3362,12 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_macbook_pro_m5_16_silver.jpg"
               },
               {
                 "color": "Space Black",
                 "colorHex": "#1C1C2E",
-                "image": null
+                "image": "/products/mac/compare_macbook_pro_m5_16_spaceblack.jpg"
               }
             ],
             "storages": [
@@ -3384,17 +3384,17 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Space Black",
                 "colorHex": "#1C1C2E",
-                "image": null
+                "image": "/products/mac/compare_macbook_pro_14_spaceblack.jpg"
               },
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_macbook_pro_14_silver.jpg"
               },
               {
                 "color": "Space Gray",
                 "colorHex": "#57534E",
-                "image": null
+                "image": "/products/mac/compare_macbook_pro_14_spacegray.jpg"
               }
             ],
             "storages": [
@@ -3411,12 +3411,12 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Space Black",
                 "colorHex": "#1C1C2E",
-                "image": null
+                "image": "/products/mac/compare_macbook_pro_16_spaceblack.jpg"
               },
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_macbook_pro_16_silver.jpg"
               }
             ],
             "storages": [
@@ -3439,37 +3439,37 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Purple",
                 "colorHex": "#9B7FB6",
-                "image": null
+                "image": "/products/mac/compare_imac_24_m4_purple.jpg"
               },
               {
                 "color": "Green",
                 "colorHex": "#4A7B5C",
-                "image": null
+                "image": "/products/mac/compare_imac_24_m4_green.jpg"
               },
               {
                 "color": "Yellow",
                 "colorHex": "#F5E642",
-                "image": null
+                "image": "/products/mac/compare_imac_24_m4_yellow.jpg"
               },
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_imac_24_m4_silver.jpg"
               },
               {
                 "color": "Pink",
                 "colorHex": "#F2A7B0",
-                "image": null
+                "image": "/products/mac/compare_imac_24_m4_pink.jpg"
               },
               {
                 "color": "Blue",
                 "colorHex": "#4A7BA8",
-                "image": null
+                "image": "/products/mac/compare_imac_24_m4_blue.jpg"
               },
               {
                 "color": "Orange",
                 "colorHex": "#D4621A",
-                "image": null
+                "image": "/products/mac/compare_imac_24_m4_orange.jpg"
               }
             ],
             "storages": [
@@ -3491,7 +3491,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_mac_mini_m4_silver.jpg"
               }
             ],
             "storages": [
@@ -3514,7 +3514,7 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_mac_studio_silver.jpg"
               }
             ],
             "storages": [
@@ -3536,22 +3536,22 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Silver",
                 "colorHex": "#E8E3DC",
-                "image": null
+                "image": "/products/mac/compare_macbook_neo_a18_silver.jpg"
               },
               {
                 "color": "Blush",
                 "colorHex": "#E8C4B8",
-                "image": null
+                "image": "/products/mac/compare_macbook_neo_a18_blush.jpg"
               },
               {
                 "color": "Citrus",
                 "colorHex": "#D4A830",
-                "image": null
+                "image": "/products/mac/compare_macbook_neo_a18_citrus.jpg"
               },
               {
                 "color": "Indigo",
                 "colorHex": "#3B4B9E",
-                "image": null
+                "image": "/products/mac/compare_macbook_neo_a18_indigo.jpg"
               }
             ],
             "storages": [
