@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { formatMoney, dualUsd } from "@/lib/format";
+import { saleAmountUsd } from "@/lib/money";
 import { useBlueRate } from "@/store/dollarStore";
 import { useIsMobile } from "@/lib/useIsMobile";
 import * as api from "@/lib/api";
@@ -58,11 +59,11 @@ export function Reportes() {
     load();
   }, [load]);
 
-  // US$ es la fuente de verdad. Para las ventas ya migradas usamos el monto en
-  // US$ congelado; las legacy (sin US$) caen al ARS convertido al blue de hoy —
-  // igual que la versión vieja, así nunca mostramos algo peor que antes.
+  // US$ es la fuente de verdad: monto congelado de la venta; las legacy (sin US$)
+  // caen al ARS ÷ blue de hoy. La regla vive en money.ts (saleAmountUsd, testeada);
+  // acá sólo le inyectamos el blue actual. Mismo helper que usa Ventas.
   const saleUsd = useCallback(
-    (usd: number | null | undefined, ars: number) => (usd != null ? usd : blue && blue > 0 ? ars / blue : 0),
+    (usd: number | null | undefined, ars: number) => saleAmountUsd(usd, ars, blue),
     [blue],
   );
   // Pasa un monto de una línea de venta a US$: US$ tal cual; ARS ÷ blue
