@@ -46,8 +46,10 @@ intentarlo desde la web.
 - Sync entre pantallas por window events: `clozr:customer-changed`,
   `clozr:item-changed`, `clozr:stage-changed` (ver `src/lib/*Events.ts`).
 - **Skills del repo**: `.claude/skills/clozr-ui` (portar/construir vistas con el
-  design system y los tokens) y `.claude/skills/clozr-endpoint` (consumir un
-  recurso nuevo de la API). Usalas cuando apliquen.
+  design system y los tokens), `.claude/skills/clozr-endpoint` (consumir un
+  recurso nuevo de la API) y `.claude/skills/clozr-deploy` (el ritual de cierre
+  de fase: tsc+build+test → commit → PR → merge → hard-refresh). Usalas cuando
+  apliquen.
 
 ## Regla de oro: la plata es en dólares (US$-nativo)
 
