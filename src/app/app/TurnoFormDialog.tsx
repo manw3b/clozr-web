@@ -10,6 +10,7 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
 import { shareOnWhatsApp } from "@/lib/openExternal";
+import { toLocalISODate } from "@/lib/format";
 import { applyTurnoTemplate, resolveTurnoTemplate, buildTurnoData, buildTurnoDataFromAppointment } from "@/lib/turnoTemplates";
 import { appointmentCode } from "@/lib/types";
 import type { Appointment, AppointmentType, Customer, Origin, SaleDetail } from "@/lib/types";
@@ -45,7 +46,12 @@ export function TurnoFormDialog({
   const [customerId, setCustomerId] = useState(sale?.customerId ?? initial?.customerId ?? presetCustomer?.id ?? "");
   const [customerName, setCustomerName] = useState(sale?.customerName ?? initial?.customerName ?? presetCustomer?.name ?? "");
   const [customerPhone, setCustomerPhone] = useState(salePhone ?? initial?.customerPhone ?? presetCustomer?.phone ?? "");
-  const [appointmentAt, setAppointmentAt] = useState(sale?.appointmentAt ?? initial?.appointmentAt ?? "");
+  // Turno nuevo sin fecha (ni de venta ni de edición): arranca en hoy 09:00 para
+  // no escribir la fecha entera cada vez. `datetime-local` quiere "YYYY-MM-DDTHH:mm".
+  const isNewSlot = !sale?.appointmentAt && !initial?.appointmentAt;
+  const [appointmentAt, setAppointmentAt] = useState(
+    sale?.appointmentAt ?? initial?.appointmentAt ?? `${toLocalISODate()}T09:00`,
+  );
   const [type, setType] = useState(initial?.type ?? (sale ? "Venta" : ""));
   const [origin, setOrigin] = useState(sale?.origin ?? initial?.origin ?? "");
   const [product, setProduct] = useState(initial?.product ?? "");
@@ -248,7 +254,7 @@ export function TurnoFormDialog({
         </>
       )}
 
-      <ModalField label="Día y horario del turno">
+      <ModalField label="Día y horario del turno" hint={isNewSlot ? "Por defecto: hoy 09:00 — cambialo si hace falta" : undefined}>
         <Input type="datetime-local" value={appointmentAt} onChange={(e) => setAppointmentAt(e.target.value)} />
       </ModalField>
 
