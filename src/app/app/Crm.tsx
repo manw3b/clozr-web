@@ -77,7 +77,7 @@ type SalePreset = {
   /** Nombre del cliente del preset — sirve de fallback si el id no está en la
    *  lista local de customers (cliente borrado o lista desincronizada). */
   customerName?: string;
-  lines?: { description: string; quantity: string; unitPrice: string }[];
+  lines?: { description: string; quantity: string; unitPrice: string; currency?: "ARS" | "USD" }[];
 };
 
 type ModalState =
@@ -357,12 +357,10 @@ export default function Crm({
                           {
                             description: p.name,
                             quantity: "1",
-                            // El SaleModal trabaja en ARS y convierte USD al blue:
-                            // sembramos el precio ya convertido para no cobrar US$ como $.
-                            unitPrice:
-                              p.currency === "USD" && blue && blue > 0
-                                ? String(Math.round(p.price * blue))
-                                : String(p.price || 0),
+                            // La línea arranca en la MONEDA del producto (US$ si el
+                            // catálogo está en dólares). El Total convierte a pesos al blue.
+                            unitPrice: String(p.price || 0),
+                            currency: p.currency === "USD" ? "USD" : "ARS",
                           },
                         ],
                       },
@@ -1445,12 +1443,12 @@ function SaleModal({
     const c = customers.find((x) => x.id === (preset?.customerId ?? ""));
     return c?.type ?? "final";
   });
-  // Precio sugerido en PESOS: el catálogo vive en USD (fuente de verdad) y acá
-  // se convierte al dólar blue. Un producto marcado en ARS se toma tal cual.
-  function suggestedPrice(p: Product, type: ClientType = priceType): number {
+  // Siembra del precio de un ítem: arranca en la MONEDA del producto (US$ si el
+  // catálogo está en dólares) para que veas el precio que cargaste; el Total
+  // convierte a pesos al blue. Respeta el precio por tipo de cliente.
+  function seedFor(p: Product, type: ClientType = priceType): { unitPrice: string; currency: Currency } {
     const base = priceByKey.get(`${p.id}|${type}`) ?? p.price;
-    if (p.currency === "USD" && blue && blue > 0) return Math.round(base * blue);
-    return base;
+    return { unitPrice: String(base ?? 0), currency: p.currency === "USD" ? "USD" : "ARS" };
   }
   // Costo del producto llevado a pesos (para el margen): si está en USD, al blue.
   function costArs(p: Product): number | null {
@@ -1470,7 +1468,7 @@ function SaleModal({
         if (!l.catalogItemId || !l.priceAuto) return l;
         const p = productById.get(l.catalogItemId);
         if (!p) return l;
-        return { ...l, unitPrice: String(suggestedPrice(p, newType)) };
+        return { ...l, ...seedFor(p, newType) };
       }),
     );
   }
@@ -1513,7 +1511,9 @@ function SaleModal({
         }
         const next: SaleLine = { ...l, description: value, catalogItemId };
         if (exact && (!l.unitPrice || l.unitPrice.trim() === "")) {
-          next.unitPrice = String(suggestedPrice(exact));
+          const seed = seedFor(exact);
+          next.unitPrice = seed.unitPrice;
+          next.currency = seed.currency;
           next.priceAuto = true;
         }
         return next;
@@ -1528,7 +1528,9 @@ function SaleModal({
         if (idx !== i) return l;
         const next: SaleLine = { ...l, description: p.name, catalogItemId: p.id };
         if (!l.unitPrice || l.unitPrice.trim() === "") {
-          next.unitPrice = String(suggestedPrice(p));
+          const seed = seedFor(p);
+          next.unitPrice = seed.unitPrice;
+          next.currency = seed.currency;
           next.priceAuto = true;
         }
         return next;
@@ -1690,7 +1692,7 @@ function SaleModal({
           </select>
           <span className="text-xs text-text-dim">
             {blue
-              ? `Catálogo en US$ → precio sugerido en pesos al blue ($${Math.round(blue).toLocaleString("es-AR")}). Se ajusta al cliente; podés cambiarlo.`
+              ? `Catálogo en US$ → la línea arranca en US$; el Total convierte a pesos al blue ($${Math.round(blue).toLocaleString("es-AR")}). Podés cambiar precio y moneda por línea.`
               : "⚠ Cargá la cotización del dólar (chip arriba) para sugerir precios en pesos."}
           </span>
         </div>
@@ -1745,7 +1747,7 @@ function SaleModal({
                   />
                   <button
                     type="button"
-                    onClick={() => setLine(i, { currency: (l.currency ?? "ARS") === "ARS" ? "USD" : "ARS" })}
+                    onClick={() => setLine(i, { currency: (l.currency ?? "ARS") === "ARS" ? "USD" : "ARS", priceAuto: false })}
                     title="Moneda de la línea — clic para cambiar entre pesos ($) y dólares (US$)"
                     className={`${fieldCls} font-bold ${(l.currency ?? "ARS") === "USD" ? "text-primary" : "text-text-dim"}`}
                     style={{ width: 48, flexShrink: 0, cursor: "pointer" }}
