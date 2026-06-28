@@ -636,6 +636,19 @@ export async function addPayment(
   });
 }
 
+/**
+ * Fase 1b — convierte las ventas legacy (cargadas en pesos) a US$ usando el
+ * blue indicado. One-shot e idempotente: el Worker sólo toca las ventas que
+ * todavía no tienen US$, así que se puede re-correr sin pisar nada. Owner only.
+ */
+export async function backfillSalesUsd(rate: number): Promise<{ updated: number }> {
+  const r = await req<{ ok: boolean; updated: number }>(`/workspaces/${ws()}/sales/backfill-usd`, {
+    method: "POST",
+    body: JSON.stringify({ rate }),
+  });
+  return { updated: r.updated };
+}
+
 /** Envía el certificado de garantía por mail al cliente. */
 export async function sendWarranty(
   saleId: string,

@@ -16,6 +16,7 @@ import type { PaymentOption, User, CustomerType, CustomerTag, PipelineStage, Ori
 import { PLANS, PAID_PLAN_IDS, EXTRA_SEAT_USD, ESPACIO_USD, ANNUAL_MONTHS_PAID, ANNUAL_MONTHS_FREE, formatArs, formatUsd, discountTargetLabel, type PlanId, type PlanInfo } from "@/lib/types";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchDolares } from "@/lib/dolar";
+import { useBlueRate } from "@/store/dollarStore";
 import { Stepper } from "@/components/Stepper";
 import {
   applyTurnoTemplate,
@@ -461,6 +462,9 @@ export function Ajustes({ user, onLogout }: { user: User; onLogout: () => void }
         )}
       </Card>
 
+      {/* Pasar ventas viejas a dólares (Fase 1b) — owner only */}
+      <BackfillUsdCard />
+
       {/* Cuenta */}
       <Card padding={5}>
         <SectionTitle>Cuenta</SectionTitle>
@@ -695,6 +699,84 @@ function ReferralCard() {
         <div style={{ fontSize: text.sm, color: color.textDim, marginTop: space[3] }}>
           {loading ? "Generando tu código…" : "—"}
         </div>
+      )}
+    </Card>
+  );
+}
+
+/* ───────── Pasar ventas viejas a dólares (Fase 1b) ─────────
+ * El dólar es la moneda madre. Las ventas cargadas antes quedaron en pesos;
+ * este bloque (owner-only) las convierte a US$ una sola vez usando el blue
+ * actual editable. El Worker sólo toca las que aún no tienen US$, así que es
+ * idempotente: re-correrlo no duplica ni pisa nada. */
+function BackfillUsdCard() {
+  const { showToast } = useUIStore();
+  const isOwner = useWorkspaceStore((s) => s.activeWorkspace?.role) === "owner";
+  const blue = useBlueRate();
+  const [rate, setRate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<number | null>(null);
+
+  // Prefill con el blue de la app (el que el usuario ve/carga).
+  useEffect(() => {
+    if (blue && blue > 0) setRate((r) => (r ? r : String(blue)));
+  }, [blue]);
+
+  if (!isOwner) return null;
+
+  async function run() {
+    const r = Number(rate);
+    if (!Number.isFinite(r) || r <= 0) {
+      showToast("Cargá una cotización válida", "error");
+      return;
+    }
+    const ok = await confirmAsync({
+      title: "Pasar ventas a dólares",
+      message: `Vamos a convertir tus ventas cargadas en pesos a US$ usando ${formatArs(r)} por dólar. Solo afecta las que todavía no tienen precio en dólares — se puede repetir sin problema.`,
+      confirmText: "Convertir",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const { updated } = await api.backfillSalesUsd(r);
+      setDone(updated);
+      showToast(
+        updated > 0 ? `${updated} venta(s) convertida(s) a US$` : "No quedaban ventas en pesos por convertir",
+        "success",
+      );
+    } catch {
+      showToast("No se pudo convertir. Probá de nuevo.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card padding={5}>
+      <SectionTitle>Pasar ventas a dólares</SectionTitle>
+      <Hint>
+        El dólar es la moneda madre de Clozr. Tus ventas viejas se cargaron en pesos: convertilas
+        a US$ una sola vez con la cotización de hoy (las nuevas ya nacen en dólares). El saldo en
+        dólares queda congelado y no se licúa. Solo toca las que todavía no tienen precio en US$,
+        así que podés repetirlo sin duplicar nada.
+      </Hint>
+      <div style={{ display: "flex", gap: space[2], alignItems: "flex-end", marginTop: space[4] }}>
+        <div style={{ flex: 1 }}>
+          <Label>Cotización (pesos por dólar)</Label>
+          <Input
+            type="number"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            placeholder={blue ? String(blue) : "Ej: 1200"}
+          />
+        </div>
+        <Button variant="primary" onClick={run} loading={busy} disabled={!rate || Number(rate) <= 0}>
+          Convertir
+        </Button>
+      </div>
+      {!blue && <Hint>No pudimos leer el dólar blue automáticamente — cargalo a mano.</Hint>}
+      {done != null && (
+        <Hint>{done > 0 ? `Listo: ${done} venta(s) ahora están en US$.` : "Ya estaban todas en US$ 👍"}</Hint>
       )}
     </Card>
   );
