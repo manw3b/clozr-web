@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Search, Plus, MoreHorizontal, Check, Copy, Eye, Trash2, CheckCircle2, Clock, AlertCircle, Package, ShieldCheck, Download, FileText, CalendarClock } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
@@ -795,6 +795,7 @@ function PaymentModal({
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("efectivo");
   const [saving, setSaving] = useState(false);
+  const amountRef = useRef<HTMLInputElement>(null);
 
   const balanceFor = useCallback(
     (c: Currency) => (c === "USD" ? maxAmountUsd ?? 0 : maxAmount),
@@ -810,12 +811,15 @@ function PaymentModal({
   );
 
   useEffect(() => {
-    if (open) {
-      const c: Currency = hasUsd ? "USD" : "ARS";
-      setCurrency(c);
-      setAmount(prefillFor(c));
-      setMethod("efectivo");
-    }
+    if (!open) return;
+    const c: Currency = hasUsd ? "USD" : "ARS";
+    setCurrency(c);
+    setAmount(prefillFor(c));
+    setMethod("efectivo");
+    // Seleccionar el saldo prefilleado al abrir: si el monto es el correcto
+    // alcanza con Enter; si no, se tipea otro encima sin tener que borrar.
+    const id = requestAnimationFrame(() => amountRef.current?.select());
+    return () => cancelAnimationFrame(id);
   }, [open, hasUsd, prefillFor]);
 
   function pickCurrency(c: Currency) {
@@ -827,6 +831,13 @@ function PaymentModal({
   const n = Number(amount);
   const canSubmit = n > 0;
 
+  async function handleSubmit() {
+    if (!canSubmit || saving) return;
+    setSaving(true);
+    await onSubmit(n, method, currency);
+    setSaving(false);
+  }
+
   return (
     <Modal
       open={open}
@@ -836,16 +847,7 @@ function PaymentModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button
-            variant="primary"
-            disabled={!canSubmit}
-            loading={saving}
-            onClick={async () => {
-              setSaving(true);
-              await onSubmit(n, method, currency);
-              setSaving(false);
-            }}
-          >
+          <Button variant="primary" disabled={!canSubmit} loading={saving} onClick={handleSubmit}>
             Registrar
           </Button>
         </>
@@ -878,7 +880,20 @@ function PaymentModal({
         </ModalField>
       )}
       <ModalField label="Monto" required>
-        <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
+        <Input
+          ref={amountRef}
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+          placeholder="0"
+          autoFocus
+        />
         {balanceFor(currency) > 0 && (
           <div style={{ marginTop: space[1], fontSize: text.xs, color: color.textDim }}>
             Saldo: {formatMoney(Math.round(balanceFor(currency)), currency)}
