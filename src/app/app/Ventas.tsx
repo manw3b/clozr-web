@@ -624,12 +624,23 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
         <Section title="Cobros">
           {detail && detail.payments.length > 0 ? (
             detail.payments.map((p) => (
-              <PaymentRow key={p.id} amount={p.amount} kind="paid" method={p.method} />
+              <PaymentRow key={p.id} amount={p.amount} currency={p.currency} kind="paid" method={p.method} />
             ))
           ) : sale.totalPaid > 0 ? (
-            <PaymentRow amount={sale.totalPaid} kind="paid" method={sale.paymentMethod} />
+            <PaymentRow
+              amount={sale.totalPaidUsd ?? sale.totalPaid}
+              currency={sale.totalPaidUsd != null ? "USD" : "ARS"}
+              kind="paid"
+              method={sale.paymentMethod}
+            />
           ) : null}
-          {remaining > 0 && <PaymentRow amount={remaining} kind="pending" />}
+          {remaining > 0 && (
+            <PaymentRow
+              amount={sale.balanceUsd ?? remaining}
+              currency={sale.balanceUsd != null ? "USD" : "ARS"}
+              kind="pending"
+            />
+          )}
         </Section>
 
         {sale.notes && (
@@ -642,10 +653,11 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
       <PaymentModal
         open={payOpen}
         maxAmount={remaining}
+        maxAmountUsd={sale.balanceUsd ?? null}
         onClose={() => setPayOpen(false)}
-        onSubmit={async (amount, method) => {
+        onSubmit={async (amount, method, currency) => {
           try {
-            await api.addPayment(sale.id, { method, amount, currency: "ARS" });
+            await api.addPayment(sale.id, { method, amount, currency });
             showToast("Pago registrado", "success");
             setPayOpen(false);
             reload();
@@ -765,24 +777,52 @@ function WarrantyModal({
 function PaymentModal({
   open,
   maxAmount,
+  maxAmountUsd,
   onClose,
   onSubmit,
 }: {
   open: boolean;
-  maxAmount: number;
+  maxAmount: number;            // saldo en ARS (referencia / venta legacy)
+  maxAmountUsd?: number | null; // saldo en US$ congelado (si la venta es US$-nativa)
   onClose: () => void;
-  onSubmit: (amount: number, method: string) => void;
+  onSubmit: (amount: number, method: string, currency: Currency) => void;
 }) {
+  // El toggle US$/$ sólo aplica a ventas US$-nativas (con saldo en dólares). En
+  // las legacy en pesos no lo mostramos: cobrar US$ sobre un total ARS mezclaría
+  // monedas en el saldo. Cuando el dueño corre el backfill, pasan a US$ y aparece.
+  const hasUsd = maxAmountUsd != null;
+  const [currency, setCurrency] = useState<Currency>(hasUsd ? "USD" : "ARS");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("efectivo");
   const [saving, setSaving] = useState(false);
 
+  const balanceFor = useCallback(
+    (c: Currency) => (c === "USD" ? maxAmountUsd ?? 0 : maxAmount),
+    [maxAmount, maxAmountUsd],
+  );
+  const prefillFor = useCallback(
+    (c: Currency) => {
+      const m = balanceFor(c);
+      if (m <= 0) return "";
+      return String(c === "USD" ? Math.round(m * 100) / 100 : Math.round(m));
+    },
+    [balanceFor],
+  );
+
   useEffect(() => {
     if (open) {
-      setAmount(maxAmount > 0 ? String(maxAmount) : "");
+      const c: Currency = hasUsd ? "USD" : "ARS";
+      setCurrency(c);
+      setAmount(prefillFor(c));
       setMethod("efectivo");
     }
-  }, [open, maxAmount]);
+  }, [open, hasUsd, prefillFor]);
+
+  function pickCurrency(c: Currency) {
+    if (c === currency) return;
+    setCurrency(c);
+    setAmount(prefillFor(c));
+  }
 
   const n = Number(amount);
   const canSubmit = n > 0;
@@ -802,7 +842,7 @@ function PaymentModal({
             loading={saving}
             onClick={async () => {
               setSaving(true);
-              await onSubmit(n, method);
+              await onSubmit(n, method, currency);
               setSaving(false);
             }}
           >
@@ -811,8 +851,39 @@ function PaymentModal({
         </>
       }
     >
+      {hasUsd && (
+        <ModalField label="Moneda">
+          <div style={{ display: "flex", gap: space[2] }}>
+            {(["USD", "ARS"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => pickCurrency(c)}
+                style={{
+                  flex: 1,
+                  padding: `${space[2]} ${space[3]}`,
+                  borderRadius: radius.md,
+                  background: currency === c ? color.primaryBg : color.surface2,
+                  border: `1px solid ${currency === c ? color.primary : color.border}`,
+                  color: currency === c ? color.primary : color.textMuted,
+                  fontSize: text.sm,
+                  fontWeight: weight.semibold,
+                  cursor: "pointer",
+                }}
+              >
+                {c === "USD" ? "US$ Dólares" : "$ Pesos"}
+              </button>
+            ))}
+          </div>
+        </ModalField>
+      )}
       <ModalField label="Monto" required>
         <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
+        {balanceFor(currency) > 0 && (
+          <div style={{ marginTop: space[1], fontSize: text.xs, color: color.textDim }}>
+            Saldo: {formatMoney(Math.round(balanceFor(currency)), currency)}
+          </div>
+        )}
       </ModalField>
       <ModalField label="Método">
         <Select value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -847,7 +918,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function PaymentRow({ amount, kind, method }: { amount: number; kind: "paid" | "pending"; method?: string }) {
+function PaymentRow({ amount, kind, method, currency = "ARS" }: { amount: number; kind: "paid" | "pending"; method?: string; currency?: Currency }) {
   return (
     <div style={{ padding: space[3], background: color.surface2, border: `1px solid ${color.border}`, borderRadius: radius.md, display: "flex", alignItems: "center", gap: space[3], marginBottom: space[2] }}>
       <div style={{ width: 32, height: 32, borderRadius: radius.md, background: kind === "paid" ? color.successBg : color.warningBg, color: kind === "paid" ? color.success : color.warning, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -857,7 +928,7 @@ function PaymentRow({ amount, kind, method }: { amount: number; kind: "paid" | "
         <div style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.text, marginBottom: 1 }}>{kind === "paid" ? "Cobrado" : "Pendiente de cobro"}</div>
         {method && <div style={{ fontSize: text.xs, color: color.textMuted }}>{PAYMENT_METHOD_LABELS[method as keyof typeof PAYMENT_METHOD_LABELS] ?? method}</div>}
       </div>
-      <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text, fontVariantNumeric: "tabular-nums" }}>{formatMoney(amount)}</div>
+      <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text, fontVariantNumeric: "tabular-nums" }}>{formatMoney(Math.round(amount), currency)}</div>
     </div>
   );
 }
