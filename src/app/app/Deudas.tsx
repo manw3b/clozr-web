@@ -20,7 +20,7 @@ import { DataTable, type ColumnDef } from "@/components/data-table";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { color, space, text, weight } from "@/tokens";
-import { dualMoney } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
 import { useCustomersChanged } from "@/lib/customerEvents";
@@ -37,6 +37,7 @@ interface DeudaRow {
   customerName: string;
   customerPhone: string | null;
   pendingSales: number;
+  /** Saldo total adeudado en US$ (congelado por venta; las legacy se convierten al blue actual). */
   totalDue: number;
   oldestDueDate: string;
   maxDaysOverdue: number;
@@ -71,7 +72,13 @@ export function Deudas() {
   }, [load]);
 
   const pendingSales = useMemo(
-    () => sales.filter((s) => !s.isPaid && s.balance > 0),
+    () =>
+      sales.filter((s) => {
+        if (s.isPaid) return false;
+        // US$ es la moneda madre: si la venta tiene saldo en US$, ese manda.
+        if (s.balanceUsd != null) return s.balanceUsd > 0.01;
+        return s.balance > 0;
+      }),
     [sales],
   );
 
@@ -102,14 +109,15 @@ export function Deudas() {
         grouped.set(cid, row);
       }
       row.pendingSales += 1;
-      row.totalDue += s.balance;
+      // Saldo congelado en US$ (no se licúa con el blue); legacy sin US$ → convertir al blue actual.
+      row.totalDue += s.balanceUsd != null ? s.balanceUsd : blue && blue > 0 ? s.balance / blue : 0;
       row.sales.push(s);
       if (date && (!row.oldestDueDate || date < row.oldestDueDate)) row.oldestDueDate = date;
       if (days > row.maxDaysOverdue) row.maxDaysOverdue = days;
     }
 
     return Array.from(grouped.values()).sort((a, b) => b.totalDue - a.totalDue);
-  }, [pendingSales, customers]);
+  }, [pendingSales, customers, blue]);
 
   const totals = useMemo(() => {
     const totalDue = rows.reduce((s, r) => s + r.totalDue, 0);
@@ -130,7 +138,12 @@ export function Deudas() {
     if (!ok) return;
     try {
       for (const s of r.sales) {
-        await api.addPayment(s.id, { method: "efectivo", amount: s.balance, currency: "ARS" });
+        // Cobramos el saldo congelado en US$; legacy sin US$ → cae a pesos.
+        if (s.balanceUsd != null && s.balanceUsd > 0.01) {
+          await api.addPayment(s.id, { method: "efectivo", amount: s.balanceUsd, currency: "USD" });
+        } else {
+          await api.addPayment(s.id, { method: "efectivo", amount: s.balance, currency: "ARS" });
+        }
       }
       showToast("Cobrado", "success");
       load();
@@ -177,10 +190,12 @@ export function Deudas() {
       cell: (r) => (
         <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end" }}>
           <span style={{ fontSize: text.sm, fontWeight: weight.semibold, color: color.danger }}>
-            {dualMoney(r.totalDue, blue).main}
+            {formatMoney(Math.round(r.totalDue), "USD")}
           </span>
-          {dualMoney(r.totalDue, blue).sub && (
-            <span style={{ fontSize: 11, color: color.textDim }}>{dualMoney(r.totalDue, blue).sub}</span>
+          {blue && blue > 0 && (
+            <span style={{ fontSize: 11, color: color.textDim }}>
+              ≈ {formatMoney(Math.round(r.totalDue * blue), "ARS")}
+            </span>
           )}
         </span>
       ),
@@ -264,11 +279,11 @@ export function Deudas() {
             Saldo total
           </div>
           <div style={{ fontSize: text["2xl"], fontWeight: weight.bold, color: color.danger, letterSpacing: "-0.5px" }}>
-            {dualMoney(totals.totalDue, blue).main}
+            {formatMoney(Math.round(totals.totalDue), "USD")}
           </div>
-          {dualMoney(totals.totalDue, blue).sub && (
+          {blue && blue > 0 && (
             <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>
-              {dualMoney(totals.totalDue, blue).sub}
+              ≈ {formatMoney(Math.round(totals.totalDue * blue), "ARS")}
             </div>
           )}
         </Card>

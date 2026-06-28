@@ -309,7 +309,13 @@ export function Ventas({
 
   async function markPaid(s: Sale) {
     try {
-      await api.addPayment(s.id, { method: "efectivo", amount: s.balance, currency: "ARS" });
+      // US$ es la moneda madre: saldamos el saldo congelado en US$ (no se licúa
+      // con el blue). Legacy sin US$ → cae a pesos.
+      if (s.balanceUsd != null && s.balanceUsd > 0.01) {
+        await api.addPayment(s.id, { method: "efectivo", amount: s.balanceUsd, currency: "USD" });
+      } else {
+        await api.addPayment(s.id, { method: "efectivo", amount: s.balance, currency: "ARS" });
+      }
       showToast("Venta marcada como pagada", "success");
       load();
     } catch {
@@ -490,7 +496,12 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
 
   async function markPaid() {
     try {
-      await api.addPayment(sale.id, { method: "efectivo", amount: remaining, currency: "ARS" });
+      // US$ es la moneda madre: saldamos el saldo congelado en US$. Legacy → pesos.
+      if (sale.balanceUsd != null && sale.balanceUsd > 0.01) {
+        await api.addPayment(sale.id, { method: "efectivo", amount: sale.balanceUsd, currency: "USD" });
+      } else {
+        await api.addPayment(sale.id, { method: "efectivo", amount: remaining, currency: "ARS" });
+      }
       showToast("Venta cobrada", "success");
       reload();
       onChanged();
