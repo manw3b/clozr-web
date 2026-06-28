@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { mapSale, mapSaleItem, mapSalePayment, toIsoUtc } from "@/lib/mappers";
+import {
+  mapCashMovement,
+  mapCashSession,
+  mapSale,
+  mapSaleItem,
+  mapSaleItemReport,
+  mapSalePayment,
+  parseBuckets,
+  toIsoUtc,
+} from "@/lib/mappers";
 
 describe("toIsoUtc", () => {
   it("vacío/null/undefined → string vacío", () => {
@@ -106,5 +115,116 @@ describe("mapSalePayment", () => {
     expect(p.amount).toBe(0);
     expect(p.isDeposit).toBe(true);
     expect(mapSalePayment({ id: "p4", method: "efectivo" }).isDeposit).toBe(false);
+  });
+});
+
+describe("mapSaleItemReport (líneas de venta para Reportes)", () => {
+  it("moneda: USD/ARS se respetan; desconocida/ausente → null (no asume)", () => {
+    expect(mapSaleItemReport({ id: "r1", sale_id: "v1", currency: "USD" }).currency).toBe("USD");
+    expect(mapSaleItemReport({ id: "r2", sale_id: "v1", currency: "ARS" }).currency).toBe("ARS");
+    expect(mapSaleItemReport({ id: "r3", sale_id: "v1" }).currency).toBeNull();
+  });
+
+  it("unitCost y fxRate: presentes → número; ausentes → null (snapshot legacy)", () => {
+    const con = mapSaleItemReport({ id: "r4", sale_id: "v1", unit_cost: 90, fx_rate: 1200 });
+    expect(con.unitCost).toBe(90);
+    expect(con.fxRate).toBe(1200);
+    const sin = mapSaleItemReport({ id: "r5", sale_id: "v1" });
+    expect(sin.unitCost).toBeNull();
+    expect(sin.fxRate).toBeNull();
+  });
+
+  it("saleDate: usa sale_date, y si falta cae a sale_created_at (normalizada a UTC)", () => {
+    expect(mapSaleItemReport({ id: "r6", sale_id: "v1", sale_date: "2026-06-27 10:00:00" }).saleDate).toBe(
+      "2026-06-27T10:00:00Z",
+    );
+    expect(
+      mapSaleItemReport({ id: "r7", sale_id: "v1", sale_created_at: "2026-06-20 09:00:00" }).saleDate,
+    ).toBe("2026-06-20T09:00:00Z");
+  });
+
+  it("defaults: cantidad/precio/subtotal → 0, descripción → ''", () => {
+    const r = mapSaleItemReport({ id: "r8", sale_id: "v1" });
+    expect(r.quantity).toBe(0);
+    expect(r.unitPrice).toBe(0);
+    expect(r.subtotal).toBe(0);
+    expect(r.description).toBe("");
+  });
+});
+
+describe("mapCashMovement (movimientos de caja)", () => {
+  it("kind: 'expense' se respeta; cualquier otra cosa → 'income'", () => {
+    expect(mapCashMovement({ id: "m1", kind: "expense" }).kind).toBe("expense");
+    expect(mapCashMovement({ id: "m2", kind: "income" }).kind).toBe("income");
+    expect(mapCashMovement({ id: "m3" }).kind).toBe("income");
+  });
+
+  it("moneda USD/ARS y monto ausente → 0", () => {
+    expect(mapCashMovement({ id: "m4", currency: "USD" }).currency).toBe("USD");
+    expect(mapCashMovement({ id: "m5", currency: "ARS" }).currency).toBe("ARS");
+    expect(mapCashMovement({ id: "m6" }).amount).toBe(0);
+  });
+
+  it("movedAt: usa moved_at, y si falta cae a created_at (normalizada a UTC)", () => {
+    expect(mapCashMovement({ id: "m7", moved_at: "2026-06-27 12:00:00" }).movedAt).toBe(
+      "2026-06-27T12:00:00Z",
+    );
+    expect(mapCashMovement({ id: "m8", created_at: "2026-06-26 08:00:00" }).movedAt).toBe(
+      "2026-06-26T08:00:00Z",
+    );
+  });
+});
+
+describe("mapCashSession (apertura/cierre + arqueo)", () => {
+  it("sesión abierta sin cerrar: closedAt/balances en null, buckets parseados", () => {
+    const s = mapCashSession({
+      id: "s1",
+      session_date: "2026-06-27",
+      opened_at: "2026-06-27 09:00:00",
+      opened_balance_ars: 50_000,
+      opened_balance_usd: 40,
+      opened_buckets: '{"Efectivo·ARS":50000,"Efectivo·USD":40}',
+    });
+    expect(s.openedAt).toBe("2026-06-27T09:00:00Z");
+    expect(s.openedBalanceArs).toBe(50_000);
+    expect(s.openedBuckets).toEqual({ "Efectivo·ARS": 50_000, "Efectivo·USD": 40 });
+    expect(s.closedAt).toBeNull();
+    expect(s.closedBalanceArs).toBeNull();
+    expect(s.closedBalanceUsd).toBeNull();
+    expect(s.closedBuckets).toBeNull();
+  });
+
+  it("balances de apertura ausentes → 0", () => {
+    const s = mapCashSession({ id: "s2" });
+    expect(s.openedBalanceArs).toBe(0);
+    expect(s.openedBalanceUsd).toBe(0);
+    expect(s.openedBuckets).toBeNull();
+  });
+});
+
+describe("parseBuckets (JSON de arqueo del Worker, tolerante)", () => {
+  it("vacío/null/undefined → null", () => {
+    expect(parseBuckets(null)).toBeNull();
+    expect(parseBuckets(undefined)).toBeNull();
+    expect(parseBuckets("")).toBeNull();
+  });
+
+  it("objeto válido → CashBuckets con los valores numéricos", () => {
+    expect(parseBuckets('{"Efectivo·ARS":1000,"Transferencia·USD":50}')).toEqual({
+      "Efectivo·ARS": 1000,
+      "Transferencia·USD": 50,
+    });
+  });
+
+  it("descarta valores no numéricos y coerciona strings numéricos", () => {
+    expect(parseBuckets('{"Efectivo·ARS":1000,"basura":"no"}')).toEqual({ "Efectivo·ARS": 1000 });
+    expect(parseBuckets('{"a":"50"}')).toEqual({ a: 50 });
+  });
+
+  it("objeto vacío, array o JSON inválido → null", () => {
+    expect(parseBuckets("{}")).toBeNull();
+    expect(parseBuckets("[1,2,3]")).toBeNull();
+    expect(parseBuckets("no soy json")).toBeNull();
+    expect(parseBuckets('{"a":"x"}')).toBeNull();
   });
 });
