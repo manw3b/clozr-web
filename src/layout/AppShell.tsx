@@ -374,7 +374,10 @@ function NewActionSheet({ onAction, onClose }: { onAction: (a: NewAction) => voi
                     >
                       <a.Icon size={19} strokeWidth={2.2} />
                     </span>
-                    <span style={{ fontSize: text.sm, fontWeight: weight.medium, color: color.text }}>{a.short}</span>
+                    <span style={{ display: 'block', minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: text.sm, fontWeight: weight.semibold, color: color.text }}>{a.short}</span>
+                      <span style={{ display: 'block', fontSize: text.xs, color: color.textMuted, marginTop: 1, lineHeight: 1.3 }}>{a.desc}</span>
+                    </span>
                   </button>
                 ))}
               </div>
