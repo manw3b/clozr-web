@@ -54,11 +54,12 @@ function inPeriod(movedAt: string | null | undefined, period: Period): boolean {
 }
 
 /**
- * Vista Caja (v1, solo-movimientos) — port web de clozr/src/pages/caja/.
+ * Vista Caja — port web de clozr/src/pages/caja/.
  * Ingresos/egresos sobre la ruta genérica `cash` del Worker (kind/amount/
- * currency/category/description/moved_at). KPIs y filtros client-side.
- * DIFERIDO (necesita endpoint nuevo en el Worker): la "sesión" abrir/cerrar
- * caja + arqueo (CashSessionChip/CloseCashModal de la desktop).
+ * currency/category/description/moved_at) + sesión abrir/cerrar con arqueo por
+ * bucket (CashSessionChip/Open/CloseCashModal). KPIs y filtros client-side.
+ * US$ y pesos van SIEMPRE por separado: cada moneda es una caja física distinta,
+ * no se mezclan ni se convierten (los KPIs y el desglose son por moneda).
  */
 export function Caja() {
   const { showToast } = useUIStore();
@@ -153,19 +154,24 @@ export function Caja() {
     [movements, period],
   );
 
+  // US$ y pesos por separado: cada moneda es una caja física distinta, no se
+  // mezclan ni se convierten. Antes el USD se calculaba pero no se mostraba.
   const totals = useMemo(() => {
-    let income = 0;
-    let expense = 0;
-    let usd = 0;
+    let incomeArs = 0, expenseArs = 0, incomeUsd = 0, expenseUsd = 0;
     for (const m of periodMovements) {
       if (m.currency === "USD") {
-        usd += m.kind === "income" ? m.amount : -m.amount;
-        continue;
+        if (m.kind === "income") incomeUsd += m.amount;
+        else expenseUsd += m.amount;
+      } else {
+        if (m.kind === "income") incomeArs += m.amount;
+        else expenseArs += m.amount;
       }
-      if (m.kind === "income") income += m.amount;
-      else expense += m.amount;
     }
-    return { income, expense, balance: income - expense, usd };
+    return {
+      incomeArs, expenseArs, balanceArs: incomeArs - expenseArs,
+      incomeUsd, expenseUsd, balanceUsd: incomeUsd - expenseUsd,
+      hasUsd: incomeUsd > 0 || expenseUsd > 0,
+    };
   }, [periodMovements]);
 
   // Desglose del período por método × moneda (billetes ARS, transferencia ARS,
@@ -250,15 +256,33 @@ export function Caja() {
         }
       />
 
-      <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
-        <MetricCard label="Ingresos" value={formatMoney(totals.income)} tone="success" icon={<ArrowUpRight size={16} />} />
-        <MetricCard label="Egresos" value={formatMoney(totals.expense)} tone="danger" icon={<ArrowDownRight size={16} />} />
-        <MetricCard
-          label="Balance"
-          value={formatMoney(totals.balance)}
-          tone={totals.balance >= 0 ? "neutral" : "danger"}
-          icon={<Wallet size={16} />}
-        />
+      <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+        {totals.hasUsd && <BucketLabel>Pesos</BucketLabel>}
+        <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
+          <MetricCard label="Ingresos" value={formatMoney(totals.incomeArs)} tone="success" icon={<ArrowUpRight size={16} />} />
+          <MetricCard label="Egresos" value={formatMoney(totals.expenseArs)} tone="danger" icon={<ArrowDownRight size={16} />} />
+          <MetricCard
+            label="Balance"
+            value={formatMoney(totals.balanceArs)}
+            tone={totals.balanceArs >= 0 ? "neutral" : "danger"}
+            icon={<Wallet size={16} />}
+          />
+        </div>
+        {totals.hasUsd && (
+          <>
+            <BucketLabel>Dólares</BucketLabel>
+            <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
+              <MetricCard label="Ingresos" value={formatMoney(totals.incomeUsd, "USD")} tone="success" icon={<ArrowUpRight size={16} />} />
+              <MetricCard label="Egresos" value={formatMoney(totals.expenseUsd, "USD")} tone="danger" icon={<ArrowDownRight size={16} />} />
+              <MetricCard
+                label="Balance"
+                value={formatMoney(totals.balanceUsd, "USD")}
+                tone={totals.balanceUsd >= 0 ? "neutral" : "danger"}
+                icon={<Wallet size={16} />}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {breakdown.length > 0 && (
@@ -392,6 +416,15 @@ export function Caja() {
         expectedBuckets={expectedBuckets}
         onConfirm={handleCloseSession}
       />
+    </div>
+  );
+}
+
+/** Etiqueta de grupo de moneda sobre la fila de métricas (Pesos / Dólares). */
+function BucketLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: text.xs, fontWeight: weight.semibold, color: color.textMuted, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+      {children}
     </div>
   );
 }
