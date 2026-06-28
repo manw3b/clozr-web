@@ -51,8 +51,10 @@ export function CloseCashModal({
 
   const isDirty = () =>
     expectedBuckets.some((b) => counted(b) !== Math.round(b.expected));
-  const allFilled = expectedBuckets.every((b) => (inputs[bucketKey(b.method, b.currency)] ?? "").trim() !== "");
-  const canSubmit = allFilled && !submitting;
+  // Los inputs arrancan prefilleados con lo esperado. Si el usuario vacía uno, lo
+  // tomamos como 0 contado (es lo que ya hace `counted`): no lo obligamos a tipear
+  // ese 0 para poder cerrar. La diferencia (falta/sobra) queda registrada igual.
+  const canSubmit = !submitting;
 
   async function handleConfirm() {
     if (!canSubmit) return;
