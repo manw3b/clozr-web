@@ -270,13 +270,17 @@ export function Inventario({ onQuickSale }: { onQuickSale?: (p: Product) => void
                     <Badge tone="neutral" size="sm">
                       Sin control
                     </Badge>
-                  ) : p.stock > 0 ? (
-                    <Badge tone="success" size="sm">
-                      {p.stock} en stock
-                    </Badge>
-                  ) : (
+                  ) : p.stock <= 0 ? (
                     <Badge tone="danger" size="sm">
                       Agotado
+                    </Badge>
+                  ) : p.stockMin != null && p.stockMin > 0 && p.stock <= p.stockMin ? (
+                    <Badge tone="warning" size="sm">
+                      Bajo stock · {p.stock}
+                    </Badge>
+                  ) : (
+                    <Badge tone="success" size="sm">
+                      {p.stock} en stock
                     </Badge>
                   )}
                 </div>
@@ -964,6 +968,7 @@ function ProductModal({
   const [sku, setSku] = useState("");
   const [trackStock, setTrackStock] = useState(true);
   const [stock, setStock] = useState("");
+  const [stockMin, setStockMin] = useState("");
   const [saving, setSaving] = useState(false);
   // Quick-add: el alta muestra solo lo esencial (nombre, precio, stock). Lo
   // demás (categoría, SKU, precios por tipo, refurbish) va en "Más opciones".
@@ -1000,6 +1005,7 @@ function ProductModal({
     setSku(product?.sku ?? "");
     setTrackStock(product ? product.trackStock : true);
     setStock(product ? String(product.stock) : "");
+    setStockMin(product?.stockMin != null ? String(product.stockMin) : "");
     setShowAdvanced(!!product); // alta: colapsado; edición: expandido
     // Serializado / IMEIs: reset; en edición se cargan del server.
     setSerialized(false);
@@ -1131,6 +1137,7 @@ function ProductModal({
       // Serializado ⇒ siempre con tracking y stock = unidades disponibles.
       trackStock: serialized ? true : trackStock,
       stock: serialized ? availableCount : trackStock ? (stock ? Number(stock) : 0) : 0,
+      stockMin: stockMin ? Number(stockMin) : null,
     };
     try {
       const id = product ? (await api.updateProduct(product.id, input), product.id) : await api.createProduct(input);
@@ -1470,9 +1477,14 @@ function ProductModal({
             <span style={{ fontSize: text.sm, color: color.text }}>Llevar control de stock</span>
           </label>
           {trackStock && (
-            <ModalField label="Stock actual">
-              <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" />
-            </ModalField>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+              <ModalField label="Stock actual">
+                <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" />
+              </ModalField>
+              <ModalField label="Stock mínimo" hint="Avisa al bajar de acá">
+                <Input type="number" value={stockMin} onChange={(e) => setStockMin(e.target.value)} placeholder="—" />
+              </ModalField>
+            </div>
           )}
         </>
       )}
