@@ -428,6 +428,10 @@ interface SaleRaw {
   total?: number | null;
   total_paid?: number | null;
   balance?: number | null;
+  total_usd?: number | null;
+  total_paid_usd?: number | null;
+  balance_usd?: number | null;
+  fx_rate?: number | null;
   is_paid?: number | null;
   payment_method?: string | null;
   notes?: string | null;
@@ -448,6 +452,10 @@ function mapSale(r: SaleRaw): Sale {
     total: Number(r.total ?? 0),
     totalPaid: Number(r.total_paid ?? 0),
     balance: Number(r.balance ?? 0),
+    totalUsd: r.total_usd != null ? Number(r.total_usd) : null,
+    totalPaidUsd: r.total_paid_usd != null ? Number(r.total_paid_usd) : null,
+    balanceUsd: r.balance_usd != null ? Number(r.balance_usd) : null,
+    fxRate: r.fx_rate != null ? Number(r.fx_rate) : null,
     isPaid: !!r.is_paid,
     paymentMethod: r.payment_method ?? undefined,
     notes: r.notes ?? undefined,
@@ -544,14 +552,20 @@ export async function createSale(input: NewSaleInput): Promise<string> {
     imei: i.imei ?? null,
     unit_cost: i.unitCost ?? null,
   }));
-  // Total en ARS: los ítems en USD se convierten al dólar del momento.
-  const subtotal = items.reduce(
-    (a, i) => a + (i.currency === "USD" && rate > 0 ? i.subtotal * rate : i.subtotal),
-    0,
-  );
-  const total = subtotal;
-  const totalPaid = input.payments.reduce((a, p) => a + p.amount, 0);
+  // USD-nativo: el dólar es la fuente de verdad. Calculamos total/saldo en USD
+  // (ítems USD tal cual + ítems ARS ÷ blue) y dejamos las columnas ARS de
+  // referencia (× blue). Si no hay blue, queda como venta legacy en pesos (USD null).
+  const hasRate = rate > 0;
+  const toUsd = (amount: number, cur: Currency) => (cur === "USD" ? amount : hasRate ? amount / rate : 0);
+  const toArs = (amount: number, cur: Currency) => (cur === "USD" && hasRate ? amount * rate : amount);
+  const total = items.reduce((a, i) => a + toArs(i.subtotal, i.currency as Currency), 0);
+  const subtotal = total;
+  const totalPaid = input.payments.reduce((a, p) => a + toArs(p.amount, p.currency), 0);
   const balance = total - totalPaid;
+  const totalUsd = hasRate ? items.reduce((a, i) => a + toUsd(i.subtotal, i.currency as Currency), 0) : null;
+  const totalPaidUsd = hasRate ? input.payments.reduce((a, p) => a + toUsd(p.amount, p.currency), 0) : null;
+  const balanceUsd = hasRate && totalUsd != null && totalPaidUsd != null ? totalUsd - totalPaidUsd : null;
+  const isPaid = balanceUsd != null ? (balanceUsd <= 0.01 ? 1 : 0) : (balance <= 0.01 ? 1 : 0);
   const paymentMethod =
     input.payments.length === 1
       ? input.payments[0]!.method
@@ -569,7 +583,11 @@ export async function createSale(input: NewSaleInput): Promise<string> {
       total,
       total_paid: totalPaid,
       balance,
-      is_paid: balance <= 0.01 ? 1 : 0,
+      total_usd: totalUsd,
+      total_paid_usd: totalPaidUsd,
+      balance_usd: balanceUsd,
+      fx_rate: hasRate ? rate : null,
+      is_paid: isPaid,
       payment_method: paymentMethod,
       notes: input.notes ?? null,
       sale_date: new Date().toISOString(),
@@ -578,6 +596,8 @@ export async function createSale(input: NewSaleInput): Promise<string> {
         method: p.method,
         amount: p.amount,
         currency: p.currency,
+        amount_usd: hasRate ? toUsd(p.amount, p.currency) : null,
+        fx_rate: hasRate ? rate : null,
       })),
       trade_in: input.tradeIn
         ? {
