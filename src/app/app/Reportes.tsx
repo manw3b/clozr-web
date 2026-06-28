@@ -213,7 +213,11 @@ export function Reportes() {
     const marThis = costedRevThis - costThis;
     const marLast = costedRevLast - costLast;
     const pctThis = costedRevThis > 0 ? (marThis / costedRevThis) * 100 : 0;
-    return { revThis, marThis, pctThis, uncostedThis, marLast, hasCosted: costedRevThis > 0 };
+    // Qué parte del facturado del mes tiene costo cargado: el margen % es SOLO
+    // sobre esto, así que lo exponemos para que el número no engañe cuando hay
+    // ítems sin costo (el resto se reporta en el aviso de abajo).
+    const coveragePct = revThis > 0 ? (costedRevThis / revThis) * 100 : 0;
+    return { revThis, marThis, pctThis, uncostedThis, marLast, hasCosted: costedRevThis > 0, coveragePct };
   }, [items, unitCostOf, itemUsd]);
 
   // Productos más vendidos (histórico). Agrupa por producto del catálogo, o por
@@ -305,6 +309,14 @@ export function Reportes() {
           <MetricCard
             label="Margen %"
             value={margin.hasCosted ? `${margin.pctThis.toFixed(0)}%` : "—"}
+            sub={
+              !margin.hasCosted
+                ? "sin costos cargados"
+                : margin.coveragePct < 99.5
+                  ? `sobre ${margin.coveragePct.toFixed(0)}% del facturado`
+                  : null
+            }
+            tone={margin.hasCosted && margin.coveragePct < 99.5 ? "warning" : "neutral"}
             icon={<Percent size={16} />}
           />
         </div>
@@ -324,9 +336,9 @@ export function Reportes() {
             }}
           >
             <AlertCircle size={14} />
-            {formatMoney(Math.round(margin.uncostedThis), "USD")} facturado este mes <strong>sin costo asignado</strong> — no
-            entra en el margen. Linkeá los productos al catálogo (con costo) al cargar la venta para que el
-            margen sea exacto.
+            {formatMoney(Math.round(margin.uncostedThis), "USD")} ({(100 - margin.coveragePct).toFixed(0)}% de lo facturado
+            este mes) <strong>sin costo asignado</strong> — no entra en el margen. Linkeá los productos al catálogo
+            (con costo) al cargar la venta para que el margen sea exacto.
           </div>
         )}
       </div>
