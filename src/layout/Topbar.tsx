@@ -30,6 +30,18 @@ import type { Permission } from '../lib/permissions';
 import type { Sale, Task } from '../lib/types';
 
 export type NewAction = 'cliente' | 'venta' | 'lead' | 'tarea' | 'movimiento';
+
+// Tinte de acento por acción para distinguirlas de un vistazo. Es la paleta
+// DECORATIVA de la app (la misma que usa Avatar), NO los colores semánticos:
+// evitamos verde/amarillo/rojo (reservados a estados) salvo el rojo de marca,
+// que va para "venta" (la acción estrella).
+export const ACTION_TINT: Record<NewAction, string> = {
+  venta: '#E11D48', // marca
+  cliente: '#3B82F6', // azul
+  lead: '#8B5CF6', // violeta
+  tarea: '#06B6D4', // cyan
+  movimiento: '#F97316', // naranja
+};
 export type NotifNavigate = 'tasks' | 'cash' | 'pipeline' | 'deudas';
 
 /**
@@ -279,9 +291,10 @@ function NotificationsMenu({ onNavigate }: { onNavigate: (s: NotifNavigate) => v
 
 /* ===== "Nuevo" dropdown menu ===== */
 
+// Venta primero: es la acción estrella (igual que el hero del sheet en mobile).
 const NEW_ITEMS: Array<{ id: NewAction; label: string; shortcut: string; Icon: typeof Users; perm: Permission }> = [
-  { id: 'cliente', label: 'Cliente', shortcut: 'C', Icon: Users, perm: 'customers.write' },
   { id: 'venta', label: 'Venta', shortcut: 'V', Icon: ShoppingCart, perm: 'sales.write' },
+  { id: 'cliente', label: 'Cliente', shortcut: 'C', Icon: Users, perm: 'customers.write' },
   { id: 'lead', label: 'Lead', shortcut: 'L', Icon: GitBranch, perm: 'pipeline.write' },
   { id: 'tarea', label: 'Tarea', shortcut: 'T', Icon: CheckSquare, perm: 'tasks.write' },
   { id: 'movimiento', label: 'Movimiento de caja', shortcut: 'M', Icon: Wallet, perm: 'cash.write' },
@@ -339,6 +352,7 @@ function NewMenu({ onAction }: { onAction: (a: NewAction) => void }) {
               label={item.label}
               shortcut={item.shortcut}
               Icon={item.Icon}
+              tint={ACTION_TINT[item.id]}
               onClick={() => {
                 setOpen(false);
                 onAction(item.id);
@@ -355,11 +369,13 @@ function NewMenuItem({
   label,
   shortcut,
   Icon,
+  tint,
   onClick,
 }: {
   label: string;
   shortcut: string;
   Icon: typeof Users;
+  tint: string;
   onClick: () => void;
 }) {
   return (
@@ -378,7 +394,21 @@ function NewMenuItem({
         textAlign: 'left',
       }}
     >
-      <Icon size={14} color={color.textMuted} strokeWidth={2.2} />
+      <span
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: radius.sm,
+          background: `${tint}22`,
+          color: tint,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <Icon size={15} strokeWidth={2.2} />
+      </span>
       <span style={{ flex: 1 }}>{label}</span>
       <kbd
         style={{
