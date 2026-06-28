@@ -52,12 +52,17 @@ export function Agenda({
   customers,
   onOpenSale,
   onOpenPipeline,
+  autoNew,
+  onAutoNewConsumed,
 }: {
   sales: Sale[];
   items: PipelineItem[];
   customers: Customer[];
   onOpenSale: (id: string) => void;
   onOpenPipeline: () => void;
+  /** Abrir "Nuevo turno" al entrar (desde el menú Crear). One-shot. */
+  autoNew?: boolean;
+  onAutoNewConsumed?: () => void;
 }) {
   const { can } = usePermissions();
   const { showToast } = useUIStore();
@@ -69,6 +74,14 @@ export function Agenda({
   const [form, setForm] = useState<null | { initial?: Appointment }>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [dayKey, setDayKey] = useState<string>(() => toLocalISODate(new Date()));
+
+  // Entró desde el menú "Crear" → Turno: abrimos el alta directo (one-shot).
+  useEffect(() => {
+    if (!autoNew) return;
+    if (canWrite) setForm({});
+    onAutoNewConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoNew]);
 
   const todayKey = toLocalISODate(new Date());
   const tomorrowKey = toLocalISODate(new Date(Date.now() + 86_400_000));

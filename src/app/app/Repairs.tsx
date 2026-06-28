@@ -60,12 +60,31 @@ function repairWaText(status: RepairStatus, name?: string | null, device?: strin
   return `${greet}Te escribimos por la reparación de tu ${dev}.`;
 }
 
-export function Repairs({ customers, onOpenSale }: { customers: Customer[]; onOpenSale?: (id: string) => void }) {
+export function Repairs({
+  customers,
+  onOpenSale,
+  autoNew,
+  onAutoNewConsumed,
+}: {
+  customers: Customer[];
+  onOpenSale?: (id: string) => void;
+  /** Abrir "Nueva reparación" al entrar (desde el menú Crear). One-shot. */
+  autoNew?: boolean;
+  onAutoNewConsumed?: () => void;
+}) {
   const { can } = usePermissions();
   const { showToast } = useUIStore();
   const canWrite = can("repairs.write");
   const [repairs, setRepairs] = useState<Repair[] | null>(null);
   const [dialog, setDialog] = useState<null | { initial?: Repair }>(null);
+
+  // Entró desde el menú "Crear" → Reparación: abrimos el alta directo (one-shot).
+  useEffect(() => {
+    if (!autoNew) return;
+    if (canWrite) setDialog({});
+    onAutoNewConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoNew]);
 
   const load = useCallback(() => {
     api.listRepairs().then(setRepairs).catch(() => setRepairs([]));

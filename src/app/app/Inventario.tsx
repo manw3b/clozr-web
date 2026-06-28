@@ -44,7 +44,16 @@ function isOut(p: Product): boolean {
  * el VisualProductPicker, el tracking unidad-por-unidad (IMEIs), precios por
  * tipo de cliente y la venta rápida. Acá el stock es un número simple.
  */
-export function Inventario({ onQuickSale }: { onQuickSale?: (p: Product) => void }) {
+export function Inventario({
+  onQuickSale,
+  autoNew,
+  onAutoNewConsumed,
+}: {
+  onQuickSale?: (p: Product) => void;
+  /** Abrir "Nuevo producto" al entrar (desde el menú Crear). One-shot. */
+  autoNew?: boolean;
+  onAutoNewConsumed?: () => void;
+}) {
   const { showToast } = useUIStore();
   const blue = useBlueRate();
   const { can } = usePermissions();
@@ -59,6 +68,14 @@ export function Inventario({ onQuickSale }: { onQuickSale?: (p: Product) => void
   const [tab, setTab] = useState<FilterTab>("todos");
   const [editing, setEditing] = useState<Product | null>(null);
   const [adding, setAdding] = useState(false);
+
+  // Entró desde el menú "Crear" → Producto: abrimos el alta manual directo (one-shot).
+  useEffect(() => {
+    if (!autoNew) return;
+    if (canWrite) setAdding(true);
+    onAutoNewConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoNew]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
