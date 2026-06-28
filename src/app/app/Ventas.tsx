@@ -216,7 +216,20 @@ export function Ventas({
               {formatMoney(s.total)}
             </div>
             {statusOf(s) === "partial" && (
-              <div style={{ fontSize: 10, color: color.warning, fontWeight: weight.semibold, marginTop: 1 }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  marginTop: 3,
+                  padding: "1px 6px",
+                  borderRadius: radius.full,
+                  background: color.warningBg,
+                  color: color.warning,
+                  fontSize: 10,
+                  fontWeight: weight.bold,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
                 Falta {formatMoney(s.balance)}
               </div>
             )}
