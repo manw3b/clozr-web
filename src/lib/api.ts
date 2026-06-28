@@ -670,6 +670,8 @@ interface SaleItemReportRaw {
   unit_price?: number | null;
   subtotal?: number | null;
   unit_cost?: number | null;
+  currency?: string | null;
+  fx_rate?: number | null;
   sale_date?: string | null;
   sale_created_at?: string | null;
   seller_name?: string | null;
@@ -686,6 +688,10 @@ function mapSaleItemReport(r: SaleItemReportRaw): SaleItemReport {
     // Snapshot del costo al momento de la venta (0 en ventas viejas → el
     // consumidor cae al costo actual del catálogo como fallback).
     unitCost: r.unit_cost != null ? Number(r.unit_cost) : null,
+    // Moneda de la línea + blue congelado de la venta → Reportes pasa cada
+    // línea a US$ sin licuar (US$ tal cual; ARS ÷ fx_rate, o ÷ blue si legacy).
+    currency: r.currency === "USD" ? "USD" : r.currency === "ARS" ? "ARS" : null,
+    fxRate: r.fx_rate != null ? Number(r.fx_rate) : null,
     saleDate: toIsoUtc(r.sale_date ?? r.sale_created_at) || null,
     sellerName: r.seller_name ?? null,
   };
