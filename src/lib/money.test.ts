@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeRate, toArs, toUsd } from "@/lib/money";
+import { normalizeRate, saleAmountUsd, toArs, toUsd } from "@/lib/money";
 
 describe("normalizeRate", () => {
   it("devuelve la cotización si es positiva", () => {
@@ -50,5 +50,26 @@ describe("ida y vuelta US$↔ARS con el mismo blue", () => {
     const blue = 1200;
     const ars = toArs(150, "USD", blue); // 180_000
     expect(toUsd(ars, "ARS", blue)).toBe(150);
+  });
+});
+
+describe("saleAmountUsd (US$ congelado, con fallback legacy)", () => {
+  it("venta migrada: usa el US$ congelado tal cual (no se licúa)", () => {
+    // Aunque el ars y el blue de hoy dirían otra cosa, manda el congelado.
+    expect(saleAmountUsd(150, 999_999, 1000)).toBe(150);
+  });
+
+  it("0 congelado NO es legacy: devuelve 0 (venta saldada/regalo)", () => {
+    expect(saleAmountUsd(0, 180_000, 1200)).toBe(0);
+  });
+
+  it("legacy (null/undefined): cae al ARS ÷ blue de hoy", () => {
+    expect(saleAmountUsd(null, 180_000, 1200)).toBe(150);
+    expect(saleAmountUsd(undefined, 120_000, 1200)).toBe(100);
+  });
+
+  it("legacy sin blue → 0", () => {
+    expect(saleAmountUsd(null, 180_000, 0)).toBe(0);
+    expect(saleAmountUsd(null, 180_000, null)).toBe(0);
   });
 });

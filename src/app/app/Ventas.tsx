@@ -23,7 +23,8 @@ import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/store/usePermissions";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
-import { formatMoney, dualMoney, formatRelative, formatDateLong, formatTime } from "@/lib/format";
+import { formatMoney, dualUsd, formatRelative, formatDateLong, formatTime } from "@/lib/format";
+import { saleAmountUsd } from "@/lib/money";
 import { useBlueRate } from "@/store/dollarStore";
 import * as api from "@/lib/api";
 import { exportToCsv, timestamp } from "@/lib/csv";
@@ -161,17 +162,20 @@ export function Ventas({
     });
   }, [periodFiltered, search, statusFilter]);
 
+  // US$ es la fuente de verdad: sumamos el monto en US$ congelado de cada venta
+  // (no se licúa con el blue de hoy); las legacy sin US$ caen al ARS ÷ blue de hoy.
   const totals = useMemo(() => {
     let vendido = 0,
       cobrado = 0,
       porCobrar = 0;
     for (const s of periodFiltered) {
-      vendido += s.total;
-      cobrado += s.totalPaid;
-      if (s.balance > 0) porCobrar += s.balance;
+      vendido += saleAmountUsd(s.totalUsd, s.total, blue);
+      cobrado += saleAmountUsd(s.totalPaidUsd, s.totalPaid, blue);
+      const bal = saleAmountUsd(s.balanceUsd, s.balance, blue);
+      if (bal > 0) porCobrar += bal;
     }
     return { vendido, cobrado, porCobrar, count: periodFiltered.length };
-  }, [periodFiltered]);
+  }, [periodFiltered, blue]);
 
   const columns = useMemo<ColumnDef<Sale>[]>(
     () => [
@@ -210,31 +214,39 @@ export function Ventas({
         sortable: true,
         width: "150px",
         align: "right",
-        cell: (s) => (
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text, fontVariantNumeric: "tabular-nums" }}>
-              {formatMoney(s.total)}
-            </div>
-            {statusOf(s) === "partial" && (
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  marginTop: 3,
-                  padding: "1px 6px",
-                  borderRadius: radius.full,
-                  background: color.warningBg,
-                  color: color.warning,
-                  fontSize: 10,
-                  fontWeight: weight.bold,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                Falta {formatMoney(s.balance)}
+        cell: (s) => {
+          const m = dualUsd(saleAmountUsd(s.totalUsd, s.total, blue), blue);
+          return (
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text, fontVariantNumeric: "tabular-nums" }}>
+                {m.main}
               </div>
-            )}
-          </div>
-        ),
+              {m.sub && (
+                <div style={{ fontSize: 10, color: color.textDim, fontVariantNumeric: "tabular-nums", marginTop: 1 }}>
+                  {m.sub}
+                </div>
+              )}
+              {statusOf(s) === "partial" && (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    marginTop: 3,
+                    padding: "1px 6px",
+                    borderRadius: radius.full,
+                    background: color.warningBg,
+                    color: color.warning,
+                    fontSize: 10,
+                    fontWeight: weight.bold,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  Falta {dualUsd(saleAmountUsd(s.balanceUsd, s.balance, blue), blue).main}
+                </div>
+              )}
+            </div>
+          );
+        },
       },
       {
         id: "status",
@@ -295,7 +307,7 @@ export function Ventas({
         ),
       },
     ],
-    [ctxMenu],
+    [ctxMenu, blue],
   );
 
   const sortedRows = useMemo(
@@ -339,7 +351,7 @@ export function Ventas({
   async function remove(s: Sale) {
     const ok = await confirmAsync({
       title: "Eliminar venta",
-      message: `¿Eliminar la venta de ${s.customerName || "Consumidor final"} por ${formatMoney(s.total)}?`,
+      message: `¿Eliminar la venta de ${s.customerName || "Consumidor final"} por ${dualUsd(saleAmountUsd(s.totalUsd, s.total, blue), blue).main}?`,
       confirmText: "Eliminar",
       tone: "danger",
     });
@@ -360,9 +372,9 @@ export function Ventas({
     exportToCsv(`ventas-${timestamp()}.csv`, filtered, [
       ["Fecha", (s) => { const d = s.createdAt ?? s.saleDate; return d ? new Date(d).toLocaleString("es-AR") : ""; }],
       ["Cliente", (s) => s.customerName || "Consumidor final"],
-      ["Total", (s) => s.total],
-      ["Cobrado", (s) => s.totalPaid],
-      ["Saldo", (s) => s.balance],
+      ["Total US$", (s) => Math.round(saleAmountUsd(s.totalUsd, s.total, blue))],
+      ["Cobrado US$", (s) => Math.round(saleAmountUsd(s.totalPaidUsd, s.totalPaid, blue))],
+      ["Saldo US$", (s) => Math.round(saleAmountUsd(s.balanceUsd, s.balance, blue))],
       ["Estado", (s) => (statusOf(s) === "paid" ? "Pagado" : statusOf(s) === "partial" ? "Parcial" : "Pendiente")],
       ["Pago", (s) => (s.paymentMethod ? PAYMENT_METHOD_LABELS[s.paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? s.paymentMethod : "")],
       ["Vendedor", (s) => s.sellerName ?? ""],
@@ -386,7 +398,7 @@ export function Ventas({
     <div style={{ display: "flex", flexDirection: "column", gap: space[5], height: "100%" }}>
       <PageHeader
         title="Ventas"
-        subtitle={loading ? "Cargando…" : `${filtered.length} ${filtered.length === 1 ? "venta" : "ventas"} · ${dualMoney(totals.vendido, blue).main} en el período`}
+        subtitle={loading ? "Cargando…" : `${filtered.length} ${filtered.length === 1 ? "venta" : "ventas"} · ${dualUsd(totals.vendido, blue).main} en el período`}
         actions={
           <div style={{ display: "flex", gap: space[2] }}>
             <Button variant="secondary" size="md" iconLeft={<Download size={15} />} onClick={exportCsv} disabled={filtered.length === 0}>
@@ -402,9 +414,9 @@ export function Ventas({
       />
 
       <div className="cz-metric-grid">
-        <MetricCard label="Vendido" value={dualMoney(totals.vendido, blue).main} sub={dualMoney(totals.vendido, blue).sub} />
-        <MetricCard label="Cobrado" value={dualMoney(totals.cobrado, blue).main} sub={dualMoney(totals.cobrado, blue).sub} tone="success" />
-        <MetricCard label="Por cobrar" value={dualMoney(totals.porCobrar, blue).main} sub={dualMoney(totals.porCobrar, blue).sub} tone={totals.porCobrar > 0 ? "warning" : "neutral"} />
+        <MetricCard label="Vendido" value={dualUsd(totals.vendido, blue).main} sub={dualUsd(totals.vendido, blue).sub} />
+        <MetricCard label="Cobrado" value={dualUsd(totals.cobrado, blue).main} sub={dualUsd(totals.cobrado, blue).sub} tone="success" />
+        <MetricCard label="Por cobrar" value={dualUsd(totals.porCobrar, blue).main} sub={dualUsd(totals.porCobrar, blue).sub} tone={totals.porCobrar > 0 ? "warning" : "neutral"} />
         <MetricCard label="Ventas" value={String(totals.count)} />
       </div>
 
@@ -504,8 +516,11 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
     reload();
   }, [reload]);
 
+  const blue = useBlueRate();
   const st = statusOf(sale);
-  const remaining = sale.balance;
+  const remaining = sale.balance; // ARS (saldo de referencia) — lo usa el cobro legacy
+  const totalDual = dualUsd(saleAmountUsd(sale.totalUsd, sale.total, blue), blue);
+  const remainingUsd = dualUsd(saleAmountUsd(sale.balanceUsd, sale.balance, blue), blue);
 
   async function markPaid() {
     try {
@@ -587,15 +602,20 @@ function SaleDrawer({ sale, customerPhone, onClose, onChanged, canWrite }: { sal
           Total de la venta
         </div>
         <div style={{ fontSize: text["3xl"], fontWeight: weight.bold, color: color.text, letterSpacing: "-0.8px", lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
-          {formatMoney(sale.total)}
+          {totalDual.main}
         </div>
+        {totalDual.sub && (
+          <div style={{ fontSize: text.sm, color: color.textMuted, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
+            {totalDual.sub}
+          </div>
+        )}
         <div style={{ marginTop: space[2], display: "inline-flex" }}>
           {st === "paid" ? <Badge tone="success" size="md" dot>Pagado</Badge> : st === "partial" ? <Badge tone="warning" size="md" dot>Parcial</Badge> : <Badge tone="danger" size="md" dot>Sin pagar</Badge>}
         </div>
         {st !== "paid" && (
           <div style={{ marginTop: space[3], padding: `${space[2]} ${space[3]}`, background: color.warningBg, border: `1px solid ${color.warning}`, borderRadius: radius.md, display: "inline-flex", alignItems: "center", gap: space[2], fontSize: text.sm, fontWeight: weight.semibold, color: color.warning }}>
             <AlertCircle size={14} strokeWidth={2.4} />
-            <span>Falta {formatMoney(remaining)}</span>
+            <span>Falta {remainingUsd.main}</span>
           </div>
         )}
       </div>
