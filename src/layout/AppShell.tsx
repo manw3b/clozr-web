@@ -1,7 +1,7 @@
 import { ReactNode, useState, type CSSProperties } from 'react';
 import { Home, ShoppingCart, Plus, CalendarDays, Menu as MenuIcon, Users, GitBranch, CheckSquare, Wallet, ChevronRight, type LucideIcon } from 'lucide-react';
 import { Sidebar } from './Sidebar';
-import { Topbar, type NewAction, type NotifNavigate } from './Topbar';
+import { Topbar, ACTION_TINT, type NewAction, type NotifNavigate } from './Topbar';
 import { color, radius, shadow, space, text, weight } from '../tokens';
 import { useIsMobile } from '../lib/useIsMobile';
 import { usePermissions } from '../store/usePermissions';
@@ -365,8 +365,8 @@ function NewActionSheet({ onAction, onClose }: { onAction: (a: NewAction) => voi
                         width: 38,
                         height: 38,
                         borderRadius: radius.md,
-                        background: color.primaryBg,
-                        color: color.primary,
+                        background: `${ACTION_TINT[a.id]}22`,
+                        color: ACTION_TINT[a.id],
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
