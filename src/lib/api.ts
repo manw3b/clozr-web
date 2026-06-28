@@ -40,6 +40,7 @@ import type {
   RepairStatus,
 } from "./types";
 import { stagesForIndustry } from "./types";
+import { useDollarStore } from "@/store/dollarStore";
 
 export const WORKER_URL =
   process.env.NEXT_PUBLIC_WORKER_URL ?? "https://clozr-auth.pyter-import.workers.dev";
@@ -615,12 +616,23 @@ export async function createSale(input: NewSaleInput): Promise<string> {
 
 export async function addPayment(
   saleId: string,
-  p: { method: string; amount: number; currency: Currency },
+  p: { method: string; amount: number; currency: Currency; usdToArs?: number },
 ): Promise<void> {
+  // US$ es la moneda madre: congelamos amount_usd + fx_rate en cada pago para
+  // que el saldo no se licúe con el blue. Si el pago es en US$, amount_usd = amount.
+  // Si es en pesos, lo convertimos al blue del momento (param o store).
+  const rate = p.usdToArs && p.usdToArs > 0 ? p.usdToArs : useDollarStore.getState().blue ?? 0;
+  const amountUsd = p.currency === "USD" ? p.amount : rate > 0 ? p.amount / rate : null;
   // El Worker recalcula total_paid/balance/is_paid al agregar el pago.
   await req(`/workspaces/${ws()}/sales/${saleId}/payments`, {
     method: "POST",
-    body: JSON.stringify({ method: p.method, amount: p.amount, currency: p.currency }),
+    body: JSON.stringify({
+      method: p.method,
+      amount: p.amount,
+      currency: p.currency,
+      amount_usd: amountUsd,
+      fx_rate: rate > 0 ? rate : null,
+    }),
   });
 }
 
