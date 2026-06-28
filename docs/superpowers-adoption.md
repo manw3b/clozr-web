@@ -51,9 +51,19 @@ aprobado).
 /plugin install superpowers@superpowers-marketplace
 ```
 
-> Ojo: instalar el plugin afecta el **entorno de Claude Code del dueño** (es
-> global), no el repo. Para que viaje con el proyecto hay que **vendorizar**
-> skills adaptadas en `.claude/skills/` (ver abajo).
+> **Importante para Claude Code en la nube (compu + celu):** un `/plugin install`
+> a secas queda en **user scope** (`~/.claude/settings.json` de tu máquina) y
+> **NO viaja** a las sesiones en la nube ni al celular. En cada sesión de la nube
+> sólo se carga lo que está **commiteado en el repo**. Por eso el marketplace y el
+> plugin ya quedaron declarados en **`.claude/settings.json`** de este repo
+> (`extraKnownMarketplaces` + `enabledPlugins`): se instala solo al arrancar cada
+> sesión, en la compu y en el celu. Requiere acceso de red a GitHub (el entorno
+> `clozr` lo tiene).
+>
+> **Para apagarlo** (si los "HARD-GATES" te frenan el estilo ship-rápido): borrá
+> la línea de `enabledPlugins` en `.claude/settings.json` — el marketplace queda
+> registrado y lo prendés cuando quieras. Alternativa más liviana: vendorizar solo
+> las skills que sí querés en `.claude/skills/` (ver abajo), sin prender todo.
 
 ## Cómo encaja con clozr
 
