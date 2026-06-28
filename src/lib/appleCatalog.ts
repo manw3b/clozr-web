@@ -3101,27 +3101,27 @@ export const APPLE_CATALOG: CatCategory[] = [
               {
                 "color": "Midnight",
                 "colorHex": "#1C1C1E",
-                "image": null
+                "image": "/products/airpods/AirPods_Max_2_Midnight.png"
               },
               {
                 "color": "Blue",
                 "colorHex": "#4A7BA8",
-                "image": null
+                "image": "/products/airpods/AirPods_Max_2_Blue.png"
               },
               {
                 "color": "Orange",
                 "colorHex": "#D4621A",
-                "image": null
+                "image": "/products/airpods/AirPods_Max_2_Orange.png"
               },
               {
                 "color": "Purple",
                 "colorHex": "#9B7FB6",
-                "image": null
+                "image": "/products/airpods/AirPods_Max_2_Purple.png"
               },
               {
                 "color": "Starlight",
                 "colorHex": "#F5F0E8",
-                "image": null
+                "image": "/products/airpods/AirPods_Max_2_Starlight.png"
               }
             ],
             "storages": []
