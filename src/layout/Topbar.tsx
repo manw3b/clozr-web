@@ -14,6 +14,9 @@ import {
   Wallet,
   Check,
   Menu,
+  CalendarDays,
+  Package,
+  Wrench,
 } from 'lucide-react';
 import { color, radius, space, text, weight } from '../tokens';
 import { Button } from '../components/Button';
@@ -29,7 +32,7 @@ import { formatMoney } from '../lib/format';
 import type { Permission } from '../lib/permissions';
 import type { Sale, Task } from '../lib/types';
 
-export type NewAction = 'cliente' | 'venta' | 'lead' | 'tarea' | 'movimiento';
+export type NewAction = 'cliente' | 'venta' | 'lead' | 'tarea' | 'movimiento' | 'turno' | 'producto' | 'reparacion';
 
 // Tinte de acento por acción para distinguirlas de un vistazo. Es la paleta
 // DECORATIVA de la app (la misma que usa Avatar), NO los colores semánticos:
@@ -39,7 +42,10 @@ export const ACTION_TINT: Record<NewAction, string> = {
   venta: '#E11D48', // marca
   cliente: '#3B82F6', // azul
   lead: '#8B5CF6', // violeta
+  turno: '#6366F1', // indigo
   tarea: '#06B6D4', // cyan
+  producto: '#A855F7', // púrpura
+  reparacion: '#14B8A6', // teal
   movimiento: '#F97316', // naranja
 };
 export type NotifNavigate = 'tasks' | 'cash' | 'pipeline' | 'deudas';
@@ -292,11 +298,14 @@ function NotificationsMenu({ onNavigate }: { onNavigate: (s: NotifNavigate) => v
 /* ===== "Nuevo" dropdown menu ===== */
 
 // Venta primero: es la acción estrella (igual que el hero del sheet en mobile).
-const NEW_ITEMS: Array<{ id: NewAction; label: string; shortcut: string; Icon: typeof Users; perm: Permission }> = [
+const NEW_ITEMS: Array<{ id: NewAction; label: string; shortcut?: string; Icon: typeof Users; perm: Permission }> = [
   { id: 'venta', label: 'Venta', shortcut: 'V', Icon: ShoppingCart, perm: 'sales.write' },
   { id: 'cliente', label: 'Cliente', shortcut: 'C', Icon: Users, perm: 'customers.write' },
   { id: 'lead', label: 'Lead', shortcut: 'L', Icon: GitBranch, perm: 'pipeline.write' },
+  { id: 'turno', label: 'Turno', Icon: CalendarDays, perm: 'sales.write' },
   { id: 'tarea', label: 'Tarea', shortcut: 'T', Icon: CheckSquare, perm: 'tasks.write' },
+  { id: 'producto', label: 'Producto', Icon: Package, perm: 'inventory.write' },
+  { id: 'reparacion', label: 'Reparación', Icon: Wrench, perm: 'repairs.write' },
   { id: 'movimiento', label: 'Movimiento de caja', shortcut: 'M', Icon: Wallet, perm: 'cash.write' },
 ];
 
@@ -373,7 +382,7 @@ function NewMenuItem({
   onClick,
 }: {
   label: string;
-  shortcut: string;
+  shortcut?: string;
   Icon: typeof Users;
   tint: string;
   onClick: () => void;
@@ -410,20 +419,22 @@ function NewMenuItem({
         <Icon size={15} strokeWidth={2.2} />
       </span>
       <span style={{ flex: 1 }}>{label}</span>
-      <kbd
-        style={{
-          fontSize: 11,
-          fontWeight: weight.medium,
-          color: color.textMuted,
-          padding: '1px 5px',
-          background: color.bg,
-          border: `1px solid ${color.border}`,
-          borderRadius: radius.sm,
-          fontFamily: 'inherit',
-        }}
-      >
-        {shortcut}
-      </kbd>
+      {shortcut && (
+        <kbd
+          style={{
+            fontSize: 11,
+            fontWeight: weight.medium,
+            color: color.textMuted,
+            padding: '1px 5px',
+            background: color.bg,
+            border: `1px solid ${color.border}`,
+            borderRadius: radius.sm,
+            fontFamily: 'inherit',
+          }}
+        >
+          {shortcut}
+        </kbd>
+      )}
     </button>
   );
 }

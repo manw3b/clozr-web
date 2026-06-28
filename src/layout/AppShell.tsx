@@ -1,5 +1,5 @@
 import { ReactNode, useState, type CSSProperties } from 'react';
-import { Home, ShoppingCart, Plus, CalendarDays, Menu as MenuIcon, Users, GitBranch, CheckSquare, Wallet, ChevronRight, type LucideIcon } from 'lucide-react';
+import { Home, ShoppingCart, Plus, CalendarDays, Menu as MenuIcon, Users, GitBranch, CheckSquare, Wallet, ChevronRight, Package, Wrench, type LucideIcon } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Topbar, ACTION_TINT, type NewAction, type NotifNavigate } from './Topbar';
 import { color, radius, shadow, space, text, weight } from '../tokens';
@@ -233,7 +233,10 @@ const SHEET_ACTIONS: Array<{ id: NewAction; label: string; short: string; desc: 
   { id: 'venta', label: 'Nueva venta', short: 'Venta', desc: 'Registrá una venta y cobrá', Icon: ShoppingCart, perm: 'sales.write' },
   { id: 'cliente', label: 'Nuevo cliente', short: 'Cliente', desc: 'Sumá un cliente al CRM', Icon: Users, perm: 'customers.write' },
   { id: 'lead', label: 'Nuevo lead', short: 'Lead', desc: 'Una oportunidad al pipeline', Icon: GitBranch, perm: 'pipeline.write' },
+  { id: 'turno', label: 'Nuevo turno', short: 'Turno', desc: 'Agendá una cita', Icon: CalendarDays, perm: 'sales.write' },
   { id: 'tarea', label: 'Nueva tarea', short: 'Tarea', desc: 'Un pendiente para seguir', Icon: CheckSquare, perm: 'tasks.write' },
+  { id: 'producto', label: 'Nuevo producto', short: 'Producto', desc: 'Cargá stock al catálogo', Icon: Package, perm: 'inventory.write' },
+  { id: 'reparacion', label: 'Nueva reparación', short: 'Reparación', desc: 'Orden de taller', Icon: Wrench, perm: 'repairs.write' },
   { id: 'movimiento', label: 'Movimiento de caja', short: 'Caja', desc: 'Ingreso o egreso', Icon: Wallet, perm: 'cash.write' },
 ];
 
