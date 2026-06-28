@@ -143,8 +143,83 @@ negocio. Para tareas simples (reescribir un WhatsApp) puede ir un modelo más
 chico/rápido y barato — el Worker elige por tipo de acción. (IDs de modelo
 vigentes: ver la doc de la API de Anthropic al implementarlo en el Worker.)
 
+## 8. Implementación en el Worker — paso a paso (criollo)
+
+> El Worker ya llama a Claude para el chat. Esto **agrega tool-use** encima.
+> Pseudocódigo orientativo (no es código del repo web).
+
+### 8.1 Pasarle tools a Claude
+
+En la llamada a Anthropic (Messages API), sumás `tools`:
+
+```ts
+const tools = [
+  { name: "ventas_resumen", description: "Totales de ventas del workspace en US$ por período",
+    input_schema: { type: "object", properties: { periodo: { type: "string", enum: ["hoy","semana","mes"] } }, required: ["periodo"] } },
+  { name: "deudas_listar", description: "Clientes con saldo pendiente",
+    input_schema: { type: "object", properties: {} } },
+  // … + las de escritura (8.4)
+];
+let res = await anthropic.messages.create({ model, max_tokens, system, tools, messages });
+```
+
+### 8.2 El loop de tool-use
+
+Claude responde con `stop_reason: "tool_use"`. Por cada bloque `tool_use`:
+ejecutás la tool, devolvés `tool_result`, y volvés a llamar hasta `end_turn`.
+
+```ts
+while (res.stop_reason === "tool_use") {
+  const results = [];
+  for (const b of res.content.filter(b => b.type === "tool_use")) {
+    const out = await runTool(b.name, b.input, { workspaceId, role }); // ← guard multi-tenant acá
+    results.push({ type: "tool_result", tool_use_id: b.id, content: JSON.stringify(out) });
+  }
+  messages.push({ role: "assistant", content: res.content });
+  messages.push({ role: "user", content: results });
+  res = await anthropic.messages.create({ model, max_tokens, system, tools, messages });
+}
+```
+
+### 8.3 Tools de lectura (Nivel 1)
+
+`runTool("ventas_resumen", {periodo}, ctx)` → `SELECT … WHERE workspace_id = ? …`.
+El `workspace_id` sale **del JWT**, NUNCA del input de Claude (riesgo #1).
+
+### 8.4 Tools de escritura (Nivel 2/3) — NO ejecutan, PROPONEN
+
+La tool de escritura **no toca la DB**: devuelve una propuesta que el Worker manda
+como `action` a la web:
+- Nivel 2 → `{ type: "open_form", form: "sale", prefill: {…} }`
+- Nivel 3 → `{ type: "confirm_execute", tool: "crear_venta", summary, payload }`
+
+La escritura real pasa por `/ai/execute` cuando el usuario confirma (8.5).
+
+### 8.5 Endpoint `POST /workspaces/:wid/ai/execute`
+
+```ts
+const auth = await requireAuth(req, env); if (!auth) return json({error:"unauthorized"}, 401);
+const role = await getMembershipRole(env, wid, auth.userId);
+if (!role || !ROLES_WRITE_FOR[tool]?.has(role)) return json({error:"forbidden"}, 403);
+const result = await executeTool(tool, payload, { workspaceId: wid }); // reusa la lógica de venta/turno/caja
+await logAiAction(env, wid, auth.userId, tool, payload, result);       // auditoría
+return json({ ok: true, result, summary });
+```
+
+### 8.6 System prompt
+
+Persona (asistente de un revendedor argentino de celulares), reglas (US$-nativo,
+**no inventar montos**, **proponer no ejecutar**), y contexto base (negocio, fecha,
+blue). El resto lo traen las tools on-demand.
+
+### 8.7 Modelo
+
+El Claude más nuevo con tool-use para razonar sobre el negocio; uno más chico/
+rápido y barato para tareas simples (reescribir un WhatsApp). El Worker elige por
+tipo de acción.
+
 ---
 
 > **Resumen para el dueño:** la web queda lista para mostrar y confirmar acciones;
 > el salto a "agente que ejecuta" se hace en el Worker (tools + `/ai/execute` +
-> barandas). Este doc es el contrato para que ambos lados encajen.
+> barandas). Este doc es el contrato + la guía para que ambos lados encajen.
