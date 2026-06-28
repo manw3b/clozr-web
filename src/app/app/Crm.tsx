@@ -158,8 +158,13 @@ export default function Crm({
     if (action === "cliente") { if (can("customers.write")) setModal({ kind: "customer" }); }
     else if (action === "venta") { if (can("sales.write")) setModal({ kind: "sale" }); }
     else if (action === "lead") { if (can("pipeline.write")) setModal({ kind: "item" }); }
+    // Las que se crean desde su propia pantalla: navegamos ahí (su CTA "+ Nuevo"
+    // abre el alta). El menú ya filtró por permiso, así que la acción es válida.
     else if (action === "tarea") setView("tasks");
-    else flash("Próximamente");
+    else if (action === "turno") setView("agenda");
+    else if (action === "producto") setView("inventory");
+    else if (action === "reparacion") setView("repairs");
+    else if (action === "movimiento") setView("cash");
   }
 
   async function loadAll() {
