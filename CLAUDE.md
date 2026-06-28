@@ -85,8 +85,9 @@ en web). Reglas:
 
 1. Desarrollá en la **branch que asigna el harness** (`claude/...`). **Nunca**
    pushees directo a `main`.
-2. Antes de mergear, **siempre** verificá: `npx tsc --noEmit` y `npm run build`
-   (ambos en verde). El build es el gate real (Next corre TS ahí también).
+2. Antes de mergear, **siempre** verificá: `npx tsc --noEmit`, `npm run build` y
+   `npm test` (los tres en verde). El build es el gate real (Next corre TS ahí
+   también); `npm test` (vitest) cubre las funciones puras de plata/identidad.
 3. Commit con mensaje **en español**, claro y descriptivo (mirá el `git log`
    para el estilo). El harness ya agrega el footer `Co-Authored-By` /
    `Claude-Session`.
