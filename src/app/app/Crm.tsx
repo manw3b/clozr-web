@@ -1763,6 +1763,21 @@ function SaleModal({
                 {l.description.trim() !== "" && (
                   <div className="flex flex-wrap items-center gap-2">
                     <LineStatusChip status={st} />
+                    {Number(l.unitPrice) > 0 && (() => {
+                      // Lectura formateada del precio + su equivalente en la otra
+                      // moneda al blue — para que "1015050" se lea "$ 1.015.050 ≈ US$ 670".
+                      const cur = l.currency ?? "ARS";
+                      const p = Number(l.unitPrice) || 0;
+                      const ref =
+                        cur === "USD"
+                          ? rate > 0 ? ` · ≈ ${money(Math.round(p * rate), "ARS")}` : ""
+                          : rate > 0 ? ` · ≈ ${money(Math.round(p / rate), "USD")}` : "";
+                      return (
+                        <span className="whitespace-nowrap text-xs text-text-dim">
+                          {money(p, cur)}{ref}
+                        </span>
+                      );
+                    })()}
                     <span className="flex-1" />
                     {serial ? (
                       // Producto serializado → elegir la unidad exacta que sale.
