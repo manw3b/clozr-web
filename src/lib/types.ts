@@ -746,6 +746,10 @@ export interface SaleItemReport {
   /** Costo unitario congelado en la venta (snapshot). null/0 = sin snapshot
    *  (venta vieja) → el consumidor usa el costo actual del catálogo. */
   unitCost?: number | null;
+  /** Moneda de la línea (US$ o ARS). null = legacy (se asume ARS). */
+  currency?: Currency | null;
+  /** Blue congelado de la venta (para pasar la línea ARS a US$ sin licuar). */
+  fxRate?: number | null;
   saleDate?: string | null;
   sellerName?: string | null;
 }

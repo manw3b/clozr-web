@@ -6,7 +6,7 @@ import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { useUIStore } from "@/store/uiStore";
 import { color, radius, space, text, weight } from "@/tokens";
-import { formatMoney, dualMoney } from "@/lib/format";
+import { formatMoney, dualUsd } from "@/lib/format";
 import { useBlueRate } from "@/store/dollarStore";
 import { useIsMobile } from "@/lib/useIsMobile";
 import * as api from "@/lib/api";
@@ -17,11 +17,12 @@ function monthKey(d: Date): string {
 }
 
 /**
- * Vista Reportes — port web (v1) de clozr/src/pages/reportes/Reportes.tsx.
- * Calcula client-side desde las ventas (api.listSales): facturado/cobrado/
- * por-cobrar/ticket, tendencia mensual, top clientes y por vendedor — todo
- * en ARS. PENDIENTE (necesita ítems de venta + costos del catálogo): margen,
- * top productos y por categoría. Esos llegan cuando portemos Inventario/ítems.
+ * Vista Reportes — calcula client-side desde las ventas (api.listSales).
+ * US$-nativo (Fase 4): todas las métricas usan el monto en US$ congelado de
+ * cada venta (no se licúa con el blue); las ventas legacy sin US$ caen al ARS
+ * convertido al blue de hoy. El margen / top productos cruzan los ítems con el
+ * costo del catálogo y pasan cada línea a US$ por su moneda + el blue congelado
+ * de la venta. El peso (× blue) queda siempre como referencia "≈".
  */
 export function Reportes() {
   const { showToast } = useUIStore();
@@ -57,28 +58,52 @@ export function Reportes() {
     load();
   }, [load]);
 
+  // US$ es la fuente de verdad. Para las ventas ya migradas usamos el monto en
+  // US$ congelado; las legacy (sin US$) caen al ARS convertido al blue de hoy —
+  // igual que la versión vieja, así nunca mostramos algo peor que antes.
+  const saleUsd = useCallback(
+    (usd: number | null | undefined, ars: number) => (usd != null ? usd : blue && blue > 0 ? ars / blue : 0),
+    [blue],
+  );
+  // Pasa un monto de una línea de venta a US$: US$ tal cual; ARS ÷ blue
+  // congelado de la venta (o ÷ blue de hoy si la venta es legacy sin fx_rate).
+  const itemUsd = useCallback(
+    (amount: number, it: SaleItemReport) => {
+      if (it.currency === "USD") return amount;
+      const r = it.fxRate && it.fxRate > 0 ? it.fxRate : blue && blue > 0 ? blue : 0;
+      return r > 0 ? amount / r : 0;
+    },
+    [blue],
+  );
+
   const kpis = useMemo(() => {
-    const facturado = sales.reduce((s, v) => s + v.total, 0);
-    const cobrado = sales.reduce((s, v) => s + v.totalPaid, 0);
-    const porCobrar = sales.reduce((s, v) => s + (v.balance > 0 ? v.balance : 0), 0);
+    const facturado = sales.reduce((s, v) => s + saleUsd(v.totalUsd, v.total), 0);
+    const cobrado = sales.reduce((s, v) => s + saleUsd(v.totalPaidUsd, v.totalPaid), 0);
+    const porCobrar = sales.reduce((s, v) => {
+      const bal = saleUsd(v.balanceUsd, v.balance);
+      return s + (bal > 0 ? bal : 0);
+    }, 0);
     const ticket = sales.length > 0 ? facturado / sales.length : 0;
     return { facturado, cobrado, porCobrar, ticket, count: sales.length };
-  }, [sales]);
+  }, [sales, saleUsd]);
 
   // Ventas vs Service: facturación de reparaciones entregadas vs ventas de
   // productos. Sin doble conteo: cobrar una reparación crea una venta (saleId),
   // así que esas ventas se excluyen del lado "productos".
   const serviceSplit = useMemo(() => {
-    const service = repairs
+    // Las reparaciones no llevan US$ congelado → convertimos al blue de hoy
+    // (referencia). Las ventas de productos usan su US$ congelado.
+    const serviceArs = repairs
       .filter((r) => r.status === "delivered")
       .reduce((acc, r) => acc + (r.partsCost ?? 0) + (r.laborCost ?? 0), 0);
+    const service = blue && blue > 0 ? serviceArs / blue : 0;
     const repairSaleIds = new Set(repairs.map((r) => r.saleId).filter(Boolean) as string[]);
     const productSales = sales
       .filter((s) => !repairSaleIds.has(s.id))
-      .reduce((acc, v) => acc + v.total, 0);
+      .reduce((acc, v) => acc + saleUsd(v.totalUsd, v.total), 0);
     const total = service + productSales;
     return { service, productSales, total, servicePct: total > 0 ? (service / total) * 100 : 0 };
-  }, [repairs, sales]);
+  }, [repairs, sales, blue, saleUsd]);
 
   const monthly = useMemo(() => {
     const now = new Date();
@@ -94,10 +119,10 @@ export function Reportes() {
       const d = new Date(dt);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const b = byKey.get(key);
-      if (b) b.revenue += s.total;
+      if (b) b.revenue += saleUsd(s.totalUsd, s.total);
     }
     return buckets;
-  }, [sales]);
+  }, [sales, saleUsd]);
   const maxMonthly = Math.max(1, ...monthly.map((m) => m.revenue));
 
   const topCustomers = useMemo(() => {
@@ -106,24 +131,24 @@ export function Reportes() {
       const id = s.customerId ?? "no-client";
       const name = s.customerName ?? "Sin cliente";
       const c = map.get(id) ?? { name, total: 0, count: 0 };
-      c.total += s.total;
+      c.total += saleUsd(s.totalUsd, s.total);
       c.count += 1;
       map.set(id, c);
     }
     return [...map.values()].sort((a, b) => b.total - a.total).slice(0, 8);
-  }, [sales]);
+  }, [sales, saleUsd]);
 
   const bySeller = useMemo(() => {
     const map = new Map<string, { name: string; total: number; count: number }>();
     for (const s of sales) {
       const name = s.sellerName?.trim() || "Sin asignar";
       const c = map.get(name) ?? { name, total: 0, count: 0 };
-      c.total += s.total;
+      c.total += saleUsd(s.totalUsd, s.total);
       c.count += 1;
       map.set(name, c);
     }
     return [...map.values()].sort((a, b) => b.total - a.total);
-  }, [sales]);
+  }, [sales, saleUsd]);
 
   // Fase ④: facturación por origen ("viene de"). Solo ventas con origen
   // registrado (las legacy sin origen no ensucian el ranking).
@@ -133,14 +158,14 @@ export function Reportes() {
       const origin = s.origin?.trim();
       if (!origin) continue;
       const c = map.get(origin) ?? { name: origin, total: 0, count: 0 };
-      c.total += s.total;
+      c.total += saleUsd(s.totalUsd, s.total);
       c.count += 1;
       map.set(origin, c);
     }
     const rows = [...map.values()].sort((a, b) => b.total - a.total);
     const total = rows.reduce((s, x) => s + x.total, 0);
     return { rows, total };
-  }, [sales]);
+  }, [sales, saleUsd]);
 
   /* ── v2: margen + productos (cruzando ítems con el costo del catálogo) ── */
   const catalogById = useMemo(() => new Map(catalog.map((p) => [p.id, p])), [catalog]);
@@ -174,10 +199,10 @@ export function Reportes() {
       if (!it.saleDate) continue;
       const k = monthKey(new Date(it.saleDate));
       if (k !== thisK && k !== lastK) continue;
-      const rev = it.subtotal || it.unitPrice * it.quantity;
+      const rev = itemUsd(it.subtotal || it.unitPrice * it.quantity, it);
       const unitCost = unitCostOf(it);
       const hasCost = unitCost != null;
-      const cost = hasCost ? unitCost * it.quantity : 0;
+      const cost = hasCost ? itemUsd(unitCost * it.quantity, it) : 0;
       if (k === thisK) {
         revThis += rev;
         if (hasCost) { costedRevThis += rev; costThis += cost; } else { uncostedThis += rev; }
@@ -189,7 +214,7 @@ export function Reportes() {
     const marLast = costedRevLast - costLast;
     const pctThis = costedRevThis > 0 ? (marThis / costedRevThis) * 100 : 0;
     return { revThis, marThis, pctThis, uncostedThis, marLast, hasCosted: costedRevThis > 0 };
-  }, [items, unitCostOf]);
+  }, [items, unitCostOf, itemUsd]);
 
   // Productos más vendidos (histórico). Agrupa por producto del catálogo, o por
   // descripción si el ítem es de texto libre.
@@ -202,9 +227,9 @@ export function Reportes() {
       const e = map.get(key) ?? { name, units: 0, revenue: 0, cost: 0, costed: false };
       e.name = name;
       e.units += it.quantity;
-      e.revenue += it.subtotal || it.unitPrice * it.quantity;
+      e.revenue += itemUsd(it.subtotal || it.unitPrice * it.quantity, it);
       const unitCost = unitCostOf(it);
-      if (unitCost != null) { e.cost += unitCost * it.quantity; e.costed = true; }
+      if (unitCost != null) { e.cost += itemUsd(unitCost * it.quantity, it); e.costed = true; }
       map.set(key, e);
     }
     return [...map.values()]
@@ -215,7 +240,7 @@ export function Reportes() {
       }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10);
-  }, [items, unitCostOf, catalogById]);
+  }, [items, unitCostOf, catalogById, itemUsd]);
 
   const hasData = !loading && sales.length > 0;
   const hasItems = !loading && items.length > 0;
@@ -224,20 +249,20 @@ export function Reportes() {
     <div style={{ display: "flex", flexDirection: "column", gap: space[6] }}>
       <PageHeader
         title="Reportes"
-        subtitle={loading ? "Cargando…" : `${kpis.count} venta${kpis.count === 1 ? "" : "s"} · US$ y ARS (al blue)`}
+        subtitle={loading ? "Cargando…" : `${kpis.count} venta${kpis.count === 1 ? "" : "s"} · en US$ (≈ pesos al blue)`}
       />
 
       <div className="cz-metric-grid">
-        <MetricCard label="Facturado" value={dualMoney(kpis.facturado, blue).main} sub={dualMoney(kpis.facturado, blue).sub} icon={<DollarSign size={16} />} />
-        <MetricCard label="Cobrado" value={dualMoney(kpis.cobrado, blue).main} sub={dualMoney(kpis.cobrado, blue).sub} tone="success" icon={<HandCoins size={16} />} />
+        <MetricCard label="Facturado" value={dualUsd(kpis.facturado, blue).main} sub={dualUsd(kpis.facturado, blue).sub} icon={<DollarSign size={16} />} />
+        <MetricCard label="Cobrado" value={dualUsd(kpis.cobrado, blue).main} sub={dualUsd(kpis.cobrado, blue).sub} tone="success" icon={<HandCoins size={16} />} />
         <MetricCard
           label="Por cobrar"
-          value={dualMoney(kpis.porCobrar, blue).main}
-          sub={dualMoney(kpis.porCobrar, blue).sub}
+          value={dualUsd(kpis.porCobrar, blue).main}
+          sub={dualUsd(kpis.porCobrar, blue).sub}
           tone={kpis.porCobrar > 0 ? "warning" : "neutral"}
           icon={<TrendingDown size={16} />}
         />
-        <MetricCard label="Ticket promedio" value={dualMoney(kpis.ticket, blue).main} sub={dualMoney(kpis.ticket, blue).sub} icon={<ShoppingCart size={16} />} />
+        <MetricCard label="Ticket promedio" value={dualUsd(kpis.ticket, blue).main} sub={dualUsd(kpis.ticket, blue).sub} icon={<ShoppingCart size={16} />} />
       </div>
 
       {/* Ventas vs Service (taller) */}
@@ -246,8 +271,8 @@ export function Reportes() {
           <Wrench size={16} color={color.primary} /> Ventas vs Service
         </h2>
         <div className="cz-metric-grid" style={{ ["--cz-cols"]: 2 } as React.CSSProperties}>
-          <MetricCard label="Ventas de productos" value={dualMoney(serviceSplit.productSales, blue).main} sub={dualMoney(serviceSplit.productSales, blue).sub} icon={<ShoppingCart size={16} />} />
-          <MetricCard label="Service (taller)" value={dualMoney(serviceSplit.service, blue).main} sub={dualMoney(serviceSplit.service, blue).sub} tone="success" icon={<Wrench size={16} />} />
+          <MetricCard label="Ventas de productos" value={dualUsd(serviceSplit.productSales, blue).main} sub={dualUsd(serviceSplit.productSales, blue).sub} icon={<ShoppingCart size={16} />} />
+          <MetricCard label="Service (taller)" value={dualUsd(serviceSplit.service, blue).main} sub={dualUsd(serviceSplit.service, blue).sub} tone="success" icon={<Wrench size={16} />} />
         </div>
         {serviceSplit.total > 0 && (
           <div style={{ marginTop: space[3] }}>
@@ -269,11 +294,11 @@ export function Reportes() {
           <Percent size={16} color={color.primary} /> Margen del mes
         </h2>
         <div className="cz-metric-grid" style={{ ["--cz-cols"]: 3 } as React.CSSProperties}>
-          <MetricCard label="Facturado (mes)" value={dualMoney(margin.revThis, blue).main} sub={dualMoney(margin.revThis, blue).sub} icon={<DollarSign size={16} />} />
+          <MetricCard label="Facturado (mes)" value={dualUsd(margin.revThis, blue).main} sub={dualUsd(margin.revThis, blue).sub} icon={<DollarSign size={16} />} />
           <MetricCard
             label="Margen estimado (mes)"
-            value={margin.hasCosted ? dualMoney(margin.marThis, blue).main : "—"}
-            sub={margin.hasCosted ? dualMoney(margin.marThis, blue).sub : null}
+            value={margin.hasCosted ? dualUsd(margin.marThis, blue).main : "—"}
+            sub={margin.hasCosted ? dualUsd(margin.marThis, blue).sub : null}
             tone={margin.hasCosted ? "success" : "neutral"}
             icon={<HandCoins size={16} />}
           />
@@ -299,7 +324,7 @@ export function Reportes() {
             }}
           >
             <AlertCircle size={14} />
-            {formatMoney(margin.uncostedThis)} facturado este mes <strong>sin costo asignado</strong> — no
+            {formatMoney(Math.round(margin.uncostedThis), "USD")} facturado este mes <strong>sin costo asignado</strong> — no
             entra en el margen. Linkeá los productos al catálogo (con costo) al cargar la venta para que el
             margen sea exacto.
           </div>
@@ -328,7 +353,7 @@ export function Reportes() {
               return (
                 <div
                   key={b.key}
-                  title={`${b.label} — ${formatMoney(b.revenue)}`}
+                  title={`${b.label} — ${formatMoney(Math.round(b.revenue), "USD")}`}
                   style={{ display: "flex", flexDirection: "column", height: "100%", gap: space[2] }}
                 >
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
@@ -409,7 +434,7 @@ export function Reportes() {
                   {p.units}
                 </span>
                 <span style={{ fontSize: text.sm, fontWeight: weight.semibold, textAlign: "right", color: color.text, fontVariantNumeric: "tabular-nums" }}>
-                  {formatMoney(p.revenue)}
+                  {formatMoney(Math.round(p.revenue), "USD")}
                 </span>
                 <span
                   style={{
@@ -418,7 +443,7 @@ export function Reportes() {
                     fontVariantNumeric: "tabular-nums",
                     color: p.marginPct == null ? color.textDim : p.marginPct >= 0 ? color.success : color.danger,
                   }}
-                  title={p.marginPct == null ? "Sin costo asignado" : `Margen: ${formatMoney(p.margin ?? 0)}`}
+                  title={p.marginPct == null ? "Sin costo asignado" : `Margen: ${formatMoney(Math.round(p.margin ?? 0), "USD")}`}
                 >
                   {p.marginPct == null ? "—" : `${p.marginPct.toFixed(0)}%`}
                 </span>
@@ -464,7 +489,7 @@ export function Reportes() {
                     </div>
                   </div>
                   <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>
-                    {formatMoney(c.total)}
+                    {formatMoney(Math.round(c.total), "USD")}
                   </div>
                 </div>
               ))}
@@ -490,7 +515,7 @@ export function Reportes() {
                     <div style={{ fontSize: text.xs, color: color.textMuted }}>{v.count} ventas</div>
                   </div>
                   <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>
-                    {formatMoney(v.total)}
+                    {formatMoney(Math.round(v.total), "USD")}
                   </div>
                 </div>
               ))}
@@ -525,7 +550,7 @@ export function Reportes() {
                     </div>
                     <div style={{ fontSize: text.xs, color: color.textMuted }}>{o.count} {o.count === 1 ? "venta" : "ventas"}</div>
                   </div>
-                  <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>{formatMoney(o.total)}</div>
+                  <div style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>{formatMoney(Math.round(o.total), "USD")}</div>
                 </div>
               );
             })}
@@ -536,7 +561,7 @@ export function Reportes() {
       {kpis.porCobrar > 0 && (
         <div style={{ fontSize: text.xs, color: color.textMuted, display: "inline-flex", alignItems: "center", gap: space[2] }}>
           <TrendingDown size={12} />
-          Saldo pendiente total: {formatMoney(kpis.porCobrar)} · ver Deudas para el detalle.
+          Saldo pendiente total: {formatMoney(Math.round(kpis.porCobrar), "USD")} · ver Deudas para el detalle.
         </div>
       )}
     </div>

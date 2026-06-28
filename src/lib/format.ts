@@ -53,6 +53,18 @@ export function dualMoney(ars: number, blue: number | null | undefined): DualMon
   return { main: formatMoney(ars, 'ARS'), sub: null };
 }
 
+/**
+ * Inverso de dualMoney: el monto YA está en US$ (fuente de verdad, congelado).
+ * Muestra US$ como principal y ARS (× blue) como referencia con "≈". Para los
+ * reportes/saldos US$-nativos, donde no queremos re-convertir desde pesos.
+ */
+export function dualUsd(usd: number, blue: number | null | undefined): DualMoney {
+  return {
+    main: formatMoney(Math.round(usd), 'USD'),
+    sub: blue && blue > 0 ? `≈ ${formatMoney(Math.round(usd * blue), 'ARS')}` : null,
+  };
+}
+
 /** Igual que dualMoney pero compacto (cards de métricas con números grandes). */
 export function dualMoneyCompact(ars: number, blue: number | null | undefined): DualMoney {
   if (blue && blue > 0) {
