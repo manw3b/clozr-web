@@ -38,7 +38,8 @@ import type {
   RepairStatus,
 } from "./types";
 import { stagesForIndustry } from "./types";
-import { normalizeRate, toArs, toUsd } from "./money";
+import { normalizeRate, toUsd } from "./money";
+import { computeSaleTotals } from "./sale";
 import {
   mapSale,
   mapSaleItem,
@@ -478,18 +479,10 @@ export async function createSale(input: NewSaleInput): Promise<string> {
   // (ítems USD tal cual + ítems ARS ÷ blue) y dejamos las columnas ARS de
   // referencia (× blue). Si no hay blue, queda como venta legacy en pesos (USD null).
   const hasRate = rate > 0;
-  const total = items.reduce((a, i) => a + toArs(i.subtotal, i.currency as Currency, rate), 0);
-  const subtotal = total;
-  const totalPaid = input.payments.reduce((a, p) => a + toArs(p.amount, p.currency, rate), 0);
-  const balance = total - totalPaid;
-  const totalUsd = hasRate
-    ? items.reduce((a, i) => a + (toUsd(i.subtotal, i.currency as Currency, rate) ?? 0), 0)
-    : null;
-  const totalPaidUsd = hasRate
-    ? input.payments.reduce((a, p) => a + (toUsd(p.amount, p.currency, rate) ?? 0), 0)
-    : null;
-  const balanceUsd = hasRate && totalUsd != null && totalPaidUsd != null ? totalUsd - totalPaidUsd : null;
-  const isPaid = balanceUsd != null ? (balanceUsd <= 0.01 ? 1 : 0) : (balance <= 0.01 ? 1 : 0);
+  // El cálculo de totales US$/ARS vive en computeSaleTotals (puro, testeado):
+  // ítems y pagos van cada uno en su moneda; el blue del momento congela el resto.
+  const { subtotal, total, totalPaid, balance, totalUsd, totalPaidUsd, balanceUsd, isPaid } =
+    computeSaleTotals(items, input.payments, rate);
   const paymentMethod =
     input.payments.length === 1
       ? input.payments[0]!.method
@@ -511,7 +504,7 @@ export async function createSale(input: NewSaleInput): Promise<string> {
       total_paid_usd: totalPaidUsd,
       balance_usd: balanceUsd,
       fx_rate: hasRate ? rate : null,
-      is_paid: isPaid,
+      is_paid: isPaid ? 1 : 0,
       payment_method: paymentMethod,
       notes: input.notes ?? null,
       sale_date: new Date().toISOString(),
