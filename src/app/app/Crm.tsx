@@ -126,6 +126,9 @@ export default function Crm({
   const [sales, setSales] = useState<Sale[]>([]);
   const [catalog, setCatalog] = useState<Product[]>([]);
   const [modal, setModal] = useState<ModalState>(null);
+  // Acción del menú "Crear" que se crea en su propia pantalla: la navegamos y le
+  // pedimos que abra el alta al entrar (one-shot, la pantalla lo consume).
+  const [pendingNew, setPendingNew] = useState<NewAction | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   // Click en un turno de la Agenda → abrir esa venta en la vista Ventas.
@@ -161,9 +164,9 @@ export default function Crm({
     // Las que se crean desde su propia pantalla: navegamos ahí (su CTA "+ Nuevo"
     // abre el alta). El menú ya filtró por permiso, así que la acción es válida.
     else if (action === "tarea") setView("tasks");
-    else if (action === "turno") setView("agenda");
-    else if (action === "producto") setView("inventory");
-    else if (action === "reparacion") setView("repairs");
+    else if (action === "turno") { setPendingNew("turno"); setView("agenda"); }
+    else if (action === "producto") { setPendingNew("producto"); setView("inventory"); }
+    else if (action === "reparacion") { setPendingNew("reparacion"); setView("repairs"); }
     else if (action === "movimiento") setView("cash");
   }
 
@@ -330,9 +333,9 @@ export default function Crm({
             onConsumeInitial={() => setPendingSaleId(null)}
           />
         ) : view === "agenda" ? (
-          <Agenda key={activeWs.id} sales={sales} items={items} customers={customers} onOpenSale={openSaleFromAgenda} onOpenPipeline={() => setView("pipeline")} />
+          <Agenda key={activeWs.id} sales={sales} items={items} customers={customers} onOpenSale={openSaleFromAgenda} onOpenPipeline={() => setView("pipeline")} autoNew={pendingNew === "turno"} onAutoNewConsumed={() => setPendingNew(null)} />
         ) : view === "repairs" ? (
-          <Repairs key={activeWs.id} customers={customers} onOpenSale={openSaleFromAgenda} />
+          <Repairs key={activeWs.id} customers={customers} onOpenSale={openSaleFromAgenda} autoNew={pendingNew === "reparacion"} onAutoNewConsumed={() => setPendingNew(null)} />
         ) : view === "tasks" ? (
           <Tareas key={activeWs.id} />
         ) : view === "deudas" ? (
@@ -352,6 +355,8 @@ export default function Crm({
         ) : view === "inventory" ? (
           <Inventario
             key={activeWs.id}
+            autoNew={pendingNew === "producto"}
+            onAutoNewConsumed={() => setPendingNew(null)}
             onQuickSale={
               can("sales.write")
                 ? (p) =>
