@@ -65,6 +65,20 @@ export function dualUsd(usd: number, blue: number | null | undefined): DualMoney
   };
 }
 
+/**
+ * Espejo de dualUsd para lo ARS-nativo: el monto está en pesos (fuente de
+ * verdad) y mostramos ARS como principal con US$ (÷ blue) de referencia con
+ * "≈". Es para el taller/reparaciones, cuyos costos (repuestos + mano de obra)
+ * son locales en ARS: NO los convertimos a US$, solo agregamos el equivalente
+ * de referencia. Sin cotización, cae a ARS solo.
+ */
+export function dualArs(ars: number, blue: number | null | undefined): DualMoney {
+  return {
+    main: formatMoney(Math.round(ars), 'ARS'),
+    sub: blue && blue > 0 ? `≈ ${formatMoney(Math.round(ars / blue), 'USD')}` : null,
+  };
+}
+
 /** Igual que dualMoney pero compacto (cards de métricas con números grandes). */
 export function dualMoneyCompact(ars: number, blue: number | null | undefined): DualMoney {
   if (blue && blue > 0) {
