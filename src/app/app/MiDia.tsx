@@ -1,12 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Plus,
   CheckSquare,
   AlertCircle,
   Check,
   Target,
+  ShoppingCart,
+  TrendingUp,
+  Tag,
+  CalendarDays,
   Pencil,
   X,
   Zap,
@@ -689,12 +693,12 @@ export function MiDia({
         return (
           <HeroPanel activeWs={activeWs} now={now} greeting={greeting} userName={userName}>
             <div className="cz-metric-grid">
-              <MetricTile label="Ventas de hoy" value={dual(todayTotal).main} sub={`${todaySales.length} ${todaySales.length === 1 ? "venta" : "ventas"}`} />
-              <MetricTile label="Ventas del mes" value={dual(mtdTotal).main} sub={`${monthSales.length} ${monthSales.length === 1 ? "venta" : "ventas"}`} />
-              <MetricTile label="Ticket promedio" value={dual(ticketAvg).main} sub="del mes" />
-              <MetricTile label="Proyección mes" value={dual(monthProj).main} sub="a este ritmo" />
-              <MetricTile label="Por cobrar" value={dual(porCobrar).main} tone={porCobrar > 0 ? "warning" : "neutral"} sub={`${collections.length} pendientes`} />
-              <MetricTile label="Turnos hoy" value={`${todayAppointments.length}`} sub="agenda" />
+              <MetricTile label="Ventas de hoy" value={dual(todayTotal).main} sub={`${todaySales.length} ${todaySales.length === 1 ? "venta" : "ventas"}`} icon={<ShoppingCart size={18} />} tint="#E11D48" />
+              <MetricTile label="Ventas del mes" value={dual(mtdTotal).main} sub={`${monthSales.length} ${monthSales.length === 1 ? "venta" : "ventas"}`} icon={<TrendingUp size={18} />} tint="#3B82F6" />
+              <MetricTile label="Ticket promedio" value={dual(ticketAvg).main} sub="del mes" icon={<Tag size={18} />} tint="#8B5CF6" />
+              <MetricTile label="Proyección mes" value={dual(monthProj).main} sub="a este ritmo" icon={<Target size={18} />} tint="#14B8A6" />
+              <MetricTile label="Por cobrar" value={dual(porCobrar).main} tone={porCobrar > 0 ? "warning" : "neutral"} sub={`${collections.length} pendientes`} icon={<Wallet size={18} />} tint="#F97316" />
+              <MetricTile label="Turnos hoy" value={`${todayAppointments.length}`} sub="agenda" icon={<CalendarDays size={18} />} tint="#6366F1" />
             </div>
           </HeroPanel>
         );
@@ -963,12 +967,19 @@ function HeroPanel({ activeWs, now, greeting, userName, children }: { activeWs: 
   );
 }
 
-function MetricTile({ label, value, sub, tone = "neutral" }: { label: string; value: string; sub?: string; tone?: "neutral" | "warning" }) {
+function MetricTile({ label, value, sub, tone = "neutral", icon, tint }: { label: string; value: string; sub?: string; tone?: "neutral" | "warning"; icon?: ReactNode; tint?: string }) {
   return (
-    <div style={{ background: color.surface, border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[3] }}>
-      <div style={{ fontSize: text.xs, color: color.textMuted, fontWeight: weight.medium, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: text.xl, fontWeight: weight.bold, color: tone === "warning" ? color.warning : color.text, letterSpacing: "-0.4px", lineHeight: 1.1 }}>{value}</div>
-      {sub && <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>{sub}</div>}
+    <div style={{ background: color.surface, border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[3], display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: space[3] }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: text.xs, color: color.textMuted, fontWeight: weight.medium, marginBottom: 4 }}>{label}</div>
+        <div style={{ fontSize: text.xl, fontWeight: weight.bold, color: tone === "warning" ? color.warning : color.text, letterSpacing: "-0.4px", lineHeight: 1.1 }}>{value}</div>
+        {sub && <div style={{ fontSize: text.xs, color: color.textDim, marginTop: 2 }}>{sub}</div>}
+      </div>
+      {icon && tint && (
+        <span style={{ width: 38, height: 38, borderRadius: radius.md, background: `${tint}22`, color: tint, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {icon}
+        </span>
+      )}
     </div>
   );
 }
