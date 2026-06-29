@@ -10,7 +10,12 @@ import { useAiStore } from "@/store/aiStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { AI_PACKS, AI_FREE_LIMIT, formatUsd, hasAiPlan } from "@/lib/types";
+import { openWhatsApp } from "@/lib/openExternal";
+import { AiActions } from "./AiActions";
 import * as api from "@/lib/api";
+
+/** Mensaje del chat en la UI: el del asistente puede traer acciones propuestas. */
+type UiMessage = api.AiChatMessage & { actions?: api.AssistantAction[] };
 
 const EXAMPLES = [
   "¿Cuánto vendí este mes?",
@@ -31,7 +36,7 @@ export function ClozrAi() {
   const consumePendingQuery = useAiStore((s) => s.consumePendingQuery);
   const ws = useWorkspaceStore((s) => s.activeWorkspace);
   const [status, setStatus] = useState<api.AiStatus | null>(null);
-  const [messages, setMessages] = useState<api.AiChatMessage[]>([]);
+  const [messages, setMessages] = useState<UiMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
@@ -59,13 +64,14 @@ export function ClozrAi() {
   async function send(textArg?: string) {
     const t = (textArg ?? input).trim();
     if (!t || sending) return;
-    const next: api.AiChatMessage[] = [...messages, { role: "user", content: t }];
+    const next: UiMessage[] = [...messages, { role: "user", content: t }];
     setMessages(next);
     setInput("");
     setSending(true);
     try {
-      const r = await api.aiChat(next);
-      setMessages([...next, { role: "assistant", content: r.reply }]);
+      // Al Worker le mandamos solo {role, content} (el historial), sin las acciones.
+      const r = await api.aiChat(next.map((m) => ({ role: m.role, content: m.content })));
+      setMessages([...next, { role: "assistant", content: r.reply, actions: r.actions }]);
       setStatus((s) => (s ? { ...s, ...r.wallet } : s));
     } catch (e) {
       if (e instanceof api.ApiError && (e.code === "no_credits" || e.status === 402)) {
@@ -81,6 +87,36 @@ export function ClozrAi() {
       }
     } finally {
       setSending(false);
+    }
+  }
+
+  // Ejecuta la acción que el usuario tocó en una respuesta del asistente.
+  // Nada se dispara solo: siempre hay un click de por medio.
+  async function runAction(a: api.AssistantAction): Promise<{ ok: boolean } | void> {
+    if (a.type === "whatsapp") {
+      openWhatsApp(a.phone ?? "", a.text);
+      return;
+    }
+    if (a.type === "navigate" || a.type === "open_form") {
+      // El contenedor (Crm) escucha y navega / abre el form prellenado.
+      window.dispatchEvent(new CustomEvent("clozr:ai-action", { detail: a }));
+      closeAi();
+      return;
+    }
+    // confirm_execute (Nivel 3): pega a /ai/execute. Si el Worker aún no lo tiene,
+    // devuelve un error y el card lo muestra como "todavía no disponible".
+    try {
+      const r = await api.aiExecute(a.tool, a.payload);
+      if (r.ok) {
+        // Refrescar las pantallas que la acción pudo tocar (eventos del repo).
+        for (const ev of ["clozr:sale-changed", "clozr:item-changed", "clozr:customer-changed"]) {
+          window.dispatchEvent(new Event(ev));
+        }
+        showToast(r.summary || "Hecho ✓", "success");
+      }
+      return { ok: r.ok };
+    } catch {
+      return { ok: false };
     }
   }
 
@@ -199,7 +235,14 @@ export function ClozrAi() {
                     </div>
                   </div>
                 ) : (
-                  messages.map((m, i) => <Bubble key={i} role={m.role} content={m.content} />)
+                  messages.map((m, i) => (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+                      <Bubble role={m.role} content={m.content} />
+                      {m.role === "assistant" && m.actions && m.actions.length > 0 && (
+                        <AiActions actions={m.actions} onRun={runAction} />
+                      )}
+                    </div>
+                  ))
                 )}
                 {sending && <Bubble role="assistant" content="…" />}
               </div>

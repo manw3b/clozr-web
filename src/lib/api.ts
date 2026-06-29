@@ -1773,6 +1773,27 @@ export interface AiChatMessage {
   content: string;
 }
 
+/**
+ * Acción que el asistente puede proponer junto a su respuesta (contrato
+ * web↔Worker, ver docs/asistente.md). La web ya sabe renderizarlas aunque el
+ * Worker mande `[]`. NUNCA se ejecuta nada sin la intervención del usuario:
+ * - open_form / navigate / whatsapp: la web abre algo prellenado / navega / arma
+ *   un WhatsApp (Nivel 2, cero escritura sin confirmar).
+ * - confirm_execute: card de confirmación; al OK, llama a /ai/execute (Nivel 3).
+ */
+export type AssistantAction =
+  | { type: "open_form"; form: "sale" | "turno" | "cash" | "customer"; label: string; prefill?: Record<string, unknown> }
+  | { type: "navigate"; view: string; label: string }
+  | { type: "whatsapp"; label: string; phone?: string; text: string }
+  | { type: "confirm_execute"; tool: string; label: string; summary: string; payload: Record<string, unknown> };
+
+export interface AiChatReply {
+  reply: string;
+  wallet: AiWallet;
+  /** Acciones propuestas. Opcional: el Worker puede no mandarla (Nivel 1). */
+  actions?: AssistantAction[];
+}
+
 export async function aiStatus(): Promise<AiStatus> {
   const r = await req<Partial<AiStatus>>(`/workspaces/${ws()}/ai`);
   return {
@@ -1784,13 +1805,30 @@ export async function aiStatus(): Promise<AiStatus> {
 }
 
 /** Manda la conversación y devuelve la respuesta + la billetera actualizada.
+ *  Puede traer `actions` (contrato Nivel 2/3); si no, la web no muestra ninguna.
  *  Si no quedan mensajes, el Worker responde 402 y `req` lanza ApiError("no_credits"). */
-export async function aiChat(messages: AiChatMessage[]): Promise<{ reply: string; wallet: AiWallet }> {
-  const r = await req<{ reply: string; wallet: AiWallet }>(`/workspaces/${ws()}/ai/chat`, {
+export async function aiChat(messages: AiChatMessage[]): Promise<AiChatReply> {
+  const r = await req<AiChatReply>(`/workspaces/${ws()}/ai/chat`, {
     method: "POST",
     body: JSON.stringify({ messages }),
   });
-  return r;
+  return { reply: r.reply, wallet: r.wallet, actions: Array.isArray(r.actions) ? r.actions : undefined };
+}
+
+/**
+ * Ejecuta una acción confirmada por el usuario (Nivel 3). Pega a un endpoint del
+ * Worker (`POST /ai/execute`) que valida permiso del rol, filtra por workspace y
+ * audita. Mientras el Worker no lo exponga, responde 404 → la web degrada con un
+ * aviso ("todavía no disponible"), nunca rompe.
+ */
+export async function aiExecute(
+  tool: string,
+  payload: Record<string, unknown>,
+): Promise<{ ok: boolean; result?: unknown; summary?: string }> {
+  return req<{ ok: boolean; result?: unknown; summary?: string }>(`/workspaces/${ws()}/ai/execute`, {
+    method: "POST",
+    body: JSON.stringify({ tool, payload }),
+  });
 }
 
 export interface AiActionParams {
