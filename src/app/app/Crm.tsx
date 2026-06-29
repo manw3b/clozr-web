@@ -510,7 +510,7 @@ export default function Crm({
         onOpenSale={(id) => setModal({ kind: "saleDetail", id })}
         onOpenItem={(id) => setModal({ kind: "item", id })}
       />
-      <ClozrAi />
+      <ClozrAi currentView={view} />
     </>
   );
 }

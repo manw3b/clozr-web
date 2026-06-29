@@ -11,24 +11,21 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { color, radius, space, text, weight } from "@/tokens";
 import { AI_PACKS, AI_FREE_LIMIT, formatUsd, hasAiPlan } from "@/lib/types";
 import { openWhatsApp } from "@/lib/openExternal";
+import { examplesForView } from "@/lib/aiPrompts";
 import { AiActions } from "./AiActions";
 import * as api from "@/lib/api";
 
 /** Mensaje del chat en la UI: el del asistente puede traer acciones propuestas. */
 type UiMessage = api.AiChatMessage & { actions?: api.AssistantAction[] };
 
-const EXAMPLES = [
-  "¿Cuánto vendí este mes?",
-  "Armame un WhatsApp para reactivar un cliente",
-  "¿Qué productos tengo sin stock?",
-];
-
 /**
  * IA de Clozr — asistente conversacional con microtransacciones.
  * 1 mensaje gratis por workspace; después se compra un pack. Self-contained:
  * lanzador flotante + drawer (chat + paywall). Se monta una vez en el shell.
+ *
+ * `currentView` es la pantalla activa: ajusta los prompts sugeridos al contexto.
  */
-export function ClozrAi() {
+export function ClozrAi({ currentView }: { currentView?: string }) {
   const { showToast } = useUIStore();
   const open = useAiStore((s) => s.open);
   const openAi = useAiStore((s) => s.openAi);
@@ -214,7 +211,7 @@ export function ClozrAi() {
                       <strong style={{ color: color.text }}>{AI_FREE_LIMIT} acciones gratis</strong> para probar.
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-                      {EXAMPLES.map((ex) => (
+                      {examplesForView(currentView).map((ex) => (
                         <button
                           key={ex}
                           onClick={() => send(ex)}
