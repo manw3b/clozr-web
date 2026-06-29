@@ -9,7 +9,8 @@ import { Modal, ModalField } from "@/components/Modal";
 import { Input, Select, Textarea } from "@/components/Input";
 import { confirmAsync } from "@/lib/confirmAsync";
 import { color, radius, space, text, weight } from "@/tokens";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, dualArs } from "@/lib/format";
+import { useBlueRate } from "@/store/dollarStore";
 import { usePermissions } from "@/store/usePermissions";
 import { useUIStore } from "@/store/uiStore";
 import * as api from "@/lib/api";
@@ -197,6 +198,7 @@ export function RepairDialog({
   onSaved: () => void;
 }) {
   const { showToast } = useUIStore();
+  const blue = useBlueRate();
   const ws = useWorkspaceStore((s) => s.activeWorkspace);
   const business = { name: ws?.name ?? "Mi negocio", logoUrl: ws?.logoKey ? api.assetUrl(ws.logoKey) : null };
   const [customerId, setCustomerId] = useState(initial?.customerId ?? presetCustomer?.id ?? "");
@@ -383,7 +385,12 @@ export function RepairDialog({
       footer={
         <div style={{ display: "flex", gap: space[2], justifyContent: "space-between", alignItems: "center", width: "100%" }}>
           <span style={{ fontSize: text.sm, color: color.textMuted }}>
-            Presupuesto: <strong style={{ color: color.text }}>{formatMoney(total)}</strong>
+            Presupuesto: <strong style={{ color: color.text }}>{dualArs(total, blue).main}</strong>
+            {dualArs(total, blue).sub && (
+              <span style={{ color: color.textDim, marginLeft: 6, fontVariantNumeric: "tabular-nums" }}>
+                {dualArs(total, blue).sub}
+              </span>
+            )}
           </span>
           <div style={{ display: "flex", gap: space[2] }}>
             {customerPhone.trim() && (
@@ -563,6 +570,8 @@ function RepairCardView({ repair: r, canWrite, onEdit, onRemove, onMove }: {
   onRemove?: () => void;
   onMove?: (s: RepairStatus) => void;
 }) {
+  const blue = useBlueRate();
+  const quote = dualArs(quoteTotal(r), blue);
   return (
     <Card padding={3} interactive={!!onEdit} onClick={onEdit}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: space[2], justifyContent: "space-between" }}>
@@ -586,7 +595,12 @@ function RepairCardView({ repair: r, canWrite, onEdit, onRemove, onMove }: {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2], marginTop: space[2] }}>
         <div style={{ display: "flex", alignItems: "center", gap: space[2], minWidth: 0 }}>
           {quoteTotal(r) > 0 && (
-            <span style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text }}>{formatMoney(quoteTotal(r))}</span>
+            <span style={{ display: "inline-flex", flexDirection: "column", lineHeight: 1.15, minWidth: 0 }}>
+              <span style={{ fontSize: text.sm, fontWeight: weight.bold, color: color.text, fontVariantNumeric: "tabular-nums" }}>{quote.main}</span>
+              {quote.sub && (
+                <span style={{ fontSize: text.xs, color: color.textDim, fontVariantNumeric: "tabular-nums" }}>{quote.sub}</span>
+              )}
+            </span>
           )}
           {r.status === "ready" && r.customerPhone && (
             <button

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   displayName,
+  dualArs,
   dualMoney,
   dualUsd,
   formatMoney,
@@ -87,6 +88,27 @@ describe("dualUsd (US$ fuente de verdad → ≈ pesos de referencia)", () => {
     const r = dualUsd(150, null);
     expect(norm(r.main)).toBe("US$ 150");
     expect(r.sub).toBeNull();
+  });
+});
+
+describe("dualArs (ARS fuente de verdad → ≈ US$ de referencia, para el taller)", () => {
+  it("con cotización: ARS principal y ≈ US$ como referencia", () => {
+    const r = dualArs(150_000, 1000);
+    expect(norm(r.main)).toBe("$ 150.000");
+    expect(r.sub).not.toBeNull();
+    expect(r.sub!.startsWith("≈")).toBe(true);
+    expect(norm(r.sub!)).toContain("US$ 150");
+  });
+
+  it("sin cotización: sólo ARS, sin referencia en US$", () => {
+    const r = dualArs(150_000, null);
+    expect(norm(r.main)).toBe("$ 150.000");
+    expect(r.sub).toBeNull();
+  });
+
+  it("cotización 0 o negativa se trata como sin cotización", () => {
+    expect(dualArs(150_000, 0).sub).toBeNull();
+    expect(dualArs(150_000, -5).sub).toBeNull();
   });
 });
 
