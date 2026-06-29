@@ -145,6 +145,33 @@ export default function Crm({
     useWorkspaceStore.setState({ workspaces, activeWorkspace: workspace, isLoading: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // El asistente (ClozrAi) propone acciones y dispara este evento; acá las
+  // ejecutamos: navegar o abrir el form prellenado. Respeta permisos, igual que
+  // el menú "Crear". (whatsapp y confirm_execute los resuelve el propio ClozrAi.)
+  useEffect(() => {
+    function onAiAction(e: Event) {
+      const a = (e as CustomEvent<api.AssistantAction>).detail;
+      if (!a) return;
+      if (a.type === "navigate") {
+        setView(a.view as View);
+      } else if (a.type === "open_form") {
+        if (a.form === "sale") {
+          if (can("sales.write")) setModal({ kind: "sale", preset: a.prefill as SalePreset });
+        } else if (a.form === "customer") {
+          if (can("customers.write")) setModal({ kind: "customer" });
+        } else if (a.form === "turno") {
+          setPendingNew("turno");
+          setView("agenda");
+        } else if (a.form === "cash") {
+          setView("cash");
+        }
+      }
+    }
+    window.addEventListener("clozr:ai-action", onAiAction as EventListener);
+    return () => window.removeEventListener("clozr:ai-action", onAiAction as EventListener);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const activeWs = useWorkspaceStore((s) => s.activeWorkspace) ?? workspace;
   const blue = useBlueRate(); // para sembrar el precio (USD→ARS) en la venta rápida
   // Caja restringida a managers (decisión de producto): ocultamos el item del
